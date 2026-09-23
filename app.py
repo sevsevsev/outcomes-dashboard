@@ -50,6 +50,7 @@ from outcomes_data import (
     COL_ORG_VIEW,
     COL_POP,
     COL_PROGRAM,
+    COL_PROGRAM_LABEL,
     COL_QA,
     COL_SOURCE_FILE,
     COL_SUBCAT,
@@ -65,11 +66,15 @@ from outcomes_data import (
     MissingColumnsError,
     compute_peer_overlap,
     domain_order,
+    domain_short,
     filter_outcomes,
     load_codebook,
     organizations_for_subcategory,
     peer_heatmap_data,
     population_group,
+    program_flows,
+    program_labels,
+    program_options,
     read_outcomes_csv,
     resolve_data_path,
     sorted_subcategories,
@@ -81,6 +86,9 @@ APP_TITLE = "Outcomes Explorer"
 
 # Session-state keys for the sidebar filters, so "Reset filters" can clear them.
 FILTER_KEYS = ["f_domains", "f_pops", "f_orgs", "f_conf"]
+ALL_DOMAINS = "All domains"
+MAX_PROGRAMS = 6        # the categorical palette stays distinct up to about six colors
+DEFAULT_PROGRAMS = 4
 UPLOAD_KEY = "uploaded_csv"          # (file name, bytes) of a CSV uploaded this session
 READ_ERRORS = (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError)
 
@@ -384,11 +392,17 @@ def page_find_peers(df: pd.DataFrame) -> None:
         st.warning("No outcomes match the current filters. Loosen them in the sidebar.")
         return
 
-    tab_org, tab_goal = st.tabs([":material/groups: Peers for an organization", ":material/flag: Who works on a goal"])
+    tab_org, tab_goal, tab_compare = st.tabs([
+        ":material/groups: Peers for an organization",
+        ":material/flag: Who works on a goal",
+        ":material/compare_arrows: Compare programs",
+    ])
     with tab_org:
         peers_for_organization(df)
     with tab_goal:
         organizations_for_goal(df)
+    with tab_compare:
+        compare_programs(df)
 
 
 def peers_for_organization(df: pd.DataFrame) -> None:
@@ -490,6 +504,60 @@ def organizations_for_goal(df: pd.DataFrame) -> None:
                      f"{chosen_org} · {subcat}", key="v2_goal_selection")
     else:
         outcome_list(goal_rows, subcat, key="v2_goal_all", expanded=False)
+
+
+def default_programs(df: pd.DataFrame, options: pd.DataFrame) -> list[str]:
+    """Start the comparison with the organization picked on the peers tab and its closest peers."""
+    org = st.session_state.get("v2_org")
+    if org not in set(options[COL_ORG_VIEW]):
+        return options[COL_PROGRAM_LABEL].head(3).tolist()
+    peers = compute_peer_overlap(df, org)
+    orgs = [org] + (peers["organization"].head(3).tolist() if not peers.empty else [])
+    chosen = options[options[COL_ORG_VIEW].isin(orgs)]
+    chosen = chosen.assign(_rank=chosen[COL_ORG_VIEW].map({o: i for i, o in enumerate(orgs)}))
+    return chosen.sort_values(["_rank", "outcomes"], ascending=[True, False])[COL_PROGRAM_LABEL].head(
+        DEFAULT_PROGRAMS).tolist()
+
+
+def compare_programs(df: pd.DataFrame) -> None:
+    options = program_options(df)
+    labels = options[COL_PROGRAM_LABEL].tolist()
+    keep_valid("v2_programs", labels)
+    if not st.session_state.get("v2_programs"):
+        st.session_state["v2_programs"] = default_programs(df, options)
+    programs = st.multiselect(
+        "Programs to compare", labels, key="v2_programs", max_selections=MAX_PROGRAMS,
+        placeholder="Type to search programs",
+        help=f"Up to {MAX_PROGRAMS}, so every program keeps its own color. "
+             "It starts with the organization picked on the first tab and its closest peers.",
+    )
+    if not programs:
+        st.info("Pick at least one program to compare.")
+        return
+
+    # A Sankey can't report which bar was clicked, so these buttons do the zooming.
+    overview = program_flows(df, programs)
+    domains = list(dict.fromkeys(overview["target"]))
+    if st.session_state.get("v2_zoom") not in [ALL_DOMAINS] + domains:
+        st.session_state.pop("v2_zoom", None)
+    zoom = st.pills(
+        "Zoom to a domain", [ALL_DOMAINS] + domains, default=ALL_DOMAINS, key="v2_zoom",
+        format_func=lambda d: d if d == ALL_DOMAINS else domain_short(d),
+    ) or ALL_DOMAINS
+
+    zoomed = zoom != ALL_DOMAINS
+    flows = program_flows(df, programs, domain=zoom) if zoomed else overview
+    section(
+        f"How these programs split across {domain_short(zoom)}" if zoomed else "Where each program's outcomes go",
+        "Band width is the number of outcome statements. Hover a band for samples.",
+    )
+    plot(charts.build_program_sankey(flows, programs, zoomed=zoomed), key=f"v2_sankey_{slug(zoom)}")
+
+    rows = df[program_labels(df).isin(programs)]
+    if zoomed:
+        rows = rows[rows[COL_DOMAIN] == zoom]
+    outcome_list(rows, domain_short(zoom) if zoomed else "These programs", key=f"v2_compare_{slug(zoom)}",
+                 expanded=False)
 
 
 # =============================================================================

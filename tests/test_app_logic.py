@@ -207,3 +207,30 @@ def test_outcome_text_prefers_atomic_and_keeps_split_context():
     assert df.loc[0, app.COL_FULL] == "Increased confidence, well-being and self-worth"
     assert df.loc[1, app.COL_FULL] == ""  # not split, so no extra context
     assert app.COL_OUTCOME not in app.to_export_frame(df).columns
+
+
+def test_program_labels_name_the_program_only_when_an_org_has_several(df):
+    labels = set(app.program_options(df)[app.COL_PROGRAM_LABEL])
+    assert "BalletX" in labels
+    assert {"Historic Fair Hill, Inc.: Gardens", "Historic Fair Hill, Inc.: Reading Buddies"} <= labels
+
+
+def test_program_flows_go_to_domains_then_to_one_domains_subcategories(df):
+    flows = app.program_flows(df, ["BalletX", "ArtWell"])
+    assert flows.groupby("source")["outcomes"].sum().to_dict() == {"ArtWell": 2, "BalletX": 3}
+    assert flows["target"].tolist()[0] == JOY  # codebook order: Domain 1 before Domain 3
+    zoomed = app.program_flows(df, ["BalletX", "ArtWell"], domain=SEL)
+    assert set(zoomed["target"]) == {CONF, TEAM}
+    assert zoomed["outcomes"].sum() == 4
+
+
+def test_program_sankey_keeps_codebook_order_and_one_color_per_program(df):
+    programs = ["BalletX", "ArtWell"]
+    sankey = charts.build_program_sankey(app.program_flows(df, programs), programs).data[0]
+    names = list(sankey.node.customdata)
+    assert names[:2] == programs
+    assert names[2].startswith("1.") and names[3].startswith("3.")
+    assert sankey.node.y[2] < sankey.node.y[3]
+    # Every band carries its program's color.
+    balletx = charts._rgba(charts.CATEGORICAL[0], 0.4)
+    assert all(color == balletx for s, color in zip(sankey.link.source, sankey.link.color) if s == 0)
