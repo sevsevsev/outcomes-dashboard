@@ -208,6 +208,81 @@ def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_t
     return fig
 
 
+# Wrap width for program and goal names beside the Sankey's bars.
+SANKEY_WRAP = 30
+SANKEY_TARGET_COLOR = "#b4b2ab"   # neutral, so color stays on the programs being compared
+
+
+def _rgba(hex_color: str, alpha: float) -> str:
+    h = hex_color.lstrip("#")
+    return f"rgba({int(h[0:2], 16)}, {int(h[2:4], 16)}, {int(h[4:6], 16)}, {alpha})"
+
+
+def _stack_positions(sizes: list[float], gap: float = 0.03) -> list[float]:
+    """Vertical centers (0 = top, 1 = bottom) that stack nodes in the given order.
+
+    Plotly's automatic layout reorders nodes to reduce crossings, which
+    scrambles the codebook order; fixed positions keep it.
+    """
+    total = sum(sizes) or 1
+    usable = 1 - gap * max(len(sizes) - 1, 0)
+    centers, top = [], 0.0
+    for size in sizes:
+        height = size / total * usable
+        centers.append(min(max(top + height / 2, 0.001), 0.999))
+        top += height + gap
+    return centers
+
+
+def build_program_sankey(flows: pd.DataFrame, programs: list[str], zoomed: bool = False):
+    """Sankey from programs (left) to domains, or to one domain's subcategories (right).
+
+    Band width is the number of outcome statements. Each program keeps one
+    color from the categorical palette, and its bands carry that color, so
+    you can follow a program across the chart. Hover a band for samples.
+    """
+    targets = list(dict.fromkeys(flows["target"]))
+    sources = [p for p in programs if p in set(flows["source"])]
+    index = {name: i for i, name in enumerate(sources + targets)}
+    color_of = {p: CATEGORICAL[i % len(CATEGORICAL)] for i, p in enumerate(programs)}
+
+    target_names = targets if zoomed else [domain_short(t) for t in targets]
+    source_sizes = [flows.loc[flows["source"] == p, "outcomes"].sum() for p in sources]
+    target_sizes = [flows.loc[flows["target"] == t, "outcomes"].sum() for t in targets]
+    fig = go.Figure(
+        go.Sankey(
+            arrangement="fixed",
+            node=dict(
+                x=[0.001] * len(sources) + [0.999] * len(targets),
+                y=_stack_positions(source_sizes) + _stack_positions(target_sizes),
+                label=[wrap_label(n, SANKEY_WRAP) for n in sources + target_names],
+                customdata=sources + target_names,
+                color=[color_of[p] for p in sources] + [SANKEY_TARGET_COLOR] * len(targets),
+                pad=14,
+                thickness=18,
+                line=dict(width=0),
+                hovertemplate="<b>%{customdata}</b><br>%{value} outcome statements<extra></extra>",
+            ),
+            link=dict(
+                source=[index[s] for s in flows["source"]],
+                target=[index[t] for t in flows["target"]],
+                value=flows["outcomes"].tolist(),
+                color=[_rgba(color_of[s], 0.4) for s in flows["source"]],
+                customdata=flows["samples"].tolist(),
+                hovertemplate=(
+                    "<b>%{source.customdata}</b> to <b>%{target.customdata}</b>"
+                    "<br>%{value} outcome statements"
+                    "<br><br><b>Sample outcomes</b><br>%{customdata}<extra></extra>"
+                ),
+            ),
+            textfont=dict(family=FONT_FAMILY, size=14, color=TEXT_PRIMARY),
+        )
+    )
+    # Room for a two-line label beside every bar, even the thinnest.
+    fig.update_layout(height=max(480, 64 * max(len(targets), len(sources))), margin=dict(t=8, l=8, r=8, b=8))
+    return fig
+
+
 def build_domain_population_bar(df: pd.DataFrame, as_share: bool = False):
     """Horizontal stacked bars: outcome statements per domain, split by population group."""
     counts = domain_population_counts(df)

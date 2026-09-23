@@ -74,6 +74,7 @@ COL_DOMAIN_NUM = "domain_number"        # 3 for "Domain 3. ...", used for sortin
 COL_OUTCOME = "outcome"                 # the coded (atomic) outcome, falling back to the original text
 COL_FULL = "full_statement"             # the original statement, only when the coder split it
 COL_DOMAIN_SHORT = "domain_short"       # "3. Social & Emotional Learning" for compact axis labels
+COL_PROGRAM_LABEL = "program_label"     # "Org" or "Org: Program" when an organization has several
 
 # Placeholder labels for missing values, so nothing silently drops out of a chart.
 UNCODED_DOMAIN = "Uncoded"
@@ -485,6 +486,56 @@ def subcategory_coverage(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = No
         .drop(columns="_order")
         .reset_index(drop=True)
     )
+
+
+def program_labels(df: pd.DataFrame) -> pd.Series:
+    """A readable, unique name for each row's program.
+
+    Program names alone are often generic ("Youth Programs"), so the label
+    leads with the organization and adds the program only when that
+    organization has more than one.
+    """
+    programs_per_org = df.groupby(COL_ORG_VIEW)[COL_PROGRAM].transform("nunique")
+    return df[COL_ORG_VIEW].where(programs_per_org <= 1, df[COL_ORG_VIEW] + ": " + df[COL_PROGRAM])
+
+
+def program_options(df: pd.DataFrame) -> pd.DataFrame:
+    """One row per program: label, organization, and outcome count, largest first."""
+    return (
+        df.assign(**{COL_PROGRAM_LABEL: program_labels(df)})
+        .groupby([COL_PROGRAM_LABEL, COL_ORG_VIEW], observed=True)
+        .size()
+        .rename("outcomes")
+        .reset_index()
+        .sort_values(["outcomes", COL_PROGRAM_LABEL], ascending=[False, True])
+        .reset_index(drop=True)
+    )
+
+
+def program_flows(df: pd.DataFrame, programs: Iterable[str], domain: Optional[str] = None) -> pd.DataFrame:
+    """Outcome statements flowing from each chosen program to a domain.
+
+    With `domain` set, flows go to that domain's subcategories instead, for
+    zooming in. Columns: source (program label), target (domain or
+    subcategory), outcomes, samples. Targets are in codebook order.
+    """
+    rows = df.assign(**{COL_PROGRAM_LABEL: program_labels(df)})
+    rows = rows[rows[COL_PROGRAM_LABEL].isin(list(programs))]
+    if domain is not None:
+        rows = rows[rows[COL_DOMAIN] == domain]
+    target_col = COL_SUBCAT if domain is not None else COL_DOMAIN
+    flows = (
+        rows.groupby([COL_PROGRAM_LABEL, target_col], observed=True)
+        .agg(outcomes=(COL_TEXT, "size"), samples=(COL_OUTCOME, sample_outcome_texts))
+        .reset_index()
+        .rename(columns={COL_PROGRAM_LABEL: "source", target_col: "target"})
+    )
+    if domain is None:
+        order = {d: i for i, d in enumerate(domain_order(rows))}
+        flows["_order"] = flows["target"].map(order)
+    else:
+        flows["_order"] = flows["target"].map(subcategory_sort_key)
+    return flows.sort_values(["_order", "source"]).drop(columns="_order").reset_index(drop=True)
 
 
 def org_subcategory_sets(df: pd.DataFrame, org_col: str = COL_ORG_VIEW) -> dict[str, set[str]]:
