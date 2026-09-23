@@ -100,7 +100,7 @@ HIERARCHY_MIN_TEXT_SIZE = 12
 # Characters per line when wrapping long names (treemap blocks, sunburst wedges).
 TREEMAP_WRAP = 22
 SUNBURST_WRAP = 16
-TREEMAP_ROOT = "All domains"
+ROOT_LABEL = "All domains"
 
 
 def wrap_label(text: str, width: int) -> str:
@@ -115,14 +115,18 @@ def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_t
     Color always shows how many organizations target the subcategory, so dark
     blocks are the most saturated goals and pale ones the thinnest.
 
-    Labels use the short domain name and wrapped subcategory names; hover
-    shows the full names. Pass a single domain's rows to draw just that
-    domain, which gives every subcategory room for a readable label.
+    The chart opens on domains only; clicking a domain expands it into its
+    subcategories, and clicking its name (treemap) or the center (sunburst)
+    goes back. Showing one level at a time gives every label room to be
+    read. Labels use the short domain name and wrapped subcategory names;
+    hover shows the full names.
     """
     counts = hierarchy_counts(df)
     size_col = "organizations" if measure == MEASURE_ORGS else "outcomes"
     is_treemap = chart_type == "Treemap"
-    has_root = is_treemap and counts[COL_DOMAIN].nunique() > 1
+    # An "All domains" root is what you click to go back up from a domain.
+    has_root = counts[COL_DOMAIN].nunique() > 1
+    count_index, count_noun = (2, "organizations") if measure == MEASURE_ORGS else (1, "outcome statements")
     wrap = TREEMAP_WRAP if is_treemap else SUNBURST_WRAP
 
     # Display labels: short domain names and subcategory names wrapped onto
@@ -133,19 +137,17 @@ def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_t
     chart_fn = px.treemap if is_treemap else px.sunburst
     fig = chart_fn(
         counts,
-        # The sunburst has no "All domains" center: it cost a whole ring. The
-        # treemap keeps it as a header you click to zoom back out, unless
-        # there is only one domain to show.
-        path=([px.Constant(TREEMAP_ROOT)] if has_root else []) + ["domain_label", "subcat_label"],
+        path=([px.Constant(ROOT_LABEL)] if has_root else []) + ["domain_label", "subcat_label"],
         values=size_col,
         color="organizations",
         color_continuous_scale=SEQUENTIAL_BLUE,
         custom_data=["samples", "outcomes", "organizations", COL_SUBCAT],
     )
 
-    # Plotly fills custom_data for parent nodes by aggregating children, which
-    # gives "(?)" for text and double-counts organizations working in several
-    # subcategories. Recompute domains from the rows so hover numbers are exact.
+    # Plotly fills custom_data and color for parent nodes by aggregating
+    # children, which gives "(?)" for text and double-counts organizations
+    # working in several subcategories. Recompute domains from the rows so
+    # labels, hover and shading are exact.
     # Nodes are identified by parent (not by splitting ids on "/"), because
     # some labels, e.g. "School/Program Connectedness", contain "/".
     trace = fig.data[0]
@@ -153,17 +155,23 @@ def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_t
     full_domain = dict(zip(counts["domain_label"], counts[COL_DOMAIN]))
     per_domain = distinct_counts_by(df, COL_DOMAIN)
     domain_samples = df.groupby(COL_DOMAIN)[COL_OUTCOME].agg(sample_outcome_texts)
-    fixed = []
-    for label, parent, custom in zip(trace.labels, trace.parents, trace.customdata):
+    fixed, colors = [], []
+    for label, parent, custom, color in zip(trace.labels, trace.parents, trace.customdata, trace.marker.colors):
         if has_root and not parent:
-            fixed.append([sample_outcome_texts(df[COL_OUTCOME]), len(df), df[COL_ORG_VIEW].nunique(), TREEMAP_ROOT])
+            fixed.append([sample_outcome_texts(df[COL_OUTCOME]), len(df), df[COL_ORG_VIEW].nunique(), ROOT_LABEL])
+            # A colorscale overrides root_color, so the root takes the palest
+            # blue and reads as background rather than as a count.
+            colors.append(0)
         elif parent == root_id:
             domain = full_domain[label]
             row = per_domain.loc[domain]
             fixed.append([domain_samples.get(domain, ""), int(row["outcomes"]), int(row["organizations"]), domain])
+            colors.append(int(row["organizations"]))
         else:
             fixed.append(list(custom))
+            colors.append(color)
     trace.customdata = fixed
+    trace.marker.colors = colors
 
     fig.update_traces(
         hovertemplate=(
@@ -173,21 +181,24 @@ def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_t
         ),
         marker=dict(line=dict(color=SURFACE, width=2)),
         textfont=dict(size=HIERARCHY_TEXT_SIZE),
+        # Show the exact count rather than Plotly's summed value, which
+        # double-counts organizations at the domain level.
+        texttemplate=f"<b>%{{label}}</b><br>%{{customdata[{count_index}]}} {count_noun}",
+        # One level below the current center at a time: domains first,
+        # a domain's subcategories after a click.
+        maxdepth=2,
     )
     if is_treemap:
         fig.update_traces(
-            texttemplate="<b>%{label}</b><br>%{value}",
             textposition="top left",
             tiling=dict(pad=4),
-            # A header strip tall enough for a domain name on three lines, so
-            # narrow domains keep their name instead of hiding it.
-            marker_pad=dict(t=60, l=4, r=4, b=4),
-            pathbar=dict(visible=False),  # the root header does the same job
-            root_color="#f4f4f1",
+            # Header strips fit a two-line domain name once it's expanded.
+            marker_pad=dict(t=48, l=4, r=4, b=4),
+            pathbar=dict(visible=False),  # the header above does the same job
         )
     else:
         # "auto" turns each label whichever way lets it be largest.
-        fig.update_traces(texttemplate="%{label}", insidetextorientation="auto")
+        fig.update_traces(insidetextorientation="auto")
     fig.update_layout(
         height=720,
         margin=dict(t=8, l=0, r=0, b=0),
