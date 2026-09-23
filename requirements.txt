@@ -1,0 +1,5 @@
+# Python dependencies for the outcomes dashboard (dashboard/app.py).
+# Install with: pip install -r dashboard/requirements.txt
+streamlit>=1.46
+pandas>=2.1
+plotly>=5.22
