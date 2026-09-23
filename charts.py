@@ -10,6 +10,7 @@ Color rules (so the charts read as one system):
 * Identity uses the categorical palette in a fixed order, and each population
   group always gets the same color, whatever the filters.
 * Single-series bars use the first categorical blue and need no legend.
+* The warm accent (GAP) marks thin or missing coverage, the things to act on.
 """
 
 from __future__ import annotations
@@ -55,10 +56,16 @@ TEXT_SECONDARY = "#5f5e5a"
 GRID = "#e8e7e3"
 SURFACE = "#ffffff"
 
+# Warm accent for gaps: thin coverage bars and goals no one targets. It is the
+# palette's second color, so it stays distinct from blue for color-blind readers.
+GAP = CATEGORICAL[1]
+GAP_TINT = "#fcebe2"
+GAP_TEXT = "#8f3510"
+
 # Each population group keeps its color no matter which groups are filtered in.
 POPULATION_COLORS = dict(zip(POPULATION_GROUP_ORDER, CATEGORICAL))
 
-FONT_FAMILY = '"Source Sans 3", "Source Sans Pro", -apple-system, "Segoe UI", sans-serif'
+FONT_FAMILY = '"Source Sans 3", "Source Sans", "Source Sans Pro", -apple-system, "Segoe UI", sans-serif'
 
 pio.templates["outcomes"] = go.layout.Template(
     layout=dict(
@@ -201,9 +208,14 @@ def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_t
         fig.update_traces(insidetextorientation="auto")
     fig.update_layout(
         height=720,
-        margin=dict(t=8, l=0, r=0, b=0),
+        margin=dict(t=44, l=0, r=0, b=0),
         uniformtext=dict(minsize=HIERARCHY_MIN_TEXT_SIZE, mode="hide"),
-        coloraxis_colorbar=dict(title=dict(text="Organizations", side="top"), thickness=12, len=0.6),
+        # A slim key above the top-right corner, so the chart itself gets the full width.
+        coloraxis_colorbar=dict(
+            orientation="h", x=1, xanchor="right", y=1.01, yanchor="bottom", len=0.28, thickness=8,
+            title=dict(text="Organizations working on it", side="top", font=dict(size=12, color=TEXT_SECONDARY)),
+            tickfont=dict(size=11, color=TEXT_SECONDARY), outlinewidth=0,
+        ),
     )
     return fig
 
@@ -321,10 +333,11 @@ def build_domain_population_bar(df: pd.DataFrame, as_share: bool = False):
     return fig
 
 
-def build_coverage_bar(coverage: pd.DataFrame, x_max: Optional[float] = None):
+def build_coverage_bar(coverage: pd.DataFrame, x_max: Optional[float] = None, color: str = PRIMARY):
     """Horizontal bars of organizations per subcategory (one series, no legend).
 
-    Pass the same `x_max` to charts shown side by side so bar lengths compare.
+    Pass the same `x_max` to charts shown side by side so bar lengths compare,
+    and `color=GAP` for the thinly covered goals.
     """
     data = coverage.iloc[::-1]  # plotly draws the first row at the bottom
     fig = px.bar(
@@ -333,7 +346,7 @@ def build_coverage_bar(coverage: pd.DataFrame, x_max: Optional[float] = None):
         y=COL_SUBCAT,
         orientation="h",
         custom_data=["samples", "outcomes", "programs", COL_DOMAIN],
-        color_discrete_sequence=[PRIMARY],
+        color_discrete_sequence=[color],
         labels={"organizations": "Organizations", COL_SUBCAT: ""},
         text="organizations",
     )
@@ -362,28 +375,39 @@ def build_coverage_bar(coverage: pd.DataFrame, x_max: Optional[float] = None):
 # PEERS
 # =============================================================================
 
+EMPTY_CELL = "#f5f5f2"   # the page canvas: an empty heatmap cell reads as "nothing here"
+
 
 def build_peer_heatmap(counts: pd.DataFrame, samples: pd.DataFrame):
-    """Heatmap of outcome counts: organizations (rows) x the selected organization's subcategories."""
+    """Heatmap of outcome counts: organizations (rows) x the selected organization's subcategories.
+
+    Cells with no outcomes are left empty (the pale canvas shows through), so
+    the eye goes to the overlaps that exist rather than to a grid of zeros.
+    """
+    shown = counts.where(counts > 0)
     fig = px.imshow(
-        counts,
+        shown,
         color_continuous_scale=SEQUENTIAL_BLUE,
+        zmin=0,
         aspect="auto",
-        text_auto=True,
         labels=dict(x="", y="", color="Outcomes"),
     )
     fig.update_traces(
         customdata=samples.to_numpy()[..., None],
+        text=shown.map(lambda v: "" if pd.isna(v) else f"{int(v)}").to_numpy(),
+        texttemplate="%{text}",
         hovertemplate="<b>%{y}</b><br>%{x}<br>%{z} outcomes" + SAMPLE_HOVER_BLOCK + "<extra></extra>",
+        hoverongaps=False,
         xgap=2,
         ygap=2,
     )
     fig.update_layout(
         height=max(320, 40 * len(counts) + 200),
+        plot_bgcolor=EMPTY_CELL,
         xaxis=dict(side="top", tickangle=-30, showgrid=False),
         yaxis=dict(showgrid=False),
         margin=dict(t=8, l=0, r=0, b=0),
-        coloraxis_colorbar=dict(thickness=12, len=0.6),
+        coloraxis_colorbar=dict(thickness=8, len=0.5, outlinewidth=0, tickfont=dict(size=11)),
     )
     return fig
 
@@ -431,18 +455,22 @@ def build_confidence_bar(counts: pd.Series):
     fig = go.Figure()
     total = int(counts.sum()) or 1
     for level, n in counts.items():
+        share = f"{n / total:.0%}" if n / total >= 0.01 else "<1%"
         fig.add_bar(
-            x=[n], y=[""], orientation="h", name=f"{level.title()} ({n:,})",
+            # The legend gives each level's share; the filter pills below it give the counts.
+            x=[n], y=[""], orientation="h", name=f"{level.title()} · {share}",
             marker=dict(color=colors.get(level, "#8a8984"), line=dict(color=SURFACE, width=2)),
             hovertemplate=f"<b>{level.title()}</b>: {n:,} outcomes ({n / total:.0%})<extra></extra>",
         )
     fig.update_layout(
         barmode="stack",
-        height=110,
+        height=74,
+        bargap=0,
         showlegend=True,
-        legend=dict(orientation="h", y=-0.35, x=0, traceorder="normal"),
+        legend=dict(orientation="h", y=-0.12, yanchor="top", x=0, traceorder="normal", itemwidth=30,
+                    font=dict(size=12, color=TEXT_SECONDARY)),
         xaxis=dict(visible=False, range=[0, total]),
         yaxis=dict(visible=False),
-        margin=dict(t=0, l=0, r=0, b=0),
+        margin=dict(t=0, l=0, r=0, b=34),
     )
     return fig
