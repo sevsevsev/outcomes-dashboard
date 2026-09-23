@@ -14,6 +14,8 @@ Color rules (so the charts read as one system):
 
 from __future__ import annotations
 
+from typing import Optional
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -184,8 +186,11 @@ def build_domain_population_bar(df: pd.DataFrame, as_share: bool = False):
     return fig
 
 
-def build_coverage_bar(coverage: pd.DataFrame):
-    """Horizontal bars of organizations per subcategory (one series, no legend)."""
+def build_coverage_bar(coverage: pd.DataFrame, x_max: Optional[float] = None):
+    """Horizontal bars of organizations per subcategory (one series, no legend).
+
+    Pass the same `x_max` to charts shown side by side so bar lengths compare.
+    """
     data = coverage.iloc[::-1]  # plotly draws the first row at the bottom
     fig = px.bar(
         data,
@@ -210,7 +215,7 @@ def build_coverage_bar(coverage: pd.DataFrame):
     )
     fig.update_layout(
         height=max(240, 30 * len(data) + 40),
-        xaxis=dict(visible=False),
+        xaxis=dict(visible=False, range=[0, (x_max or data["organizations"].max() or 1) * 1.08]),
         yaxis=dict(automargin=True),
         margin=dict(t=4, l=0, r=24, b=4),
         bargap=0.3,

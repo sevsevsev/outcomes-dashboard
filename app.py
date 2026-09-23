@@ -315,13 +315,14 @@ def page_system_map(df: pd.DataFrame) -> None:
     gaps = coverage[coverage["organizations"] == 0]
     covered = coverage[coverage["organizations"] > 0]
     top_n = 12
+    x_max = covered["organizations"].max() if not covered.empty else 1  # shared scale so bars compare
     left, right = st.columns(2)
     with left:
         st.markdown("**Most organizations**")
-        plot(charts.build_coverage_bar(covered.tail(top_n).iloc[::-1]), key="v1_cov_top")
+        plot(charts.build_coverage_bar(covered.tail(top_n).iloc[::-1], x_max), key="v1_cov_top")
     with right:
         st.markdown("**Fewest organizations** (at least one)")
-        plot(charts.build_coverage_bar(covered.head(top_n)), key="v1_cov_bottom")
+        plot(charts.build_coverage_bar(covered.head(top_n), x_max), key="v1_cov_bottom")
     if not gaps.empty:
         st.markdown(
             f"**No organization targets these {len(gaps)} codebook subcategories** under the current filters:"
