@@ -1,0 +1,16 @@
+# Partner data stays out of version control. Put exports in data/ locally.
+*.csv
+data/*
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+.DS_Store
