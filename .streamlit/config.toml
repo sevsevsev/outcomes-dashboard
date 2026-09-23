@@ -6,7 +6,11 @@ primaryColor = "#2a78d6"
 backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f6f6f3"
 textColor = "#1b1b1a"
+# Body text in the bundled sans (Source Sans); headings in the bundled serif
+# (Source Serif), which gives page and card titles an editorial voice. Both
+# ship with Streamlit, so nothing loads from a font service.
 font = "sans-serif"
+headingFont = "serif"
 borderColor = "#e8e7e3"
 showWidgetBorder = true
 baseRadius = "medium"

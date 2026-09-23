@@ -117,54 +117,64 @@ def cached_codebook() -> pd.DataFrame:
 # STYLE
 # =============================================================================
 
-# Small CSS touches on top of the theme in .streamlit/config.toml: tighter
-# page top, bordered metric cards, and muted captions.
-# Look and feel. The page is a soft warm-gray canvas and each section is a
-# white card on it, so the eye takes in one block at a time. Colors match the
-# theme in .streamlit/config.toml and the chart palette in charts.py.
+# Look and feel, on top of the theme in .streamlit/config.toml. The page is a
+# soft warm-gray canvas and each section is a white card on it, so the eye
+# takes in one block at a time. Titles are set in the serif heading face,
+# everything else in the sans. Colors match the chart palette in charts.py:
+# blue for what is covered, the warm accent for gaps.
 CANVAS = "#f5f5f2"
+INK = charts.TEXT_PRIMARY
+MUTED = charts.TEXT_SECONDARY
+HAIRLINE = charts.GRID
+SERIF = '"Source Serif", "Source Serif 4", Georgia, serif'
 CSS = f"""
 <style>
 [data-testid="stAppViewContainer"], [data-testid="stHeader"] {{ background: {CANVAS}; }}
 .block-container {{ padding-top: 2.4rem; padding-bottom: 4rem; max-width: 1320px; }}
 
-/* Type scale: a confident title, quiet supporting text. */
-h1 {{ font-size: 2rem !important; font-weight: 650 !important; letter-spacing: -0.02em; }}
-.page-lede {{ color: #5f5e5a; font-size: 1rem !important; line-height: 1.55; margin: -0.5rem 0 1.6rem 0; max-width: 52rem; }}
-.card-title {{ font-size: 1.25rem !important; font-weight: 650; letter-spacing: -0.01em; margin: 0 0 0.15rem 0; color: #1b1b1a; }}
-.card-note {{ color: #5f5e5a; font-size: 0.92rem !important; line-height: 1.5; margin: 0 0 0.9rem 0; max-width: 60rem; }}
-.subhead {{ font-size: 0.74rem !important; font-weight: 600; color: #5f5e5a; text-transform: uppercase;
-            letter-spacing: 0.06em; margin: 0.2rem 0 0.3rem 0; }}
+/* Type: serif titles with tight tracking, a calm sans for everything else. */
+h1 {{ font-family: {SERIF} !important; font-size: 2.35rem !important; font-weight: 600 !important;
+      letter-spacing: -0.015em; line-height: 1.15 !important; }}
+.page-lede {{ color: {MUTED}; font-size: 1.02rem !important; line-height: 1.55; margin: -0.35rem 0 1.8rem 0;
+              max-width: 44rem; }}
+.card-title {{ font-family: {SERIF}; font-size: 1.3rem !important; font-weight: 600; letter-spacing: -0.01em;
+               line-height: 1.25; margin: 0 0 0.2rem 0; color: {INK}; }}
+.card-note {{ color: {MUTED}; font-size: 0.92rem !important; line-height: 1.5; margin: 0 0 1rem 0; max-width: 46rem; }}
+.subhead {{ font-size: 0.9rem !important; font-weight: 600; color: {INK}; margin: 0.3rem 0 0.2rem 0; }}
+.subhead-note {{ font-weight: 400; color: {MUTED}; }}
 
-/* Cards: every st.container keyed "card-..." (see card()). */
+/* Cards: every st.container keyed "card-..." (see card()). A hairline, no shadow. */
 [class*="st-key-card-"] {{
     background: #ffffff;
-    border: 1px solid #e8e7e3 !important;
-    border-radius: 14px !important;
-    box-shadow: 0 1px 2px rgba(27, 27, 26, 0.04), 0 4px 16px rgba(27, 27, 26, 0.03);
-    padding: 1.35rem 1.5rem 1.2rem 1.5rem !important;
+    border: 1px solid {HAIRLINE} !important;
+    border-radius: 12px !important;
+    padding: 1.5rem 1.6rem 1.3rem 1.6rem !important;
 }}
 
-/* Headline numbers. */
-[data-testid="stMetric"] {{
+/* Headline numbers: one strip split by hairlines, not a row of boxes (see kpi_row()). */
+[class*="st-key-kpis-"] {{
     background: #ffffff;
-    border: 1px solid #e8e7e3;
-    border-radius: 14px;
-    padding: 0.95rem 1.15rem;
-    box-shadow: 0 1px 2px rgba(27, 27, 26, 0.04);
+    border: 1px solid {HAIRLINE} !important;
+    border-radius: 12px !important;
+    padding: 0 !important;
+    gap: 0 !important;
 }}
-[data-testid="stMetricLabel"] p {{ font-size: 0.74rem; font-weight: 600; color: #5f5e5a;
-                                   text-transform: uppercase; letter-spacing: 0.06em; }}
-[data-testid="stMetricValue"] {{ font-size: 2rem; font-weight: 650; letter-spacing: -0.02em; color: #1b1b1a; }}
+[class*="st-key-kpis-"] [data-testid="stColumn"] {{ padding: 1.05rem 1.4rem 1rem 1.4rem; }}
+[class*="st-key-kpis-"] [data-testid="stColumn"] + [data-testid="stColumn"] {{ border-left: 1px solid {HAIRLINE}; }}
+[class*="st-key-kpis-"] [data-testid="stHorizontalBlock"] {{ gap: 0 !important; }}
+[data-testid="stMetricLabel"] p {{ font-size: 0.86rem; font-weight: 400; color: {MUTED}; }}
+[data-testid="stMetricValue"] {{ font-size: 2.05rem; font-weight: 600; letter-spacing: -0.02em; color: {INK};
+                                 font-variant-numeric: tabular-nums; line-height: 1.2; }}
 
 /* Sidebar: white, with a thin rule instead of a colored panel. */
-[data-testid="stSidebar"] {{ border-right: 1px solid #e8e7e3; }}
-.brand {{ font-size: 1.05rem !important; font-weight: 700; letter-spacing: -0.01em; margin: 0; }}
-.brand-note {{ color: #5f5e5a; font-size: 0.82rem !important; line-height: 1.4; margin: 0.1rem 0 1.2rem 0; }}
+[data-testid="stSidebar"] {{ border-right: 1px solid {HAIRLINE}; }}
+.brand {{ font-family: {SERIF}; font-size: 1.25rem !important; font-weight: 600; letter-spacing: -0.01em; margin: 0; }}
+.brand-note {{ color: {MUTED}; font-size: 0.82rem !important; line-height: 1.4; margin: 0.15rem 0 1.4rem 0; }}
 
-.filter-chip {{
-    display: inline-block; background: #e6f0fc; color: #104281; border-radius: 999px;
-    padding: 0.12rem 0.65rem; margin: 0 0.3rem 0.35rem 0; font-size: 0.8rem;
+/* Goals no organization targets: the warm accent marks a gap, not a filter. */
+.gap-chip {{
+    display: inline-block; background: {charts.GAP_TINT}; color: {charts.GAP_TEXT}; border-radius: 6px;
+    padding: 0.14rem 0.6rem; margin: 0 0.3rem 0.35rem 0; font-size: 0.82rem;
 }}
 </style>
 """
@@ -185,21 +195,24 @@ def card(title: Optional[str] = None, note: Optional[str] = None, key: Optional[
     return box
 
 
-def subhead(text: str) -> None:
-    """A small uppercase label over part of a card, e.g. one of two side-by-side charts."""
-    st.markdown(f"<p class='subhead'>{text}</p>", unsafe_allow_html=True)
+def subhead(text: str, note: str = "") -> None:
+    """A short label over part of a card, e.g. one of two side-by-side charts, with an optional muted note."""
+    extra = f" <span class='subhead-note'>{note}</span>" if note else ""
+    st.markdown(f"<p class='subhead'>{text}{extra}</p>", unsafe_allow_html=True)
 
 
-def kpi_row(items: Sequence[tuple[str, str, Optional[str]]]) -> None:
-    """A row of headline numbers: (label, value, help text)."""
-    for col, (label, value, help_text) in zip(st.columns(len(items)), items):
-        col.metric(label, value, help=help_text)
+def kpi_row(items: Sequence[tuple[str, str, Optional[str]]], key: str) -> None:
+    """A strip of headline numbers: (label, value, help text). Styled by the kpis- rules in CSS."""
+    with st.container(key=f"kpis-{key}"):
+        for col, (label, value, help_text) in zip(st.columns(len(items)), items):
+            col.metric(label, value, help=help_text)
 
 
 def plot(fig, key: str, **kwargs):
     """Render a Plotly figure with the dashboard's shared settings."""
     # Set on the figure itself: Streamlit's renderer can override template backgrounds.
-    fig.update_layout(plot_bgcolor=charts.SURFACE, paper_bgcolor="rgba(0,0,0,0)")
+    # A chart that picks its own plot color (the heatmap's empty cells) keeps it.
+    fig.update_layout(plot_bgcolor=fig.layout.plot_bgcolor or charts.SURFACE, paper_bgcolor="rgba(0,0,0,0)")
     return st.plotly_chart(fig, key=key, config=charts.PLOTLY_CONFIG, theme=None, **kwargs)
 
 
@@ -321,7 +334,7 @@ def page_system_map(df: pd.DataFrame) -> None:
         ("Programs", f"{df[[COL_ORG_VIEW, COL_PROGRAM]].drop_duplicates().shape[0]:,}", None),
         ("Outcome statements", f"{len(df):,}", "One row per atomic outcome after the coder split compound statements."),
         ("Subcategories targeted", f"{coded[COL_SUBCAT].nunique():,}", None),
-    ])
+    ], key="map")
 
     # --- Treemap / sunburst ---------------------------------------------------
     with card(
@@ -373,11 +386,11 @@ def page_system_map(df: pd.DataFrame) -> None:
             subhead("Most organizations")
             plot(charts.build_coverage_bar(covered.tail(top_n).iloc[::-1], x_max), key="v1_cov_top")
         with right:
-            subhead("Fewest organizations (at least one)")
-            plot(charts.build_coverage_bar(covered.head(top_n), x_max), key="v1_cov_bottom")
+            subhead("Fewest organizations", "at least one")
+            plot(charts.build_coverage_bar(covered.head(top_n), x_max, color=charts.GAP), key="v1_cov_bottom")
         if not gaps.empty:
-            subhead(f"Not targeted by any organization ({len(gaps)})")
-            st.markdown(" ".join(f"<span class='filter-chip'>{g}</span>" for g in gaps[COL_SUBCAT]),
+            subhead("Not targeted by any organization", f"{len(gaps)} goals in the codebook")
+            st.markdown(" ".join(f"<span class='gap-chip'>{g}</span>" for g in gaps[COL_SUBCAT]),
                         unsafe_allow_html=True)
         with st.expander("All subcategories with counts", icon=":material/table_rows:"):
             st.dataframe(
@@ -461,7 +474,7 @@ def peers_for_organization(df: pd.DataFrame) -> None:
         ("Outcome statements", f"{len(org_rows):,}", None),
         ("Subcategories targeted", f"{len(org_subcats):,}", None),
         ("Peers sharing a goal", f"{len(peers):,}", None),
-    ])
+    ], key="org")
 
     if peers.empty:
         st.info("No other organization shares a subcategory with this one under the current filters.")
@@ -533,7 +546,7 @@ def organizations_for_goal(df: pd.DataFrame) -> None:
         ("Organizations", f"{len(orgs_for):,}", None),
         ("Programs", f"{goal_rows[[COL_ORG_VIEW, COL_PROGRAM]].drop_duplicates().shape[0]:,}", None),
         ("Outcome statements", f"{len(goal_rows):,}", None),
-    ])
+    ], key="goal")
     with card("Organizations working on this goal", "Click a bar to list that organization's outcomes.",
               key="goal_orgs"):
         event = plot(charts.build_subcategory_org_bar(orgs_for), key="v2_goal_bar",
@@ -646,15 +659,18 @@ def page_review(df: pd.DataFrame) -> None:
     page = st.session_state["v3_page"]
     start = (page - 1) * page_size
 
-    shown = f"showing {min(start + 1, len(filtered)):,}–{min(start + page_size, len(filtered)):,}"
-    with card(f"{len(filtered):,} outcomes", shown, key="review_table"):
+    shown = (f"Showing {start + 1:,}–{min(start + page_size, len(filtered)):,}, sorted by domain and subcategory."
+             if len(filtered) > page_size else "Sorted by domain and subcategory.")
+    with card(f"{len(filtered):,} outcomes to check", shown, key="review_table"):
         columns = [COL_ORG_VIEW, COL_PROGRAM, COL_OUTCOME, COL_FULL, COL_SUBCAT, COL_CONF, COL_NOTES, COL_QA,
                    COL_SOURCE_FILE]
         outcome_table(filtered.iloc[start:start + page_size], columns=columns, height=560)
 
-        p1, p2, p3 = st.columns([1, 2, 4], vertical_alignment="bottom")
-        p1.number_input("Page", min_value=1, max_value=n_pages, step=1, key="v3_page")
-        p2.markdown(f"of {n_pages}")
+        if n_pages > 1:
+            p1, _, p3 = st.columns([1, 2, 4], vertical_alignment="bottom")
+            p1.number_input(f"Page (of {n_pages})", min_value=1, max_value=n_pages, step=1, key="v3_page")
+        else:
+            p3 = st.container()
         with p3:
             download_button(filtered, f"Download all {len(filtered):,} rows", "outcomes_for_review.csv",
                             key="v3_dl")
@@ -747,7 +763,7 @@ def sidebar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
     # The placeholders ("All domains", ...) name each filter, so labels stay hidden.
     hidden = "collapsed"
     with filters_box:
-        st.markdown("<p class='subhead'>Filters</p>", unsafe_allow_html=True)
+        subhead("Filters")
         domains = domain_order(df)
         keep_valid("f_domains", domains)
         chosen_domains = st.multiselect("Domains", domains, key="f_domains", placeholder="All domains",
