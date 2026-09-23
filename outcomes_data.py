@@ -655,3 +655,122 @@ def organizations_for_subcategory(df: pd.DataFrame, subcategory: str, org_col: s
         .sort_values(["count", "organization"], ascending=[False, True])
         .reset_index(drop=True)
     )
+
+
+# =============================================================================
+# FINDINGS AND LINKED VIEWS
+# =============================================================================
+
+
+def domain_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """One row per domain: organizations, outcomes, short name and number, with hover samples.
+
+    Placeholder rows (Uncoded) are left out. Sorted by organizations, most first.
+    """
+    coded = df[df[COL_DOMAIN] != UNCODED_DOMAIN]
+    if coded.empty:
+        return pd.DataFrame(columns=[COL_DOMAIN, COL_DOMAIN_SHORT, COL_DOMAIN_NUM, "organizations", "outcomes",
+                                     "samples"])
+    return (
+        coded.groupby([COL_DOMAIN, COL_DOMAIN_SHORT, COL_DOMAIN_NUM], observed=True)
+        .agg(organizations=(COL_ORG_VIEW, "nunique"), outcomes=(COL_TEXT, "size"),
+             samples=(COL_OUTCOME, sample_outcome_texts))
+        .reset_index()
+        .sort_values(["organizations", "outcomes", COL_DOMAIN_NUM], ascending=[False, False, True])
+        .reset_index(drop=True)
+    )
+
+
+def goal_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """One row per coded subcategory: domain, organizations, outcomes and samples, most organizations first."""
+    coded = df[(df[COL_SUBCAT] != UNASSIGNED_SUBCAT) & (df[COL_DOMAIN] != UNCODED_DOMAIN)]
+    if coded.empty:
+        return pd.DataFrame(columns=[COL_DOMAIN, COL_SUBCAT, "organizations", "outcomes", "samples"])
+    counts = hierarchy_counts(coded)
+    counts["_order"] = counts[COL_SUBCAT].map(subcategory_sort_key)
+    return (
+        counts.sort_values(["organizations", "outcomes", "_order"], ascending=[False, False, True])
+        .drop(columns="_order")
+        .reset_index(drop=True)
+    )
+
+
+def population_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """Outcomes and organizations per population group, in the fixed group order (empty groups dropped)."""
+    groups = df[COL_POP].map(population_group)
+    summary = (
+        df.assign(population_group=groups)
+        .groupby("population_group")
+        .agg(outcomes=(COL_TEXT, "size"), organizations=(COL_ORG_VIEW, "nunique"),
+             samples=(COL_OUTCOME, sample_outcome_texts))
+        .reindex(POPULATION_GROUP_ORDER)
+        .dropna(subset=["outcomes"])
+        .reset_index()
+    )
+    summary["outcomes"] = summary["outcomes"].astype(int)
+    summary["organizations"] = summary["organizations"].astype(int)
+    return summary
+
+
+def _plural(n: int, one: str, many: Optional[str] = None) -> str:
+    return f"{n:,} {one if n == 1 else (many or one + 's')}"
+
+
+def portfolio_findings(df: pd.DataFrame, coverage: Optional[pd.DataFrame] = None) -> list[str]:
+    """Two to four plain-language findings about the filtered outcomes, as Markdown sentences.
+
+    Each one states a fact the charts below show, with the numbers inline, so
+    the page leads with what the data says rather than with raw counts.
+    """
+    findings: list[str] = []
+    domains = domain_summary(df)
+    n_orgs = df[COL_ORG_VIEW].nunique()
+    if domains.empty or n_orgs == 0:
+        return findings
+
+    top = domains.iloc[0]
+    if len(domains) > 1:
+        findings.append(
+            f"**{domain_short(top[COL_DOMAIN]).split('. ', 1)[-1]}** is the most widely shared focus: "
+            f"**{int(top['organizations'])} of {n_orgs}** organizations have at least one outcome in it."
+        )
+        by_outcomes = domains["outcomes"].sort_values(ascending=False)
+        needed = int((by_outcomes.cumsum() < by_outcomes.sum() / 2).sum()) + 1
+        if needed < len(domains):
+            findings.append(
+                f"Half of all outcome statements fall in **{needed} of the {len(domains)} domains**."
+            )
+
+    if coverage is not None and not coverage.empty:
+        gaps = int((coverage["organizations"] == 0).sum())
+        single = int((coverage["organizations"] == 1).sum())
+        if gaps or single:
+            parts = []
+            if gaps:
+                parts.append(f"**{_plural(gaps, 'goal')}** in the codebook "
+                             f"{'has' if gaps == 1 else 'have'} no program")
+            if single:
+                parts.append(f"{'another ' if gaps else ''}**{single}** "
+                             f"{'has' if single == 1 else 'have'} only one organization")
+            sentence = ", and ".join(parts) + "."
+            findings.append(sentence[0].upper() + sentence[1:])
+
+    groups = df[COL_POP].map(population_group)
+    student_share = (groups == "Students & youth").mean()
+    if 0 < student_share < 1:
+        share_by_domain = (
+            df.assign(_students=groups == "Students & youth")
+            .loc[df[COL_DOMAIN] != UNCODED_DOMAIN]
+            .groupby(COL_DOMAIN)["_students"].mean()
+        )
+        adult_domains = share_by_domain[share_by_domain < 0.5]
+        sentence = f"**{student_share:.0%}** of outcomes are about students and youth"
+        if len(adult_domains) == 1:
+            sentence += (f". **{domain_short(adult_domains.index[0]).split('. ', 1)[-1]}** is the one domain "
+                         "where most outcomes are about adults, families or systems instead")
+        elif len(adult_domains) > 1:
+            names = [domain_short(d).split(". ", 1)[-1] for d in adult_domains.index]
+            listed = (", ".join(names[:-1]) + " and " + names[-1]) if len(names) <= 3 else f"{len(names)} domains"
+            sentence += f". In {listed}, most outcomes are about adults, families or systems instead"
+        findings.append(sentence + ".")
+    return findings
