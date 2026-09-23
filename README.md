@@ -4,7 +4,7 @@ A Streamlit dashboard for exploring outcomes coded from partner programs' logic 
 
 ## Pages
 
-- **System map**: shows where the portfolio concentrates its effort. It has a treemap or sunburst of domains and subcategories, sized by organizations or by outcome statements and shaded by how many organizations work on each goal. Below that are the most and least covered goals, including codebook subcategories that no program targets yet, and a chart of who the outcomes are for.
+- **System map**: shows where the portfolio concentrates its effort. It has a treemap or sunburst of domains and subcategories, sized by organizations or by outcome statements and shaded by how many organizations work on each goal. Labels stay at a readable size; blocks too small for one show it on hover, and "Focus on a domain" redraws the chart for one domain. Below that are the most and least covered goals, including codebook subcategories that no program targets yet, and a chart of who the outcomes are for.
 - **Find peers**: pick an organization to rank its peers by shared goals, then select a peer to compare their outcomes side by side. You can also pick a goal to see every organization working on it.
 - **Review coding**: a paginated, searchable table that opens on low and no-confidence rows for a human check.
 
