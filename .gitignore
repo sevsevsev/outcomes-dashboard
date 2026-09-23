@@ -2,6 +2,8 @@
 *.csv
 data/*
 !data/.gitkeep
+# The codebook list is reference data, not partner data.
+!reference/*.csv
 
 # Python
 __pycache__/

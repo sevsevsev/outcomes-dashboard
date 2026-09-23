@@ -1,34 +1,52 @@
-# Outcomes Dashboard
+# Outcomes Explorer
 
-A Streamlit prototype for exploring outcomes coded from partner programs' logic models.
+A Streamlit dashboard for exploring outcomes coded from partner programs' logic models by the Qualitative Outcomes Coder.
 
-## Views
+## Pages
 
-1. **System-Level Policy Mapping**: treemap or sunburst of domains and subcategories sized by outcome count, plus outcomes per domain stacked by target population.
-2. **Program Alignment & Partnership Discovery**: pick an organization to rank peers by shared subcategories (peer matrix and heatmap), or pick a subcategory to see every organization working toward it.
-3. **Data Governance & Validation**: a paginated, searchable table of coded outcomes, filtered to low and no-confidence rows by default.
+- **System map**: shows where the portfolio concentrates its effort. It has a treemap or sunburst of domains and subcategories, sized by organizations or by outcome statements and shaded by how many organizations work on each goal. Below that are the most and least covered goals, including codebook subcategories that no program targets yet, and a chart of who the outcomes are for.
+- **Find peers**: pick an organization to rank its peers by shared goals, then select a peer to compare their outcomes side by side. You can also pick a goal to see every organization working on it.
+- **Review coding**: a paginated, searchable table that opens on low and no-confidence rows for a human check.
 
-Every chart shows sample outcome statements on hover, and each chart has a drill-down list with a CSV download underneath.
+Hovering over any chart shows sample outcome statements. Every drill-down list has a CSV download.
 
-## Run it
+## Outcome text
+
+The coder splits compound statements into atomic outcomes and codes each one separately. The dashboard shows the atomic outcome as the main text. When a statement was split, the original appears in a "From the full statement" column for context.
+
+## Run it locally
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Put the export in `data/verified_coded_outcomes(5).csv`. The app also checks next to `app.py` and the current directory. CSV files are git-ignored, so partner data never gets committed. Point it elsewhere with `OUTCOMES_CSV=/path/to/export.csv`. If no file is found, the app offers an upload box.
+Put the export in `data/verified_coded_outcomes(5).csv`, or point to it with `OUTCOMES_CSV=/path/to/export.csv`. Without a file, the app opens on an upload screen. CSV files are git-ignored, so partner data never gets committed.
 
-## Data clean-up
+## Deploy
 
-- Missing organization and program names are filled in from the logic model's file name (`<id> - <Organization> - <Program> - Logic Model.pdf`).
-- Known spelling variants are merged (see `ORG_ALIASES` in `app.py`).
-- Missing categories are labelled `Uncoded`, `Unassigned subcategory` or `unspecified` so they stay visible.
-- The sidebar can group organizations by the name in the logic model, or by the grantee named in the file name.
+Deploy on [Streamlit Community Cloud](https://share.streamlit.io) from this repo, with `main` as the branch and `app.py` as the main file. Vercel and other serverless hosts can't run Streamlit.
 
-## Reusing the filters
+The deployed app asks each visitor to upload the CSV. The file lives only in that browser session. The look is set in `.streamlit/config.toml`.
 
-The data functions in `app.py` (`clean_outcomes`, `filter_outcomes`, `compute_peer_overlap`, and so on) make no Streamlit calls, so another script can import them. A future map export, for example, could call `filter_outcomes()` and join the result to organization coordinates.
+## Code layout
+
+| File | What it holds |
+|---|---|
+| `app.py` | Page layout, navigation, sidebar filters |
+| `charts.py` | Plotly figures and the shared chart theme and palette |
+| `outcomes_data.py` | Loading, cleaning, filtering, aggregation. It makes no Streamlit calls, so other tools can import it. |
+| `reference/codebook_subcategories.csv` | Every subcategory in the codebook (v1.1.1), used to find goals no program targets. Regenerate it from the coder's `codebooks/original.ts` when the codebook changes. |
+
+### Data clean-up on load
+
+- Missing organization and program names are filled in from the logic model's file name.
+- Known spelling variants are merged (see `ORG_ALIASES` in `outcomes_data.py`).
+- Missing categories are labelled `Uncoded`, `Unassigned subcategory` or `unspecified`, so they stay visible.
+
+### Reusing the filters
+
+A future map export, for example, could call `outcomes_data.filter_outcomes()` and join the result to organization coordinates.
 
 ## Tests
 

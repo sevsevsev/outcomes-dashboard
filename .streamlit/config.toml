@@ -1,0 +1,23 @@
+# Look and feel for the outcomes dashboard (read by Streamlit locally and on Streamlit Community Cloud).
+
+[theme]
+base = "light"
+primaryColor = "#2a78d6"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f6f6f3"
+textColor = "#1b1b1a"
+font = "sans-serif"
+borderColor = "#e8e7e3"
+showWidgetBorder = true
+baseRadius = "medium"
+
+[theme.sidebar]
+backgroundColor = "#f6f6f3"
+
+[client]
+# Hide the developer menu (Deploy button, rerun, settings) from viewers.
+toolbarMode = "viewer"
+
+[server]
+# Partner exports can be a few MB; this is plenty.
+maxUploadSize = 50
