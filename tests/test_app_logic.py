@@ -224,13 +224,50 @@ def test_program_flows_go_to_domains_then_to_one_domains_subcategories(df):
     assert zoomed["outcomes"].sum() == 4
 
 
-def test_program_sankey_keeps_codebook_order_and_one_color_per_program(df):
+def test_program_dots_put_programs_in_rows_and_domains_in_codebook_order(df):
     programs = ["BalletX", "ArtWell"]
-    sankey = charts.build_program_sankey(app.program_flows(df, programs), programs).data[0]
-    names = list(sankey.node.customdata)
-    assert names[:2] == programs
-    assert names[2].startswith("1.") and names[3].startswith("3.")
-    assert sankey.node.y[2] < sankey.node.y[3]
-    # Every band carries its program's color.
-    balletx = charts._rgba(charts.CATEGORICAL[0], 0.4)
-    assert all(color == balletx for s, color in zip(sankey.link.source, sankey.link.color) if s == 0)
+    fig = charts.build_program_dots(app.program_flows(df, programs), programs)
+    trace = fig.data[0]
+    columns = list(fig.layout.xaxis.categoryarray)
+    assert columns[0].startswith("1.") and columns[-1].startswith("3.")
+    assert list(fig.layout.yaxis.categoryarray) == programs
+    # customdata[0] names the cell a click picks.
+    assert f"BalletX||{JOY}" in [c[0] for c in trace.customdata]
+    assert trace.marker.color == charts.PRIMARY
+    assert trace.unselected.marker.color == charts.FADED
+
+
+def test_ranked_bars_fade_everything_but_the_clicked_bar(df):
+    domains = app.domain_summary(df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]}))
+    fig = charts.build_ranked_bars(domains, app.COL_DOMAIN_SHORT, "organizations", app.COL_DOMAIN)
+    trace = fig.data[0]
+    assert [c[0] for c in trace.customdata][0] == SEL          # most organizations first; key in customdata[0]
+    assert "Uncoded" not in [c[0] for c in trace.customdata]
+    # Plotly styles the selection, so the figure is the same before and after a click.
+    assert trace.marker.color == charts.PRIMARY
+    assert trace.selected.marker.color == charts.PRIMARY
+    assert trace.unselected.marker.color == charts.FADED
+
+
+def test_summaries_count_organizations_once(df):
+    frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
+    domains = app.domain_summary(frame).set_index(app.COL_DOMAIN)
+    assert domains.loc[SEL, "organizations"] == 2      # BalletX and ArtWell
+    assert domains.loc[SEL, "outcomes"] == 4
+    assert domains.index[0] == SEL                     # most organizations first
+    goals = app.goal_summary(frame)
+    assert app.UNASSIGNED_SUBCAT not in set(goals[app.COL_SUBCAT])
+    pops = app.population_summary(frame).set_index("population_group")
+    assert pops.loc["Students & youth", "outcomes"] == 6
+    assert pops.loc["Educators & staff", "outcomes"] == 1
+
+
+def test_findings_state_the_top_domain_and_codebook_gaps(df):
+    frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
+    coverage = app.subcategory_coverage(frame, app.load_codebook())
+    text = " ".join(app.portfolio_findings(frame, coverage))
+    assert "**Social & Emotional Learning** is the most widely shared focus: **2 of 4** organizations" in text
+    gaps = int((coverage["organizations"] == 0).sum())
+    assert f"**{gaps} goals** in the codebook have no program" in text
+    assert "of outcomes are about students and youth" in text
+    assert app.portfolio_findings(frame.iloc[0:0], coverage) == []

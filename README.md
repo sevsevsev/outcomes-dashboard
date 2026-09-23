@@ -4,11 +4,13 @@ A Streamlit dashboard for exploring outcomes coded from partner programs' logic 
 
 ## Pages
 
-- **System map**: shows where the portfolio concentrates its effort. It has a treemap or sunburst of domains and subcategories, sized by organizations or by outcome statements and shaded by how many organizations work on each goal. It opens on the domains; click one to expand its subcategories, and click back up to return. Labels stay at a readable size, and blocks too small for one show it on hover. Below that are the most and least covered goals, including codebook subcategories that no program targets yet, and a chart of who the outcomes are for.
-- **Find peers**: pick an organization to rank its peers by shared goals, then select a peer to compare their outcomes side by side. You can also pick a goal to see every organization working on it, or compare up to six programs in a Sankey chart that shows how each one's outcomes split across domains. Use the domain buttons above it to zoom into one domain's subcategories.
-- **Review coding**: a paginated, searchable table that opens on low and no-confidence rows for a human check.
+Each page opens with a few sentences that state what the data shows, worked out from the loaded file. Charts come next, and clicking a bar or dot narrows the charts and table below it. A **Clear selection** button undoes the clicks.
 
-Hovering over any chart shows sample outcome statements. Every drill-down list has a CSV download.
+- **System map**: domains ranked by how many organizations (or outcome statements) they hold. Click a domain to rank its goals and see who those outcomes are for; click a goal or an audience to narrow further. The outcomes table under the charts follows every click. A view switch swaps the ranked bars for a treemap or sunburst. The last section lists the goals with the thinnest coverage, including codebook goals no program targets yet.
+- **Find peers**: pick an organization to rank its peers by shared goals, then select a peer to read both organizations' outcomes goal by goal. You can also pick a goal and click an organization to read its outcomes, or compare up to six programs in a dot grid of programs by domain (or by the goals in one domain). Click a dot to list those outcomes.
+- **Review coding**: a searchable table that opens on low and no-confidence rows for a human check.
+
+The filter bar at the top of every page holds **Filters** (domain, audience, organization, confidence) and **Data** (the loaded file, a replacement upload, how organizations are grouped, and notes on the measures). The line beside it says how many outcome statements the page is showing. Hovering over any chart shows sample outcome statements, and every list has a CSV download.
 
 ## Outcome text
 
@@ -27,13 +29,13 @@ Put the export in `data/verified_coded_outcomes(5).csv`, or point to it with `OU
 
 Deploy on [Streamlit Community Cloud](https://share.streamlit.io) from this repo, with `main` as the branch and `app.py` as the main file. Vercel and other serverless hosts can't run Streamlit.
 
-The deployed app asks each visitor to upload the CSV. The file lives only in that browser session. The look is set in `.streamlit/config.toml`.
+The deployed app asks each visitor to upload the CSV. The file lives only in that browser session. The look is set in `.streamlit/config.toml` and the CSS at the top of `app.py`: one sans font, a white page, cool greys, and one blue that marks what is selected.
 
 ## Code layout
 
 | File | What it holds |
 |---|---|
-| `app.py` | Page layout, navigation, sidebar filters |
+| `app.py` | Page layout, navigation, the filter bar, and the chart clicks that filter tables |
 | `charts.py` | Plotly figures and the shared chart theme and palette |
 | `outcomes_data.py` | Loading, cleaning, filtering, aggregation. It makes no Streamlit calls, so other tools can import it. |
 | `reference/codebook_subcategories.csv` | Every subcategory in the codebook (v1.1.1), used to find goals no program targets. Regenerate it from the coder's `codebooks/original.ts` when the codebook changes. |

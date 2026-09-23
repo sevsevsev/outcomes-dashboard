@@ -6,11 +6,11 @@ Every chart carries sample outcome statements in its hover box (the
 
 Color rules (so the charts read as one system):
 
+* Ranked bars and dots are one series in the accent blue. When the reader
+  clicks a mark, it keeps the blue and the rest fade to grey, so the
+  selection is what stands out.
 * Magnitude uses one blue ramp, light to dark (treemap, heatmap).
-* Identity uses the categorical palette in a fixed order, and each population
-  group always gets the same color, whatever the filters.
-* Single-series bars use the first categorical blue and need no legend.
-* The warm accent (GAP) marks thin or missing coverage, the things to act on.
+* Categorical hues are assigned in a fixed order, never cycled.
 """
 
 from __future__ import annotations
@@ -25,15 +25,11 @@ import plotly.io as pio
 
 from outcomes_data import (
     COL_DOMAIN,
-    COL_DOMAIN_NUM,
-    COL_DOMAIN_SHORT,
     COL_ORG_VIEW,
     COL_SUBCAT,
     COL_OUTCOME,
     MEASURE_ORGS,
-    POPULATION_GROUP_ORDER,
     distinct_counts_by,
-    domain_population_counts,
     domain_short,
     hierarchy_counts,
     sample_outcome_texts,
@@ -51,21 +47,13 @@ CATEGORICAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300",
 SEQUENTIAL_BLUE = ["#e6f0fc", "#b7d3f6", "#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281", "#0d366b"]
 
 PRIMARY = CATEGORICAL[0]
-TEXT_PRIMARY = "#1b1b1a"
-TEXT_SECONDARY = "#5f5e5a"
-GRID = "#e8e7e3"
+FADED = "#cfd3da"          # marks that are not selected
+TEXT_PRIMARY = "#16181d"
+TEXT_SECONDARY = "#5b616d"
+GRID = "#e6e8ec"
 SURFACE = "#ffffff"
 
-# Warm accent for gaps: thin coverage bars and goals no one targets. It is the
-# palette's second color, so it stays distinct from blue for color-blind readers.
-GAP = CATEGORICAL[1]
-GAP_TINT = "#fcebe2"
-GAP_TEXT = "#8f3510"
-
-# Each population group keeps its color no matter which groups are filtered in.
-POPULATION_COLORS = dict(zip(POPULATION_GROUP_ORDER, CATEGORICAL))
-
-FONT_FAMILY = '"Source Sans 3", "Source Sans", "Source Sans Pro", -apple-system, "Segoe UI", sans-serif'
+FONT_FAMILY = '"Source Sans", "Source Sans 3", "Source Sans Pro", -apple-system, "Segoe UI", sans-serif'
 
 pio.templates["outcomes"] = go.layout.Template(
     layout=dict(
@@ -220,153 +208,125 @@ def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_t
     return fig
 
 
-# Wrap width for program and goal names beside the Sankey's bars.
-SANKEY_WRAP = 30
-SANKEY_TARGET_COLOR = "#b4b2ab"   # neutral, so color stays on the programs being compared
+# =============================================================================
+# RANKED BARS AND DOTS (the linked, clickable views)
+# =============================================================================
+
+LABEL_CHARS = 44   # longer category names are shortened on the axis; hover shows them in full
+ROW_HEIGHT = 30    # pixels per bar, which keeps each bar under 24px thick
 
 
-def _rgba(hex_color: str, alpha: float) -> str:
-    h = hex_color.lstrip("#")
-    return f"rgba({int(h[0:2], 16)}, {int(h[2:4], 16)}, {int(h[4:6], 16)}, {alpha})"
+def short_label(text: str, limit: int = LABEL_CHARS) -> str:
+    text = str(text)
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-def _stack_positions(sizes: list[float], gap: float = 0.03) -> list[float]:
-    """Vertical centers (0 = top, 1 = bottom) that stack nodes in the given order.
+# How a clicked mark and the others look. Plotly applies this in the browser, so
+# the figure itself never changes with the selection; Streamlit identifies a
+# chart by its figure, and a changed figure would drop the reader's click.
+SELECTED = dict(marker=dict(color=PRIMARY, opacity=1))
+UNSELECTED = dict(marker=dict(color=FADED, opacity=1))
+# Bars carry their value as text; it stays in text ink whether or not the bar is picked.
+BAR_SELECTED = dict(marker=SELECTED["marker"], textfont=dict(color=TEXT_PRIMARY))
+BAR_UNSELECTED = dict(marker=UNSELECTED["marker"], textfont=dict(color=TEXT_SECONDARY))
+# Dot counts print inside the dot, so a faded dot needs darker ink than white.
+DOT_UNSELECTED = dict(marker=UNSELECTED["marker"], textfont=dict(color=TEXT_SECONDARY))
 
-    Plotly's automatic layout reorders nodes to reduce crossings, which
-    scrambles the codebook order; fixed positions keep it.
+
+def build_ranked_bars(
+    data: pd.DataFrame,
+    label_col: str,
+    value_col: str,
+    key_col: str,
+    value_noun: str = "organizations",
+    detail: Optional[str] = None,
+):
+    """Horizontal bars in the order given (first row at the top), one series, no legend.
+
+    `key_col` goes into customdata[0] so a click tells the app which row was
+    picked. Values sit at the bar tips; hover adds `detail` (a
+    customdata-based template line) and sample outcomes from the `samples`
+    column.
     """
-    total = sum(sizes) or 1
-    usable = 1 - gap * max(len(sizes) - 1, 0)
-    centers, top = [], 0.0
-    for size in sizes:
-        height = size / total * usable
-        centers.append(min(max(top + height / 2, 0.001), 0.999))
-        top += height + gap
-    return centers
-
-
-def build_program_sankey(flows: pd.DataFrame, programs: list[str], zoomed: bool = False):
-    """Sankey from programs (left) to domains, or to one domain's subcategories (right).
-
-    Band width is the number of outcome statements. Each program keeps one
-    color from the categorical palette, and its bands carry that color, so
-    you can follow a program across the chart. Hover a band for samples.
-    """
-    targets = list(dict.fromkeys(flows["target"]))
-    sources = [p for p in programs if p in set(flows["source"])]
-    index = {name: i for i, name in enumerate(sources + targets)}
-    color_of = {p: CATEGORICAL[i % len(CATEGORICAL)] for i, p in enumerate(programs)}
-
-    target_names = targets if zoomed else [domain_short(t) for t in targets]
-    source_sizes = [flows.loc[flows["source"] == p, "outcomes"].sum() for p in sources]
-    target_sizes = [flows.loc[flows["target"] == t, "outcomes"].sum() for t in targets]
-    fig = go.Figure(
-        go.Sankey(
-            arrangement="fixed",
-            node=dict(
-                x=[0.001] * len(sources) + [0.999] * len(targets),
-                y=_stack_positions(source_sizes) + _stack_positions(target_sizes),
-                label=[wrap_label(n, SANKEY_WRAP) for n in sources + target_names],
-                customdata=sources + target_names,
-                color=[color_of[p] for p in sources] + [SANKEY_TARGET_COLOR] * len(targets),
-                pad=14,
-                thickness=18,
-                line=dict(width=0),
-                hovertemplate="<b>%{customdata}</b><br>%{value} outcome statements<extra></extra>",
-            ),
-            link=dict(
-                source=[index[s] for s in flows["source"]],
-                target=[index[t] for t in flows["target"]],
-                value=flows["outcomes"].tolist(),
-                color=[_rgba(color_of[s], 0.4) for s in flows["source"]],
-                customdata=flows["samples"].tolist(),
-                hovertemplate=(
-                    "<b>%{source.customdata}</b> to <b>%{target.customdata}</b>"
-                    "<br>%{value} outcome statements"
-                    "<br><br><b>Sample outcomes</b><br>%{customdata}<extra></extra>"
-                ),
-            ),
-            textfont=dict(family=FONT_FAMILY, size=14, color=TEXT_PRIMARY),
-        )
-    )
-    # Room for a two-line label beside every bar, even the thinnest.
-    fig.update_layout(height=max(480, 64 * max(len(targets), len(sources))), margin=dict(t=8, l=8, r=8, b=8))
-    return fig
-
-
-def build_domain_population_bar(df: pd.DataFrame, as_share: bool = False):
-    """Horizontal stacked bars: outcome statements per domain, split by population group."""
-    counts = domain_population_counts(df)
-    value = "share" if as_share else "count"
-    order = counts.sort_values(COL_DOMAIN_NUM)[COL_DOMAIN_SHORT].drop_duplicates().tolist()
-    fig = px.bar(
-        counts,
-        y=COL_DOMAIN_SHORT,
-        x=value,
-        color="population_group",
+    keys = data[key_col].tolist()
+    custom = list(zip(keys, data["samples"], data[label_col]))
+    fig = go.Figure(go.Bar(
+        x=data[value_col],
+        y=[short_label(v) for v in data[label_col]],
         orientation="h",
-        custom_data=["samples", COL_DOMAIN, "population_group", "count", "share"],
-        category_orders={COL_DOMAIN_SHORT: order, "population_group": POPULATION_GROUP_ORDER},
-        color_discrete_map=POPULATION_COLORS,
-        labels={COL_DOMAIN_SHORT: "", "count": "Outcome statements", "share": "Share of the domain's outcomes",
-                "population_group": "Who the outcome is for"},
-    )
-    fig.update_traces(
-        hovertemplate=(
-            "<b>%{customdata[1]}</b><br>%{customdata[2]}: %{customdata[3]} outcomes "
-            "(%{customdata[4]:.0%} of this domain)"
-            + SAMPLE_HOVER_BLOCK
-            + "<extra></extra>"
-        ),
-        marker_line=dict(color=SURFACE, width=1.5),
-    )
-    fig.update_layout(
-        barmode="stack",
-        height=max(380, 36 * len(order) + 120),
-        legend=dict(orientation="h", yanchor="bottom", y=1.01, x=0, title=None),
-        xaxis=dict(tickformat=".0%" if as_share else ",d", title=None),
-        yaxis=dict(automargin=True),
-        margin=dict(t=48, l=0, r=8, b=8),
-        bargap=0.28,
-    )
-    return fig
-
-
-def build_coverage_bar(coverage: pd.DataFrame, x_max: Optional[float] = None, color: str = PRIMARY):
-    """Horizontal bars of organizations per subcategory (one series, no legend).
-
-    Pass the same `x_max` to charts shown side by side so bar lengths compare,
-    and `color=GAP` for the thinly covered goals.
-    """
-    data = coverage.iloc[::-1]  # plotly draws the first row at the bottom
-    fig = px.bar(
-        data,
-        x="organizations",
-        y=COL_SUBCAT,
-        orientation="h",
-        custom_data=["samples", "outcomes", "programs", COL_DOMAIN],
-        color_discrete_sequence=[color],
-        labels={"organizations": "Organizations", COL_SUBCAT: ""},
-        text="organizations",
-    )
-    fig.update_traces(
-        hovertemplate=(
-            "<b>%{y}</b><br>%{customdata[3]}<br>%{x} organizations · %{customdata[2]} programs · "
-            "%{customdata[1]} outcome statements"
-            + SAMPLE_HOVER_BLOCK
-            + "<extra></extra>"
-        ),
+        marker=dict(color=PRIMARY),
+        customdata=custom,
+        text=data[value_col],
         textposition="outside",
         cliponaxis=False,
-        textfont=dict(color=TEXT_SECONDARY),
-    )
+        textfont=dict(color=TEXT_SECONDARY, size=12),
+        hovertemplate=(
+            "<b>%{customdata[2]}</b><br>%{x} " + value_noun
+            + (f"<br>{detail}" if detail else "")
+            + "<br><br><b>Sample outcomes</b><br>%{customdata[1]}<extra></extra>"
+        ),
+        selected=BAR_SELECTED,
+        unselected=BAR_UNSELECTED,
+    ))
     fig.update_layout(
-        height=max(240, 30 * len(data) + 40),
-        xaxis=dict(visible=False, range=[0, (x_max or data["organizations"].max() or 1) * 1.08]),
-        yaxis=dict(automargin=True),
-        margin=dict(t=4, l=0, r=24, b=4),
-        bargap=0.3,
+        height=ROW_HEIGHT * max(len(data), 2) + 24,
+        xaxis=dict(visible=False, range=[0, (data[value_col].max() or 1) * 1.12]),
+        yaxis=dict(autorange="reversed", automargin=True, tickfont=dict(color=TEXT_PRIMARY, size=13),
+                   showgrid=False),
+        margin=dict(t=4, l=0, r=8, b=4),
+        bargap=0.34,
+        barcornerradius=4,
+        showlegend=False,
+        dragmode=False,
+    )
+    return fig
+
+
+DOT_GRID_WRAP = 14   # characters per line in the column labels
+
+
+def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = False):
+    """Programs (rows) by domain or subcategory (columns); dot area is the number of outcome statements.
+
+    It answers "where do these programs overlap?" without crossing lines.
+    customdata[0] is "program||target", so a click tells the app which cell
+    was picked.
+    """
+    targets = list(dict.fromkeys(flows["target"]))
+    rows = [p for p in programs if p in set(flows["source"])]
+    names = {t: (t if zoomed else domain_short(t)) for t in targets}
+    x_labels = {t: wrap_label(names[t], DOT_GRID_WRAP) for t in targets}
+    peak = flows["outcomes"].max() or 1
+    sizes = [12 + 34 * (n / peak) ** 0.5 for n in flows["outcomes"]]
+    keys = [f"{src}||{tgt}" for src, tgt in zip(flows["source"], flows["target"])]
+    target_names = [names[t] for t in flows["target"]]
+    fig = go.Figure(go.Scatter(
+        x=[x_labels[t] for t in flows["target"]],
+        y=[short_label(p, 40) for p in flows["source"]],
+        mode="markers+text",
+        marker=dict(size=sizes, color=PRIMARY, line=dict(color=SURFACE, width=2)),
+        # Counts print inside dots big enough to hold them; hover gives every count.
+        text=[str(n) if size >= 24 else "" for n, size in zip(flows["outcomes"], sizes)],
+        textfont=dict(color=SURFACE, size=12),
+        customdata=list(zip(keys, flows["samples"], flows["source"], target_names, flows["outcomes"])),
+        hovertemplate=(
+            "<b>%{customdata[2]}</b> in <b>%{customdata[3]}</b><br>%{customdata[4]} outcome statements"
+            "<br><br><b>Sample outcomes</b><br>%{customdata[1]}<extra></extra>"
+        ),
+        selected=SELECTED,
+        unselected=DOT_UNSELECTED,
+    ))
+    fig.update_layout(
+        height=110 + 58 * len(rows),
+        xaxis=dict(side="top", type="category", categoryorder="array",
+                   categoryarray=[x_labels[t] for t in targets], showgrid=True, gridcolor=GRID,
+                   tickfont=dict(size=12, color=TEXT_SECONDARY), fixedrange=True),
+        yaxis=dict(type="category", categoryorder="array", categoryarray=[short_label(p, 40) for p in rows],
+                   autorange="reversed", showgrid=True, gridcolor=GRID, automargin=True,
+                   tickfont=dict(size=13, color=TEXT_PRIMARY), fixedrange=True),
+        margin=dict(t=8, l=0, r=16, b=8),
+        showlegend=False,
+        dragmode=False,
     )
     return fig
 
@@ -408,38 +368,6 @@ def build_peer_heatmap(counts: pd.DataFrame, samples: pd.DataFrame):
         yaxis=dict(showgrid=False),
         margin=dict(t=8, l=0, r=0, b=0),
         coloraxis_colorbar=dict(thickness=8, len=0.5, outlinewidth=0, tickfont=dict(size=11)),
-    )
-    return fig
-
-
-def build_subcategory_org_bar(orgs: pd.DataFrame):
-    """Horizontal bars: which organizations target a subcategory, and with how many outcomes."""
-    fig = px.bar(
-        orgs,
-        x="count",
-        y="organization",
-        orientation="h",
-        custom_data=["samples", "programs"],
-        labels={"count": "Outcome statements", "organization": ""},
-        color_discrete_sequence=[PRIMARY],
-        text="count",
-    )
-    fig.update_traces(
-        hovertemplate=(
-            "<b>%{y}</b><br>%{x} outcomes in this subcategory<br>Programs: %{customdata[1]}"
-            + SAMPLE_HOVER_BLOCK
-            + "<extra></extra>"
-        ),
-        textposition="outside",
-        cliponaxis=False,
-        textfont=dict(color=TEXT_SECONDARY),
-    )
-    fig.update_layout(
-        yaxis=dict(autorange="reversed", automargin=True),
-        xaxis=dict(visible=False),
-        height=max(220, 30 * len(orgs) + 40),
-        margin=dict(t=4, l=0, r=24, b=4),
-        bargap=0.3,
     )
     return fig
 

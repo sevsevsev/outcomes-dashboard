@@ -1,24 +1,16 @@
 # Look and feel for the outcomes dashboard (read by Streamlit locally and on Streamlit Community Cloud).
+# A plain white page, cool greys and one blue; the charts in charts.py use the same values.
 
 [theme]
 base = "light"
 primaryColor = "#2a78d6"
 backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f6f6f3"
-textColor = "#1b1b1a"
-# Body text in the bundled sans (Source Sans); headings in the bundled serif
-# (Source Serif), which gives page and card titles an editorial voice. Both
-# ship with Streamlit, so nothing loads from a font service.
+secondaryBackgroundColor = "#f4f5f7"
+textColor = "#16181d"
 font = "sans-serif"
-headingFont = "serif"
-borderColor = "#e8e7e3"
+borderColor = "#e6e8ec"
 showWidgetBorder = true
-baseRadius = "medium"
-# The page canvas (#f5f5f2) and white cards are set in app.py's CSS.
-
-[theme.sidebar]
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f5f5f2"
+baseRadius = "small"
 
 [client]
 # Hide the developer menu (Deploy button, rerun, settings) from viewers.
