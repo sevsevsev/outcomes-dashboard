@@ -1,4 +1,4 @@
-"""Tests for the pure data functions in app.py.
+"""Tests for the data layer (outcomes_data.py) and chart builders (charts.py).
 
 Run from the repository root with:  python -m pytest
 Uses a small synthetic export, so the real CSV is not needed.
@@ -11,7 +11,8 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import app  # noqa: E402
+import charts  # noqa: E402
+import outcomes_data as app  # noqa: E402
 
 SEL = "Domain 3. Social & Emotional Learning (CASEL-aligned)"
 JOY = "Domain 1. Joy, Interest & Motivation in Learning"
@@ -105,10 +106,15 @@ def test_heatmap_matrices_align(df):
     assert counts.loc["Musicopia", CONF] == 0
 
 
-def test_hierarchy_chart_gives_every_node_sample_text(df):
-    for chart_type in ("Treemap", "Sunburst"):
-        fig = app.build_hierarchy_chart(df, chart_type)
-        assert all("(?)" not in str(c[0]) for c in fig.data[0].customdata)
+def test_hierarchy_chart_gives_every_node_sample_text_and_exact_counts(df):
+    for measure in app.MEASURES:
+        for chart_type in ("Treemap", "Sunburst"):
+            fig = charts.build_hierarchy_chart(df, measure, chart_type)
+            trace = fig.data[0]
+            assert all("(?)" not in str(c[0]) for c in trace.customdata)
+            nodes = dict(zip(trace.labels, trace.customdata))
+            # SEL has 4 outcomes from 2 organizations (BalletX and ArtWell each have two).
+            assert list(nodes[SEL][1:]) == [4, 2]
 
 
 def test_hover_samples_escape_html():
@@ -119,3 +125,46 @@ def test_hover_samples_escape_html():
 def test_subcategory_sort_is_numeric():
     labels = ["10.1 A", "3.1.4 B", "3.1.2 C", "1.4 D"]
     assert app.sorted_subcategories(labels) == ["1.4 D", "3.1.2 C", "3.1.4 B", "10.1 A"]
+
+
+def test_population_groups_fold_small_groups():
+    assert app.population_group("students_youth") == "Students & youth"
+    assert app.population_group("mentors_volunteers") == app.OTHER_POPULATION
+    assert app.population_group(app.UNKNOWN_POP) == app.OTHER_POPULATION
+
+
+def test_domain_population_shares_sum_to_one(df):
+    counts = app.domain_population_counts(df)
+    shares = counts.groupby(app.COL_DOMAIN)["share"].sum()
+    assert shares.round(9).eq(1).all()
+
+
+def test_coverage_counts_organizations_and_includes_codebook_gaps(df):
+    codebook = pd.DataFrame({
+        app.COL_DOMAIN: [SEL, SEL, JOY],
+        app.COL_SUBCAT: [CONF, "3.9 Nobody does this", CREATE],
+    })
+    coverage = app.subcategory_coverage(df, codebook).set_index(app.COL_SUBCAT)
+    assert coverage.loc["3.9 Nobody does this", "organizations"] == 0
+    assert coverage.loc[CONF, "organizations"] == 2     # BalletX and ArtWell
+    assert coverage.loc[CREATE, "organizations"] == 2   # BalletX and Musicopia
+    assert app.UNASSIGNED_SUBCAT not in coverage.index
+    assert coverage["organizations"].is_monotonic_increasing
+
+
+def test_bundled_codebook_matches_coded_labels():
+    codebook = app.load_codebook()
+    assert len(codebook) > 50
+    assert CONF in set(codebook[app.COL_SUBCAT])
+
+
+def test_outcome_text_prefers_atomic_and_keeps_split_context():
+    raw = raw_rows().head(2).assign(
+        outcome_text_original=["Increased confidence, well-being and self-worth", "Students work in teams"],
+        outcome_text_atomic=["Increased well-being", "Students work in teams"],
+    )
+    df = app.clean_outcomes(raw)
+    assert df.loc[0, app.COL_OUTCOME] == "Increased well-being"
+    assert df.loc[0, app.COL_FULL] == "Increased confidence, well-being and self-worth"
+    assert df.loc[1, app.COL_FULL] == ""  # not split, so no extra context
+    assert app.COL_OUTCOME not in app.to_export_frame(df).columns
