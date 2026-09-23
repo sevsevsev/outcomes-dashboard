@@ -65,7 +65,6 @@ from outcomes_data import (
     MissingColumnsError,
     compute_peer_overlap,
     domain_order,
-    domain_short,
     filter_outcomes,
     load_codebook,
     organizations_for_subcategory,
@@ -82,7 +81,6 @@ APP_TITLE = "Outcomes Explorer"
 
 # Session-state keys for the sidebar filters, so "Reset filters" can clear them.
 FILTER_KEYS = ["f_domains", "f_pops", "f_orgs", "f_conf"]
-ALL_DOMAINS = "All domains"
 UPLOAD_KEY = "uploaded_csv"          # (file name, bytes) of a CSV uploaded this session
 READ_ERRORS = (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError)
 
@@ -281,29 +279,19 @@ def page_system_map(df: pd.DataFrame) -> None:
     # --- Treemap / sunburst ---------------------------------------------------
     section(
         "Where the portfolio invests",
-        "Blocks are subcategories grouped by domain. Darker blocks have more organizations working on them.",
+        "The chart starts with the domains. Click one to open its subcategories. "
+        "Darker blocks have more organizations working on them.",
     )
-    c1, c2, c3 = st.columns([2, 2, 3])
+    c1, c2, _ = st.columns([2, 2, 3])
     measure = c1.segmented_control(
         "Size blocks by", MEASURES, default=MEASURE_ORGS, key="v1_measure",
         help="Organizations shows how many partners pursue a goal. Outcome statements weights "
              "organizations that list many outcomes more heavily.",
     ) or MEASURE_ORGS
     chart_type = c2.segmented_control("Chart", ["Treemap", "Sunburst"], default="Treemap", key="v1_chart") or "Treemap"
-    # Drawing one domain on its own gives each subcategory room for a readable label.
-    focus_options = [ALL_DOMAINS] + domain_order(df)
-    if st.session_state.get("v1_focus") not in focus_options:
-        st.session_state.pop("v1_focus", None)  # the sidebar filtered that domain out
-    focus = c3.selectbox(
-        "Focus on a domain", focus_options, key="v1_focus",
-        format_func=lambda d: d if d == ALL_DOMAINS else domain_short(d),
-    )
-    chart_df = df if focus == ALL_DOMAINS else filter_outcomes(df, domains=[focus])
-    plot(charts.build_hierarchy_chart(chart_df, measure, chart_type), key=f"v1_hierarchy_{slug(focus)}")
-    if focus == ALL_DOMAINS:
-        st.caption("Small blocks hide their label; hover to read them, or focus on a domain to enlarge it.")
-    else:
-        st.caption("Hover over a block for its full name and sample outcomes.")
+    plot(charts.build_hierarchy_chart(df, measure, chart_type), key="v1_hierarchy")
+    back = "the domain's name at the top" if chart_type == "Treemap" else "the center"
+    st.caption(f"Click {back} to go back to all domains. Hover over any block for sample outcomes.")
 
     with st.expander("Read the outcomes behind a block", icon=":material/search:"):
         d1, d2 = st.columns(2)

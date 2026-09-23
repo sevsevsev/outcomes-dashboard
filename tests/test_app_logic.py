@@ -122,10 +122,10 @@ def test_hierarchy_chart_labels_stay_readable(df):
     for chart_type, width in (("Treemap", charts.TREEMAP_WRAP), ("Sunburst", charts.SUNBURST_WRAP)):
         fig = charts.build_hierarchy_chart(df, chart_type=chart_type)
         trace = fig.data[0]
-        # The sunburst has two rings (domain, subcategory); the treemap keeps a root header.
+        # One "All domains" root to click back to, with the domains under it.
         roots = [i for i, p in zip(trace.ids, trace.parents) if not p]
-        top = [lab for lab, p in zip(trace.labels, trace.parents) if (p in roots if chart_type == "Treemap" else not p)]
-        assert len(roots) == (1 if chart_type == "Treemap" else len(top))
+        top = [lab for lab, p in zip(trace.labels, trace.parents) if p in roots]
+        assert len(roots) == 1
         assert top and all(not label.replace("<br>", " ").startswith("Domain ") for label in top)
         # Subcategory names wrap onto short lines (single long words can't wrap).
         subcats = [lab for lab, p in zip(trace.labels, trace.parents) if p and p not in roots]
@@ -135,7 +135,19 @@ def test_hierarchy_chart_labels_stay_readable(df):
         assert fig.layout.uniformtext.minsize >= 12
 
 
-def test_hierarchy_chart_can_focus_on_one_domain(df):
+def test_hierarchy_chart_opens_on_domains_with_exact_counts(df):
+    for chart_type in ("Treemap", "Sunburst"):
+        fig = charts.build_hierarchy_chart(df, chart_type=chart_type)
+        trace = fig.data[0]
+        # Only the root and the domains are drawn until the reader clicks a domain.
+        assert trace.maxdepth == 2
+        # Domain shading and label counts are distinct organizations, not a sum over subcategories.
+        by_name = {c[3]: (c, color) for c, color in zip(trace.customdata, trace.marker.colors)}
+        custom, color = by_name[SEL]
+        assert custom[2] == color == 2
+
+
+def test_hierarchy_chart_handles_a_single_domain(df):
     one = app.filter_outcomes(df, domains=[SEL])
     for chart_type in ("Treemap", "Sunburst"):
         trace = charts.build_hierarchy_chart(one, chart_type=chart_type).data[0]
