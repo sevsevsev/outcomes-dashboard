@@ -112,9 +112,36 @@ def test_hierarchy_chart_gives_every_node_sample_text_and_exact_counts(df):
             fig = charts.build_hierarchy_chart(df, measure, chart_type)
             trace = fig.data[0]
             assert all("(?)" not in str(c[0]) for c in trace.customdata)
-            nodes = dict(zip(trace.labels, trace.customdata))
+            # Hover carries the full name, so key nodes by it rather than the display label.
+            nodes = {c[3]: c for c in trace.customdata}
             # SEL has 4 outcomes from 2 organizations (BalletX and ArtWell each have two).
-            assert list(nodes[SEL][1:]) == [4, 2]
+            assert list(nodes[SEL][1:3]) == [4, 2]
+
+
+def test_hierarchy_chart_labels_stay_readable(df):
+    for chart_type, width in (("Treemap", charts.TREEMAP_WRAP), ("Sunburst", charts.SUNBURST_WRAP)):
+        fig = charts.build_hierarchy_chart(df, chart_type=chart_type)
+        trace = fig.data[0]
+        # The sunburst has two rings (domain, subcategory); the treemap keeps a root header.
+        roots = [i for i, p in zip(trace.ids, trace.parents) if not p]
+        top = [lab for lab, p in zip(trace.labels, trace.parents) if (p in roots if chart_type == "Treemap" else not p)]
+        assert len(roots) == (1 if chart_type == "Treemap" else len(top))
+        assert top and all(not label.replace("<br>", " ").startswith("Domain ") for label in top)
+        # Subcategory names wrap onto short lines (single long words can't wrap).
+        subcats = [lab for lab, p in zip(trace.labels, trace.parents) if p and p not in roots]
+        assert all(len(line) <= width for label in subcats for line in label.split("<br>") if " " in line)
+        # Blocks too small for readable text hide it instead of shrinking it.
+        assert fig.layout.uniformtext.mode == "hide"
+        assert fig.layout.uniformtext.minsize >= 12
+
+
+def test_hierarchy_chart_can_focus_on_one_domain(df):
+    one = app.filter_outcomes(df, domains=[SEL])
+    for chart_type in ("Treemap", "Sunburst"):
+        trace = charts.build_hierarchy_chart(one, chart_type=chart_type).data[0]
+        # The domain itself is the only top-level block (no "All domains" header).
+        assert [c[3] for c, p in zip(trace.customdata, trace.parents) if not p] == [SEL]
+        assert {c[3] for c, p in zip(trace.customdata, trace.parents) if p} == set(one[app.COL_SUBCAT])
 
 
 def test_hover_samples_escape_html():

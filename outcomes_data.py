@@ -195,7 +195,7 @@ def _domain_number(domain: object) -> float:
     return float(match.group(1)) if match else float("inf")
 
 
-def _domain_short(domain: str) -> str:
+def domain_short(domain: str) -> str:
     """'Domain 3. Social & Emotional Learning (CASEL-aligned)' -> '3. Social & Emotional Learning'."""
     short = re.sub(r"^\s*Domain\s+", "", domain)
     return re.sub(r"\s*\(.*?\)\s*$", "", short)
@@ -270,7 +270,7 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
 
     # --- Helper columns -------------------------------------------------------
     df[COL_DOMAIN_NUM] = df[COL_DOMAIN].map(_domain_number)
-    df[COL_DOMAIN_SHORT] = df[COL_DOMAIN].map(_domain_short)
+    df[COL_DOMAIN_SHORT] = df[COL_DOMAIN].map(domain_short)
 
     # Default grouping; main() may switch this to the grantee column.
     df[COL_ORG_VIEW] = df[COL_ORG]
@@ -478,7 +478,7 @@ def subcategory_coverage(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = No
         for col in ("organizations", "programs", "outcomes"):
             counts[col] = counts[col].fillna(0).astype(int)
         counts["samples"] = counts["samples"].fillna("<i>(no program targets this yet)</i>")
-    counts[COL_DOMAIN_SHORT] = counts[COL_DOMAIN].map(_domain_short)
+    counts[COL_DOMAIN_SHORT] = counts[COL_DOMAIN].map(domain_short)
     counts["_order"] = counts[COL_SUBCAT].map(subcategory_sort_key)
     return (
         counts.sort_values(["organizations", "outcomes", "_order"])

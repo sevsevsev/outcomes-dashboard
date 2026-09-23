@@ -14,6 +14,7 @@ Color rules (so the charts read as one system):
 
 from __future__ import annotations
 
+import textwrap
 from typing import Optional
 
 import pandas as pd
@@ -32,6 +33,7 @@ from outcomes_data import (
     POPULATION_GROUP_ORDER,
     distinct_counts_by,
     domain_population_counts,
+    domain_short,
     hierarchy_counts,
     sample_outcome_texts,
 )
@@ -89,60 +91,107 @@ PLOTLY_CONFIG = {
 # =============================================================================
 
 
+# Readability rules for the treemap and sunburst. Plotly shrinks each label to
+# fit its block, so on a full portfolio most labels end up a few pixels tall.
+# Instead, every label is drawn at one size between these two limits, and a
+# block too small for the minimum shows no text (hover still names it).
+HIERARCHY_TEXT_SIZE = 15
+HIERARCHY_MIN_TEXT_SIZE = 12
+# Characters per line when wrapping long names (treemap blocks, sunburst wedges).
+TREEMAP_WRAP = 22
+SUNBURST_WRAP = 16
+TREEMAP_ROOT = "All domains"
+
+
+def wrap_label(text: str, width: int) -> str:
+    """Break a long name onto several lines (Plotly uses <br> for line breaks)."""
+    return "<br>".join(textwrap.wrap(str(text), width=width, break_long_words=False)) or str(text)
+
+
 def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_type: str = "Treemap"):
     """Treemap or sunburst: domain (parent) -> subcategory (child).
 
     Block size follows `measure` (organizations or outcome statements).
     Color always shows how many organizations target the subcategory, so dark
     blocks are the most saturated goals and pale ones the thinnest.
+
+    Labels use the short domain name and wrapped subcategory names; hover
+    shows the full names. Pass a single domain's rows to draw just that
+    domain, which gives every subcategory room for a readable label.
     """
     counts = hierarchy_counts(df)
     size_col = "organizations" if measure == MEASURE_ORGS else "outcomes"
-    chart_fn = px.treemap if chart_type == "Treemap" else px.sunburst
+    is_treemap = chart_type == "Treemap"
+    has_root = is_treemap and counts[COL_DOMAIN].nunique() > 1
+    wrap = TREEMAP_WRAP if is_treemap else SUNBURST_WRAP
+
+    # Display labels: short domain names and subcategory names wrapped onto
+    # short lines, so they fit narrow blocks without shrinking.
+    counts["domain_label"] = counts[COL_DOMAIN].map(lambda s: wrap_label(domain_short(s), wrap))
+    counts["subcat_label"] = counts[COL_SUBCAT].map(lambda s: wrap_label(s, wrap))
+
+    chart_fn = px.treemap if is_treemap else px.sunburst
     fig = chart_fn(
         counts,
-        path=[px.Constant("All outcomes"), COL_DOMAIN, COL_SUBCAT],
+        # The sunburst has no "All domains" center: it cost a whole ring. The
+        # treemap keeps it as a header you click to zoom back out, unless
+        # there is only one domain to show.
+        path=([px.Constant(TREEMAP_ROOT)] if has_root else []) + ["domain_label", "subcat_label"],
         values=size_col,
         color="organizations",
         color_continuous_scale=SEQUENTIAL_BLUE,
-        custom_data=["samples", "outcomes", "organizations"],
+        custom_data=["samples", "outcomes", "organizations", COL_SUBCAT],
     )
 
     # Plotly fills custom_data for parent nodes by aggregating children, which
     # gives "(?)" for text and double-counts organizations working in several
-    # subcategories. Recompute parents from the rows so hover numbers are exact.
+    # subcategories. Recompute domains from the rows so hover numbers are exact.
     # Nodes are identified by parent (not by splitting ids on "/"), because
     # some labels, e.g. "School/Program Connectedness", contain "/".
     trace = fig.data[0]
+    root_id = next(i for i, p in zip(trace.ids, trace.parents) if not p) if has_root else ""
+    full_domain = dict(zip(counts["domain_label"], counts[COL_DOMAIN]))
     per_domain = distinct_counts_by(df, COL_DOMAIN)
     domain_samples = df.groupby(COL_DOMAIN)[COL_OUTCOME].agg(sample_outcome_texts)
-    root_id = next(i for i, p in zip(trace.ids, trace.parents) if not p)
     fixed = []
     for label, parent, custom in zip(trace.labels, trace.parents, trace.customdata):
-        if not parent:
-            fixed.append([sample_outcome_texts(df[COL_OUTCOME]), len(df), df[COL_ORG_VIEW].nunique()])
+        if has_root and not parent:
+            fixed.append([sample_outcome_texts(df[COL_OUTCOME]), len(df), df[COL_ORG_VIEW].nunique(), TREEMAP_ROOT])
         elif parent == root_id:
-            row = per_domain.loc[label]
-            fixed.append([domain_samples.get(label, ""), int(row["outcomes"]), int(row["organizations"])])
+            domain = full_domain[label]
+            row = per_domain.loc[domain]
+            fixed.append([domain_samples.get(domain, ""), int(row["outcomes"]), int(row["organizations"]), domain])
         else:
             fixed.append(list(custom))
     trace.customdata = fixed
 
     fig.update_traces(
         hovertemplate=(
-            "<b>%{label}</b><br>%{customdata[2]} organizations · %{customdata[1]} outcome statements"
+            "<b>%{customdata[3]}</b><br>%{customdata[2]} organizations · %{customdata[1]} outcome statements"
             + SAMPLE_HOVER_BLOCK
             + "<extra></extra>"
         ),
         marker=dict(line=dict(color=SURFACE, width=2)),
+        textfont=dict(size=HIERARCHY_TEXT_SIZE),
     )
-    if chart_type == "Treemap":
-        fig.update_traces(texttemplate="<b>%{label}</b><br>%{value}", tiling=dict(pad=3), root_color="#f4f4f1")
+    if is_treemap:
+        fig.update_traces(
+            texttemplate="<b>%{label}</b><br>%{value}",
+            textposition="top left",
+            tiling=dict(pad=4),
+            # A header strip tall enough for a domain name on three lines, so
+            # narrow domains keep their name instead of hiding it.
+            marker_pad=dict(t=60, l=4, r=4, b=4),
+            pathbar=dict(visible=False),  # the root header does the same job
+            root_color="#f4f4f1",
+        )
     else:
-        fig.update_traces(texttemplate="%{label}", insidetextorientation="radial")
+        # "auto" turns each label whichever way lets it be largest.
+        fig.update_traces(texttemplate="%{label}", insidetextorientation="auto")
     fig.update_layout(
-        height=620,
+        height=720,
         margin=dict(t=8, l=0, r=0, b=0),
+        uniformtext=dict(minsize=HIERARCHY_MIN_TEXT_SIZE, mode="hide"),
         coloraxis_colorbar=dict(title=dict(text="Organizations", side="top"), thickness=12, len=0.6),
     )
     return fig
