@@ -10,9 +10,11 @@ font = "sans-serif"
 borderColor = "#e8e7e3"
 showWidgetBorder = true
 baseRadius = "medium"
+# The page canvas (#f5f5f2) and white cards are set in app.py's CSS.
 
 [theme.sidebar]
-backgroundColor = "#f6f6f3"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f5f5f2"
 
 [client]
 # Hide the developer menu (Deploy button, rerun, settings) from viewers.
