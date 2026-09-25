@@ -283,6 +283,12 @@ def build_ranked_bars(
 
 
 DOT_GRID_WRAP = 14   # characters per line in the column labels
+DOT_ROW = 58         # pixels per program row
+DOT_HEADER = 72      # pixels for the column headers
+DOMAIN_KEY = "domain::"   # customdata[0] prefix for a clicked domain header
+# Header marks are invisible hit areas under the domain names; only the text shows.
+HEADER_SELECTED = dict(marker=dict(opacity=0), textfont=dict(color=PRIMARY))
+HEADER_UNSELECTED = dict(marker=dict(opacity=0), textfont=dict(color=TEXT_PRIMARY))
 
 
 def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = False):
@@ -290,7 +296,9 @@ def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = 
 
     It answers "where do these programs overlap?" without crossing lines.
     customdata[0] is "program||target", so a click tells the app which cell
-    was picked.
+    was picked. With domains as columns, each domain name is itself a
+    clickable mark (customdata[0] is DOMAIN_KEY + domain) so the app can
+    drill into that domain's goals; axis labels can't be clicked.
     """
     targets = list(dict.fromkeys(flows["target"]))
     rows = [p for p in programs if p in set(flows["source"])]
@@ -304,7 +312,8 @@ def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = 
         x=[x_labels[t] for t in flows["target"]],
         y=[short_label(p, 40) for p in flows["source"]],
         mode="markers+text",
-        marker=dict(size=sizes, color=PRIMARY, line=dict(color=SURFACE, width=2)),
+        # Plotly fades sized dots to 0.7 by default; keep them the same blue as the bars.
+        marker=dict(size=sizes, color=PRIMARY, opacity=1, line=dict(color=SURFACE, width=2)),
         # Counts print inside dots big enough to hold them; hover gives every count.
         text=[str(n) if size >= 24 else "" for n, size in zip(flows["outcomes"], sizes)],
         textfont=dict(color=SURFACE, size=12),
@@ -316,18 +325,45 @@ def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = 
         selected=SELECTED,
         unselected=DOT_UNSELECTED,
     ))
-    fig.update_layout(
-        height=110 + 58 * len(rows),
-        xaxis=dict(side="top", type="category", categoryorder="array",
-                   categoryarray=[x_labels[t] for t in targets], showgrid=True, gridcolor=GRID,
-                   tickfont=dict(size=12, color=TEXT_SECONDARY), fixedrange=True),
+    height = 16 + DOT_HEADER + DOT_ROW * len(rows)
+    header_share = DOT_HEADER / (height - 16)
+    grid_axis = dict(showgrid=True, gridcolor=GRID, fixedrange=True)
+    layout = dict(
+        height=height,
+        xaxis=dict(type="category", categoryorder="array", categoryarray=[x_labels[t] for t in targets],
+                   **grid_axis),
         yaxis=dict(type="category", categoryorder="array", categoryarray=[short_label(p, 40) for p in rows],
-                   autorange="reversed", showgrid=True, gridcolor=GRID, automargin=True,
-                   tickfont=dict(size=13, color=TEXT_PRIMARY), fixedrange=True),
+                   autorange="reversed", automargin=True, tickfont=dict(size=13, color=TEXT_PRIMARY),
+                   domain=[0, 1 - header_share], **grid_axis),
         margin=dict(t=8, l=0, r=16, b=8),
         showlegend=False,
         dragmode=False,
     )
+    if zoomed:
+        # Goal names stay plain axis labels above the grid.
+        layout["xaxis"].update(side="top", automargin=True, tickfont=dict(size=12, color=TEXT_SECONDARY))
+        layout["yaxis"]["domain"] = [0, 1]
+    else:
+        # Domain names sit on their own strip (y2) as clickable text marks.
+        totals = flows.groupby("target", sort=False)["outcomes"].sum()
+        fig.add_trace(go.Scatter(
+            x=[x_labels[t] for t in targets],
+            y=[0] * len(targets),
+            yaxis="y2",
+            mode="markers+text",
+            marker=dict(symbol="square", size=DOT_HEADER - 8, color=SURFACE, opacity=0),
+            text=[f"{x_labels[t]} ›" for t in targets],
+            textposition="middle center",
+            textfont=dict(color=TEXT_PRIMARY, size=12),
+            customdata=[(DOMAIN_KEY + t, "", t, names[t], int(totals[t])) for t in targets],
+            hovertemplate=("<b>%{customdata[3]}</b><br>%{customdata[4]} outcome statements from these programs"
+                           "<br>Click to see its goals<extra></extra>"),
+            selected=HEADER_SELECTED,
+            unselected=HEADER_UNSELECTED,
+        ))
+        layout["xaxis"]["showticklabels"] = False
+        layout["yaxis2"] = dict(domain=[1 - header_share, 1], range=[-0.5, 0.5], visible=False, fixedrange=True)
+    fig.update_layout(**layout)
     return fig
 
 
