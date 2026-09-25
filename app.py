@@ -136,6 +136,8 @@ MUTED = charts.TEXT_SECONDARY
 HAIRLINE = charts.GRID
 CSS = f"""
 <style>
+/* The browser's scroll anchoring shifts the page when a table below a chart changes; keep it still. */
+[data-testid="stMain"], html, body {{ overflow-anchor: none; }}
 .block-container {{ padding-top: 4.2rem; padding-bottom: 4rem; max-width: 1240px; }}
 h1 {{ font-size: 1.7rem !important; font-weight: 600 !important; letter-spacing: -0.01em;
       padding: 0.2rem 0 0 0 !important; }}
@@ -306,9 +308,13 @@ def outcomes_panel(rows: pd.DataFrame, where: str, key: str, nonce_key: Optional
                           label_visibility="collapsed")
     if query:
         rows = filter_outcomes(rows, text_query=query)
-    # A short list sizes to its rows instead of leaving an empty grid.
-    outcome_table(rows, height=height if len(rows) > 10 else "auto")
-    download_button(rows, f"Download these {len(rows):,} (CSV)", f"outcomes_{key}.csv", key=f"{key}_dl")
+    # A short list sizes to its rows instead of leaving an empty grid, but its box keeps the
+    # full height: a chart click re-filters this table, and a page that grew or shrank would
+    # move the chart under the pointer so the next click missed its mark.
+    with st.container(key=f"rows-{key}"):
+        st.html(f"<style>.st-key-rows-{key} {{ min-height: {height + 60}px; }}</style>")
+        outcome_table(rows, height=height if len(rows) > 10 else "auto")
+        download_button(rows, f"Download these {len(rows):,} (CSV)", f"outcomes_{key}.csv", key=f"{key}_dl")
 
 
 def describe(*parts: Optional[str], audience: Optional[str] = None) -> str:
