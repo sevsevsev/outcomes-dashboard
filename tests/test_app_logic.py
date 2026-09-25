@@ -237,6 +237,19 @@ def test_program_dots_put_programs_in_rows_and_domains_in_codebook_order(df):
     assert trace.unselected.marker.color == charts.FADED
 
 
+def test_program_dots_domain_headers_are_clickable_marks_until_zoomed(df):
+    programs = ["BalletX", "ArtWell"]
+    fig = charts.build_program_dots(app.program_flows(df, programs), programs)
+    header = fig.data[1]
+    # Each domain name is a mark whose click key names the domain; axis labels give way to it.
+    assert [c[0] for c in header.customdata] == [charts.DOMAIN_KEY + JOY, charts.DOMAIN_KEY + SEL]
+    assert list(header.x) == list(fig.layout.xaxis.categoryarray)
+    assert fig.layout.xaxis.showticklabels is False
+    assert header.marker.opacity == 0 and header.unselected.marker.opacity == 0
+    zoomed = charts.build_program_dots(app.program_flows(df, programs, domain=SEL), programs, zoomed=True)
+    assert len(zoomed.data) == 1
+
+
 def test_ranked_bars_fade_everything_but_the_clicked_bar(df):
     domains = app.domain_summary(df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]}))
     fig = charts.build_ranked_bars(domains, app.COL_DOMAIN_SHORT, "organizations", app.COL_DOMAIN)

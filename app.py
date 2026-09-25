@@ -661,6 +661,9 @@ def compare_programs(df: pd.DataFrame) -> None:
 
     overview = program_flows(df, programs)
     domains = list(dict.fromkeys(overview["target"]))
+    # A clicked domain header asks for its goals on the next run, before the Columns box is drawn.
+    if "v2_zoom_next" in st.session_state:
+        st.session_state["v2_zoom"] = st.session_state.pop("v2_zoom_next")
     if st.session_state.get("v2_zoom") not in [ALL_DOMAINS] + domains:
         st.session_state.pop("v2_zoom", None)
     zoom = c2.selectbox("Columns", [ALL_DOMAINS] + domains, key="v2_zoom",
@@ -669,12 +672,22 @@ def compare_programs(df: pd.DataFrame) -> None:
     flows = program_flows(df, programs, domain=zoom) if zoomed else overview
 
     title = f"Where these programs meet in {plain_domain(zoom)}" if zoomed else "Where these programs meet"
-    with section(title, "Bigger dots mean more outcome statements. Click a dot to list its outcomes below.",
-                 key="dots"):
+    note = ("Bigger dots mean more outcome statements. Click a dot to list its outcomes below."
+            if zoomed else
+            "Bigger dots mean more outcome statements. Click a domain name to see its goals, "
+            "or a dot to list its outcomes below.")
+    with section(title, note, key="dots"):
+        if zoomed:
+            st.button("‹ All domains", key="v2_unzoom", type="tertiary",
+                      on_click=lambda: st.session_state.update(v2_zoom=ALL_DOMAINS))
         # The key changes with the programs and columns, so a new comparison starts unselected.
         key = (f"v2_dots_{st.session_state.get('v2_dot_nonce', 0)}_{slug(zoom)}_"
                f"{slug('_'.join(programs))[:80]}")
         cell = clickable(charts.build_program_dots(flows, programs, zoomed=zoomed), key)
+        if cell and cell.startswith(charts.DOMAIN_KEY):
+            st.session_state["v2_zoom_next"] = cell.removeprefix(charts.DOMAIN_KEY)
+            clear_selection("v2_dot_nonce")
+            st.rerun()
         rows = df.assign(**{COL_PROGRAM_LABEL: program_labels(df)})
         rows = rows[rows[COL_PROGRAM_LABEL].isin(programs)]
         if zoomed:
