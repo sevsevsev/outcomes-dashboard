@@ -12,7 +12,7 @@ youth-serving program logic models. It is built for two audiences:
 
 Pages (top navigation):
 
-1. System map        - findings, linked domain / goal / audience charts, coverage gaps
+1. What programs aim for - findings, linked priority (or domain) / goal / audience charts, coverage gaps
 2. Find peers        - peers for an organization, organizations by goal, program comparison
 3. Review coding     - paginated explorer for checking the coder's categorizations
 
@@ -56,6 +56,7 @@ from outcomes_data import (
     COL_ORG_VIEW,
     COL_POP,
     COL_PROGRAM,
+    COL_PRIORITY,
     COL_PROGRAM_LABEL,
     COL_QA,
     COL_SOURCE_FILE,
@@ -64,6 +65,7 @@ from outcomes_data import (
     CONFIDENCE_ORDER,
     DATA_ENV_VAR,
     DATA_FILENAME,
+    INTENT_NOTE,
     MEASURE_ORGS,
     MEASURES,
     ORG_GROUPING_OPTIONS,
@@ -71,6 +73,7 @@ from outcomes_data import (
     UNASSIGNED_SUBCAT,
     MissingColumnsError,
     compute_peer_overlap,
+    count_organizations,
     domain_order,
     domain_short,
     domain_summary,
@@ -82,6 +85,7 @@ from outcomes_data import (
     population_group,
     population_summary,
     portfolio_findings,
+    priority_summary,
     program_flows,
     program_labels,
     program_options,
@@ -102,6 +106,10 @@ DEFAULT_PROGRAMS = 4
 UPLOAD_KEY = "uploaded_csv"          # (file name, bytes) of a CSV uploaded this session
 READ_ERRORS = (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError)
 VIEWS = ["Ranked", "Treemap", "Sunburst"]
+# What the first ranked chart groups by: plain priorities, or the codebook's own domains.
+GROUP_PRIORITIES = "Priorities"
+GROUP_DOMAINS = "Codebook domains"
+GROUPINGS = [GROUP_PRIORITIES, GROUP_DOMAINS]
 
 
 # =============================================================================
@@ -162,6 +170,8 @@ h1 {{ font-size: 1.7rem !important; font-weight: 600 !important; letter-spacing:
 
 .status {{ color: {MUTED}; font-size: 0.9rem !important; margin: 0; }}
 .status b {{ color: {INK}; font-weight: 600; }}
+.intent {{ color: {MUTED}; font-size: 0.9rem !important; margin: 0.1rem 0 0 0; }}
+.intent b {{ color: {INK}; font-weight: 600; }}
 .crumb {{ font-size: 0.98rem !important; margin: 0; color: {MUTED}; }}
 .crumb b {{ color: {INK}; font-weight: 600; }}
 
@@ -378,7 +388,7 @@ def plain_domain(domain: str) -> str:
 
 
 def page_system_map(df: pd.DataFrame) -> None:
-    page_header("System map")
+    page_header("What these programs aim for")
     if df.empty:
         st.warning("No outcomes match the current filters. Clear some of them to see results.")
         return
@@ -388,15 +398,20 @@ def page_system_map(df: pd.DataFrame) -> None:
 
     with section("Explore the portfolio", "Click a bar to narrow the charts beside and below it, and the "
                  "outcomes table.", key="explore"):
-        t1, t2, _ = st.columns([3, 3, 3])
+        t0, t1, t2 = st.columns([3, 3, 3])
+        view = t2.segmented_control("View", VIEWS, default="Ranked", key="v1_view") or "Ranked"
+        grouping = t0.segmented_control(
+            "Group by", GROUPINGS, default=GROUP_PRIORITIES, key="v1_grouping", disabled=view != "Ranked",
+            help="Priorities use plain names such as Attendance or Math. Codebook domains are the coder's "
+                 "own twelve domains, which the treemap and sunburst always use.",
+        ) or GROUP_PRIORITIES
         measure = t1.segmented_control(
             "Count", MEASURES, default=MEASURE_ORGS, key="v1_measure",
             help="Organizations counts each organization once per goal. Outcome statements gives more weight "
                  "to organizations that list many outcomes.",
         ) or MEASURE_ORGS
-        view = t2.segmented_control("View", VIEWS, default="Ranked", key="v1_view") or "Ranked"
         if view == "Ranked":
-            chosen_domain = linked_explorer(df, measure)
+            chosen_domain = linked_explorer(df, measure, grouping)
         else:
             chosen_domain = None
             hierarchy_view(df, measure, view)
@@ -405,41 +420,51 @@ def page_system_map(df: pd.DataFrame) -> None:
     download_button(df, "Download all outcomes on this page (CSV)", "system_map_outcomes.csv", key="v1_dl_all")
 
 
-def linked_explorer(df: pd.DataFrame, measure: str) -> Optional[str]:
-    """Domains, goals and audiences as ranked bars; each click narrows the charts after it and the table.
+def linked_explorer(df: pd.DataFrame, measure: str, grouping: str = GROUP_PRIORITIES) -> Optional[str]:
+    """Priorities (or domains), goals and audiences as ranked bars; each click narrows the charts after it
+    and the table.
 
     Returns the selected domain, if any, so the coverage table can follow it.
     Each chart's key includes the selections before it, so picking a new
-    domain starts its goals chart unselected.
+    priority or domain starts its goals chart unselected.
     """
     value = "organizations" if measure == MEASURE_ORGS else "outcomes"
     other = "outcomes" if value == "organizations" else "organizations"
     noun = "organizations" if value == "organizations" else "outcome statements"
     other_template = ("%{customdata[3]} outcome statements" if value == "organizations"
                       else "%{customdata[3]} organizations")
-    base = f"v1_{st.session_state.get('v1_nonce', 0)}_{value}"
+    by_priority = grouping == GROUP_PRIORITIES
+    base = f"v1_{st.session_state.get('v1_nonce', 0)}_{value}_{'pri' if by_priority else 'dom'}"
 
     left, right = st.columns(2, gap="large")
-    domains = domain_summary(df).sort_values([value, COL_DOMAIN_NUM], ascending=[False, True])
-    dom_key = f"{base}_dom"
     with left:
-        subhead("Domains", f"by {noun}")
-        fig = charts.build_ranked_bars(domains, COL_DOMAIN_SHORT, value, COL_DOMAIN,
-                                       value_noun=noun)
-        add_hover_value(fig, domains[other].tolist(), other_template)
-        domain = clickable(fig, dom_key)
+        if by_priority:
+            groups = priority_summary(df).sort_values(value, ascending=False, kind="stable")
+            subhead("Priorities", f"by {noun}")
+            fig = charts.build_ranked_bars(groups, COL_PRIORITY, value, COL_PRIORITY, value_noun=noun)
+        else:
+            groups = domain_summary(df).sort_values([value, COL_DOMAIN_NUM], ascending=[False, True])
+            subhead("Domains", f"by {noun}")
+            fig = charts.build_ranked_bars(groups, COL_DOMAIN_SHORT, value, COL_DOMAIN, value_noun=noun)
+        add_hover_value(fig, groups[other].tolist(), other_template)
+        chosen = clickable(fig, f"{base}_top")
 
-    scope = df if domain is None else df[df[COL_DOMAIN] == domain]
+    group_col = COL_PRIORITY if by_priority else COL_DOMAIN
+    scope = df if chosen is None else df[df[group_col] == chosen]
+    # The coverage table below follows a domain. Each priority sits inside one domain, so it follows that.
+    domains_in_scope = scope[COL_DOMAIN].unique() if chosen is not None else []
+    domain = domains_in_scope[0] if len(domains_in_scope) == 1 else None
+    chosen_name = (chosen if by_priority else plain_domain(chosen)) if chosen else None
     goals = goal_summary(scope).sort_values([value, other], ascending=False)
-    if domain is None:
+    if chosen is None:
         goals = goals.head(12)
-    goal_key = f"{base}_goal_{slug(domain or 'all')}"
+    goal_key = f"{base}_goal_{slug(chosen or 'all')}"
     goal = None
     with right:
-        if domain is None:
-            subhead("Most shared goals", f"top {len(goals)}, across all domains")
+        if chosen is None:
+            subhead("Most shared goals", f"top {len(goals)}")
         else:
-            subhead(f"Goals in {plain_domain(domain)}", f"by {noun}")
+            subhead(f"Goals in {chosen_name}", f"by {noun}")
         if goals.empty:
             st.caption("No coded goals here.")
         else:
@@ -451,7 +476,7 @@ def linked_explorer(df: pd.DataFrame, measure: str) -> Optional[str]:
     if goal is not None:
         scope = scope[scope[COL_SUBCAT] == goal]
     pops = population_summary(scope)
-    pop_key = f"{base}_pop_{slug(domain or 'all')}_{slug(goal or 'all')}"
+    pop_key = f"{base}_pop_{slug(chosen or 'all')}_{slug(goal or 'all')}"
     subhead("Who these outcomes are for", "outcome statements by target population")
     narrow, _ = st.columns(2, gap="large")
     with narrow:
@@ -460,8 +485,8 @@ def linked_explorer(df: pd.DataFrame, measure: str) -> Optional[str]:
         audience = clickable(fig, pop_key)
 
     rows = scope if audience is None else scope[scope[COL_POP].map(population_group) == audience]
-    selected_any = domain is not None or goal is not None or audience is not None
-    outcomes_panel(rows, describe(domain_short(domain) if domain else None, goal, audience=audience), key="v1",
+    selected_any = chosen is not None or goal is not None or audience is not None
+    outcomes_panel(rows, describe(chosen_name, goal, audience=audience), key="v1",
                    nonce_key="v1_nonce" if selected_any else None)
     return domain
 
@@ -852,7 +877,8 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
         st.markdown(
             "**About the measures**\n\n"
             "- **Outcome statement**: one outcome after the coder split compound statements.\n"
-            "- **Organizations** counts each organization once per goal, however many outcomes it lists.\n"
+            "- **Organizations** counts each organization once per goal, however many outcomes it lists. "
+            "Rows with no organization name are not counted as one.\n"
             "- **Overall overlap** between peers is shared goals divided by all goals either organization "
             "targets.\n"
             "- **Confidence** is the coder's own rating; *none* means it could not code the statement."
@@ -887,7 +913,7 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
 
     filtered = filter_outcomes(df, domains=chosen_domains, populations=chosen_pops,
                                organizations=chosen_orgs, confidences=chosen_conf)
-    n_orgs = filtered[COL_ORG_VIEW].nunique()
+    n_orgs = count_organizations(filtered[COL_ORG_VIEW])
     active = [k for k in FILTER_KEYS if st.session_state.get(k)]
     if active:
         what = " and ".join(
@@ -896,7 +922,7 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
                 f"<b>{n_orgs}</b> organizations")
     else:
         text = f"All <b>{len(df):,}</b> outcome statements from <b>{n_orgs}</b> organizations"
-    status.markdown(f"<p class='status'>{text}</p>", unsafe_allow_html=True)
+    status.markdown(f"<p class='status'>{text}</p><p class='intent'>{INTENT_NOTE}</p>", unsafe_allow_html=True)
     return filtered
 
 
@@ -912,7 +938,7 @@ def main() -> None:
     # Pages read the filtered frame from here once the filter bar has run.
     holder: dict[str, pd.DataFrame] = {}
     pages = {
-        "map": st.Page(lambda: page_system_map(holder["df"]), title="System map", url_path="system-map",
+        "map": st.Page(lambda: page_system_map(holder["df"]), title="What programs aim for", url_path="system-map",
                        default=True),
         "peers": st.Page(lambda: page_find_peers(holder["df"]), title="Find peers", url_path="find-peers"),
         "review": st.Page(lambda: page_review(holder["df"]), title="Review coding", url_path="review-coding"),

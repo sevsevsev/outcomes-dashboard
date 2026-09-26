@@ -29,6 +29,7 @@ from outcomes_data import (
     COL_SUBCAT,
     COL_OUTCOME,
     MEASURE_ORGS,
+    count_organizations,
     distinct_counts_by,
     domain_short,
     hierarchy_counts,
@@ -153,7 +154,7 @@ def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_t
     fixed, colors = [], []
     for label, parent, custom, color in zip(trace.labels, trace.parents, trace.customdata, trace.marker.colors):
         if has_root and not parent:
-            fixed.append([sample_outcome_texts(df[COL_OUTCOME]), len(df), df[COL_ORG_VIEW].nunique(), ROOT_LABEL])
+            fixed.append([sample_outcome_texts(df[COL_OUTCOME]), len(df), count_organizations(df[COL_ORG_VIEW]), ROOT_LABEL])
             # A colorscale overrides root_color, so the root takes the palest
             # blue and reads as background rather than as a count.
             colors.append(0)

@@ -4,9 +4,9 @@ A Streamlit dashboard for exploring outcomes coded from partner programs' logic 
 
 ## Pages
 
-Each page opens with a few sentences that state what the data shows, worked out from the loaded file. Charts come next, and clicking a bar or dot narrows the charts and table below it. A **Clear selection** button undoes the clicks.
+A line under the filter bar says what every page shows: outcomes that programs intend, taken from their logic models, not measured results. Each page opens with a few sentences that state what the data shows, worked out from the loaded file. Charts come next, and clicking a bar or dot narrows the charts and table below it. A **Clear selection** button undoes the clicks.
 
-- **System map**: domains ranked by how many organizations (or outcome statements) they hold. Click a domain to rank its goals and see who those outcomes are for; click a goal or an audience to narrow further. The outcomes table under the charts follows every click. A view switch swaps the ranked bars for a treemap or sunburst. The last section lists the goals with the thinnest coverage, including codebook goals no program targets yet.
+- **What programs aim for**: plain-language priorities (Attendance, Literacy, Social-emotional skills and so on) ranked by how many organizations (or outcome statements) they hold. **Group by** switches to the codebook's own domains. The priorities are defined in `PRIORITIES` in `outcomes_data.py`, and each coded goal belongs to exactly one. Click a priority or domain to rank its goals and see who those outcomes are for; click a goal or an audience to narrow further. The outcomes table under the charts follows every click. A view switch swaps the ranked bars for a treemap or sunburst. The last section lists the goals with the thinnest coverage, including codebook goals no program targets yet.
 - **Find peers**: pick an organization to rank its peers by shared goals, then select a peer to read both organizations' outcomes goal by goal. You can also pick a goal and click an organization to read its outcomes, or compare up to six programs in a dot grid of programs by domain. Click a domain name to see the same grid by that domain's goals (**‹ All domains** goes back), or click a dot to list those outcomes.
 - **Review coding**: a searchable table that opens on low and no-confidence rows for a human check.
 
