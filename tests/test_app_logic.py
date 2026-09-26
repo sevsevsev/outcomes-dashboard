@@ -279,8 +279,42 @@ def test_findings_state_the_top_domain_and_codebook_gaps(df):
     frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
     coverage = app.subcategory_coverage(frame, app.load_codebook())
     text = " ".join(app.portfolio_findings(frame, coverage))
-    assert "**Social & Emotional Learning** is the most widely shared focus: **2 of 4** organizations" in text
+    assert "**Social-emotional skills** is the most widely shared aim: **2 of 4** organizations" in text
+    assert "Far fewer name what schools report on: **0** name attendance, **0** literacy and **0** math." in text
     gaps = int((coverage["organizations"] == 0).sum())
     assert f"**{gaps} goals** in the codebook have no program" in text
     assert "of outcomes are about students and youth" in text
     assert app.portfolio_findings(frame.iloc[0:0], coverage) == []
+
+
+def test_priorities_put_school_measures_before_their_domain():
+    assert app.priority_of(11.0, "11.5 Attendance, Chronic Absence & School Stability") == "Attendance"
+    assert app.priority_of(11.0, "11.3 General Content Knowledge & Conceptual Understanding") == \
+        "Other academic learning"
+    assert app.priority_of(7.0, "7.2 Mental Health Status (Symptom Reduction)") == "Mental health"
+    assert app.priority_of(7.0, "7.1 Physical Activity & Nutrition") == "Physical health & safety"
+    assert app.priority_of(3.0, CONF) == "Social-emotional skills"
+    assert app.priority_of(1.0, app.UNASSIGNED_SUBCAT) == "Joy & interest in learning"  # falls back to the domain
+    assert app.priority_of(float("inf"), app.UNASSIGNED_SUBCAT) == app.UNCODED_PRIORITY
+    # 11.5 must not match 11.50-style numbers or 1.1 match 11.
+    assert app.priority_of(1.0, "1.1 Joy & Emotional Wellness") == "Joy & interest in learning"
+
+
+def test_priority_summary_counts_organizations_and_skips_uncoded(df):
+    frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
+    summary = app.priority_summary(frame).set_index(app.COL_PRIORITY)
+    assert summary.loc["Social-emotional skills", "organizations"] == 2   # BalletX and ArtWell
+    assert summary.loc["Social-emotional skills", "outcomes"] == 4
+    assert summary.index[0] == "Social-emotional skills"
+    assert app.UNCODED_PRIORITY not in summary.index
+
+
+def test_rows_with_no_organization_are_not_counted_as_one():
+    raw = raw_rows()
+    raw.loc[len(raw)] = {**raw.iloc[0].to_dict(), "organization": None, "source_filename": None}
+    frame = app.clean_outcomes(raw)
+    assert (frame[app.COL_ORG] == app.UNKNOWN_ORG).sum() == 1
+    assert frame[app.COL_ORG].nunique() == 5
+    assert app.count_organizations(frame[app.COL_ORG]) == 4
+    summary = app.priority_summary(frame).set_index(app.COL_PRIORITY)
+    assert summary.loc["Social-emotional skills", "organizations"] == 2

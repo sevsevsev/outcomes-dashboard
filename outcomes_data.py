@@ -75,6 +75,7 @@ COL_OUTCOME = "outcome"                 # the coded (atomic) outcome, falling ba
 COL_FULL = "full_statement"             # the original statement, only when the coder split it
 COL_DOMAIN_SHORT = "domain_short"       # "3. Social & Emotional Learning" for compact axis labels
 COL_PROGRAM_LABEL = "program_label"     # "Org" or "Org: Program" when an organization has several
+COL_PRIORITY = "priority"               # the plain-language priority a row's goal belongs to (PRIORITIES)
 
 # Placeholder labels for missing values, so nothing silently drops out of a chart.
 UNCODED_DOMAIN = "Uncoded"
@@ -153,6 +154,40 @@ ORG_GROUPING_OPTIONS = {
     "Grantee from the file name": COL_GRANTEE,
 }
 
+# Plain-language priorities, named the way school plans and public agendas name
+# things, so a reader can find "Attendance" without knowing it is goal 11.5.
+# Each rule lists codebook numbers (a domain like "3" or a goal like "11.5").
+# A row takes the first priority whose number matches its goal, so the specific
+# school measures come before their domain's catch-all. The list is editorial:
+# edit it here and the landing chart follows.
+PRIORITIES: list[tuple[str, tuple[str, ...]]] = [
+    ("Attendance", ("11.5",)),
+    ("Literacy", ("11.1",)),
+    ("Math", ("11.2",)),
+    ("Graduation & on-track", ("11.6",)),
+    ("Other academic learning", ("11",)),
+    ("Mental health", ("7.2", "7.3", "7.4")),
+    ("Physical health & safety", ("7",)),
+    ("College & career", ("8",)),
+    ("Social-emotional skills", ("3",)),
+    ("Belonging & relationships", ("2",)),
+    ("Joy & interest in learning", ("1",)),
+    ("Engagement & study habits", ("4",)),
+    ("Positive youth development", ("5",)),
+    ("Civic voice & community", ("6",)),
+    ("Access & equity", ("9",)),
+    ("Staff & system capacity", ("10",)),
+    ("Families & basic needs", ("12",)),
+]
+UNCODED_PRIORITY = "Not coded"
+# Priorities schools report on, which the findings compare with the most shared aim.
+SCHOOL_MEASURES = ["Attendance", "Literacy", "Math"]
+
+# One standing line under the filter bar. Every audience review found the same
+# first misreading: taking what programs intend for what they achieved.
+INTENT_NOTE = ("Outcomes that programs <b>intend</b>, taken from their logic models. "
+               "They are not measured results.")
+
 
 # =============================================================================
 # LOADING
@@ -209,6 +244,27 @@ def subcategory_sort_key(label: str) -> tuple:
         return (float("inf"), str(label))
     parts = tuple(int(p) for p in match.group(1).strip(".").split(".") if p.isdigit())
     return parts + (str(label),)
+
+
+def _code_number(domain_number: float, subcategory: str) -> Optional[str]:
+    """The most specific codebook number for a row: '3.1.4' from its goal, else '3' from its domain."""
+    match = re.match(r"\s*(\d+(?:\.\d+)+)", str(subcategory))
+    if match:
+        return match.group(1)
+    if pd.isna(domain_number) or domain_number == float("inf"):
+        return None
+    return str(int(domain_number))
+
+
+def priority_of(domain_number: float, subcategory: str) -> str:
+    """The plain-language priority (PRIORITIES) for a row's domain number and goal."""
+    code = _code_number(domain_number, subcategory)
+    if code is None:
+        return UNCODED_PRIORITY
+    for label, numbers in PRIORITIES:
+        if any(code == n or code.startswith(n + ".") for n in numbers):
+            return label
+    return UNCODED_PRIORITY
 
 
 def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
@@ -272,6 +328,7 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
     # --- Helper columns -------------------------------------------------------
     df[COL_DOMAIN_NUM] = df[COL_DOMAIN].map(_domain_number)
     df[COL_DOMAIN_SHORT] = df[COL_DOMAIN].map(domain_short)
+    df[COL_PRIORITY] = [priority_of(n, g) for n, g in zip(df[COL_DOMAIN_NUM], df[COL_SUBCAT])]
 
     # Default grouping; main() may switch this to the grantee column.
     df[COL_ORG_VIEW] = df[COL_ORG]
@@ -409,6 +466,15 @@ def domain_order(df: pd.DataFrame) -> list[str]:
     return pairs[COL_DOMAIN].tolist()
 
 
+def count_organizations(orgs: pd.Series) -> int:
+    """Distinct organizations, leaving out the placeholder for rows with no name.
+
+    A handful of rows name no organization and have no file name to recover
+    one from. They are not an organization, so they never count as one.
+    """
+    return int(orgs[orgs != UNKNOWN_ORG].nunique())
+
+
 def sorted_subcategories(values: Iterable[str]) -> list[str]:
     """Unique subcategory labels in codebook order."""
     return sorted(set(values), key=subcategory_sort_key)
@@ -429,7 +495,7 @@ def hierarchy_counts(df: pd.DataFrame) -> pd.DataFrame:
         df.groupby([COL_DOMAIN, COL_SUBCAT], observed=True)
         .agg(
             outcomes=(COL_TEXT, "size"),
-            organizations=(COL_ORG_VIEW, "nunique"),
+            organizations=(COL_ORG_VIEW, count_organizations),
             samples=(COL_OUTCOME, sample_outcome_texts),
         )
         .reset_index()
@@ -438,7 +504,7 @@ def hierarchy_counts(df: pd.DataFrame) -> pd.DataFrame:
 
 def distinct_counts_by(df: pd.DataFrame, column: str) -> pd.DataFrame:
     """Outcomes and distinct organizations for each value of `column` (e.g. per domain)."""
-    return df.groupby(column).agg(outcomes=(COL_TEXT, "size"), organizations=(COL_ORG_VIEW, "nunique"))
+    return df.groupby(column).agg(outcomes=(COL_TEXT, "size"), organizations=(COL_ORG_VIEW, count_organizations))
 
 
 def domain_population_counts(df: pd.DataFrame) -> pd.DataFrame:
@@ -467,7 +533,7 @@ def subcategory_coverage(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = No
     counts = (
         coded.groupby([COL_DOMAIN, COL_SUBCAT], observed=True)
         .agg(
-            organizations=(COL_ORG_VIEW, "nunique"),
+            organizations=(COL_ORG_VIEW, count_organizations),
             programs=(COL_PROGRAM, "nunique"),
             outcomes=(COL_TEXT, "size"),
             samples=(COL_OUTCOME, sample_outcome_texts),
@@ -673,10 +739,34 @@ def domain_summary(df: pd.DataFrame) -> pd.DataFrame:
                                      "samples"])
     return (
         coded.groupby([COL_DOMAIN, COL_DOMAIN_SHORT, COL_DOMAIN_NUM], observed=True)
-        .agg(organizations=(COL_ORG_VIEW, "nunique"), outcomes=(COL_TEXT, "size"),
+        .agg(organizations=(COL_ORG_VIEW, count_organizations), outcomes=(COL_TEXT, "size"),
              samples=(COL_OUTCOME, sample_outcome_texts))
         .reset_index()
         .sort_values(["organizations", "outcomes", COL_DOMAIN_NUM], ascending=[False, False, True])
+        .reset_index(drop=True)
+    )
+
+
+def priority_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """One row per plain-language priority: organizations, outcomes and hover samples.
+
+    Rows that were never coded are left out. Sorted by organizations, most
+    first, then in PRIORITIES order.
+    """
+    coded = df[df[COL_PRIORITY] != UNCODED_PRIORITY]
+    if coded.empty:
+        return pd.DataFrame(columns=[COL_PRIORITY, "organizations", "outcomes", "samples"])
+    order = {label: i for i, (label, _) in enumerate(PRIORITIES)}
+    summary = (
+        coded.groupby(COL_PRIORITY)
+        .agg(organizations=(COL_ORG_VIEW, count_organizations), outcomes=(COL_TEXT, "size"),
+             samples=(COL_OUTCOME, sample_outcome_texts))
+        .reset_index()
+    )
+    summary["_order"] = summary[COL_PRIORITY].map(order)
+    return (
+        summary.sort_values(["organizations", "_order"], ascending=[False, True])
+        .drop(columns="_order")
         .reset_index(drop=True)
     )
 
@@ -701,7 +791,7 @@ def population_summary(df: pd.DataFrame) -> pd.DataFrame:
     summary = (
         df.assign(population_group=groups)
         .groupby("population_group")
-        .agg(outcomes=(COL_TEXT, "size"), organizations=(COL_ORG_VIEW, "nunique"),
+        .agg(outcomes=(COL_TEXT, "size"), organizations=(COL_ORG_VIEW, count_organizations),
              samples=(COL_OUTCOME, sample_outcome_texts))
         .reindex(POPULATION_GROUP_ORDER)
         .dropna(subset=["outcomes"])
@@ -724,22 +814,24 @@ def portfolio_findings(df: pd.DataFrame, coverage: Optional[pd.DataFrame] = None
     """
     findings: list[str] = []
     domains = domain_summary(df)
-    n_orgs = df[COL_ORG_VIEW].nunique()
+    n_orgs = count_organizations(df[COL_ORG_VIEW])
     if domains.empty or n_orgs == 0:
         return findings
 
-    top = domains.iloc[0]
-    if len(domains) > 1:
+    priorities = priority_summary(df)
+    if len(priorities) > 1:
+        top = priorities.iloc[0]
         findings.append(
-            f"**{domain_short(top[COL_DOMAIN]).split('. ', 1)[-1]}** is the most widely shared focus: "
-            f"**{int(top['organizations'])} of {n_orgs}** organizations have at least one outcome in it."
+            f"**{top[COL_PRIORITY]}** is the most widely shared aim: "
+            f"**{int(top['organizations'])} of {n_orgs}** organizations name at least one outcome in it."
         )
-        by_outcomes = domains["outcomes"].sort_values(ascending=False)
-        needed = int((by_outcomes.cumsum() < by_outcomes.sum() / 2).sum()) + 1
-        if needed < len(domains):
-            findings.append(
-                f"Half of all outcome statements fall in **{needed} of the {len(domains)} domains**."
-            )
+        counts = priorities.set_index(COL_PRIORITY)["organizations"]
+        school = {label: int(counts.get(label, 0)) for label in SCHOOL_MEASURES}
+        if top[COL_PRIORITY] not in school:
+            named = [f"**{n}** {label.lower()}" for label, n in school.items()]
+            named[0] = named[0].replace("** ", "** name ", 1)
+            findings.append("Far fewer name what schools report on: "
+                            + ", ".join(named[:-1]) + " and " + named[-1] + ".")
 
     if coverage is not None and not coverage.empty:
         gaps = int((coverage["organizations"] == 0).sum())
