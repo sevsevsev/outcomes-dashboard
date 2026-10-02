@@ -1,6 +1,6 @@
 # Python dependencies for the outcomes dashboard (dashboard/app.py).
 # Install with: pip install -r dashboard/requirements.txt
-streamlit>=1.50
+streamlit>=1.52   # st.components.v2, used by the sunburst
 pandas>=2.1
 plotly>=5.22
 openpyxl>=3.1

@@ -1,0 +1,82 @@
+/* The codebook sunburst (see sunburst_component.py). Modeled on the codebook
+   explorer's landing-page sunburst: quiet per-domain hues, the hovered slice
+   lifts and darkens while the rest of the ring fades, and a readout says what
+   the slice is. Colors and type match the page (slate greys, Inter). */
+
+:host, .sb {
+  --ink: #0f172a;        /* slate-900 */
+  --ink-2: #334155;      /* slate-700 */
+  --muted: #64748b;      /* slate-500 */
+  --faint: #94a3b8;      /* slate-400 */
+  --line: #e2e8f0;       /* slate-200 */
+  --wash: #f8fafc;       /* slate-50 */
+  font-family: "Inter", "Source Sans", -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+}
+
+.sb { display: flex; gap: 40px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.sb-figure { position: relative; flex: 0 1 600px; min-width: 300px; max-width: 600px; }
+.sb-svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+.sb-slice {
+  cursor: pointer;
+  transition: fill .35s ease, fill-opacity .35s ease, transform .45s cubic-bezier(.3, 1.4, .5, 1);
+}
+.sb-slice:focus { outline: none; }
+.sb-slice:focus-visible { stroke: var(--ink); stroke-width: 2.5; }
+.sb-label { pointer-events: none; user-select: none; transition: opacity .35s ease; font-variant-numeric: tabular-nums; }
+
+@keyframes sb-in { from { opacity: 0; transform: scale(.92) rotate(-8deg); } to { opacity: 1; transform: none; } }
+.sb-enter .sb-slice { animation: sb-in .7s cubic-bezier(.2, .7, .2, 1) backwards; }
+
+/* Centre readout: what the highlighted slice is. Clicking the centre goes back up. */
+.sb-hole { cursor: default; fill: #fff; }
+.sb-hole.can-go-up { cursor: pointer; }
+.sb-center {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  pointer-events: none; text-align: center;
+}
+.sb-center-inner { width: 40%; }
+.sb-eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+}
+.sb-center .sb-title {
+  margin-top: 4px; font-size: 16px; font-weight: 600; line-height: 1.3; color: var(--ink);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sb-center .sb-meta { margin-top: 4px; font-size: 13px; color: var(--muted); line-height: 1.35; }
+.sb-center .sb-big { font-size: 34px; font-weight: 600; line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.sb-back { margin-top: 8px; font-size: 12px; color: var(--muted); }
+@keyframes sb-fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.sb-fade { animation: sb-fade .3s ease both; }
+
+/* Side readout: the counts and a few real outcome statements for the slice. */
+.sb-panel { flex: 0 1 340px; min-width: 260px; height: 470px; display: flex; flex-direction: column; }
+.sb-panel-inner { display: flex; flex-direction: column; height: 100%; }
+/* Everything keeps its height; only the sample list gives way (it is last and clipped) when space runs out. */
+.sb-panel-inner > * { flex-shrink: 0; }
+.sb-panel-inner > .sb-samples { flex-shrink: 1; min-height: 0; overflow: hidden; }
+.sb-panel .sb-eyebrow { display: flex; align-items: center; gap: 8px; }
+.sb-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.sb-panel .sb-title {
+  margin-top: 8px; font-size: 20px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25; color: var(--ink);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sb-counts { margin: 14px 0 0; padding: 0; list-style: none; display: flex; gap: 22px; }
+.sb-counts li { font-size: 13px; color: var(--muted); line-height: 1.3; }
+.sb-counts b { display: block; font-size: 22px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.sb-share { margin-top: 12px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.sb-share span { display: block; height: 100%; border-radius: 2px; transition: width .35s ease, background .35s ease; }
+.sb-share-note { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.sb-samples-head { margin-top: 22px; }
+.sb-samples { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.sb-samples li {
+  font-size: 13px; line-height: 1.45; color: var(--ink-2); background: var(--wash); border-radius: 8px; padding: 8px 12px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sb-hint { margin-top: auto; padding-top: 12px; font-size: 12px; color: var(--faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-slice, .sb-label, .sb-share span { transition: none; }
+  .sb-enter .sb-slice, .sb-fade { animation: none; }
+}
