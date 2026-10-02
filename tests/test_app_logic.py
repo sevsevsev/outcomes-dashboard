@@ -348,3 +348,121 @@ def test_codebook_sunburst_sizes_domains_by_their_goals_and_labels_exact_counts(
     colors = dict(zip(trace.ids, trace.marker.colors))
     assert colors[SEL].split(",")[0] == colors[SEL + app.SUNBURST_SEP + CONF].split(",")[0]
     assert colors[app.UNCODED_DOMAIN] == charts.UNCODED_FILL[0]
+
+
+# --- Codebook 3.x and district program files ----------------------------------
+
+Y1 = "Domain Y1. Academic Learning & Achievement"
+Y4 = "Domain Y4. Social & Emotional Skills (CASEL)"
+A2 = "Domain A2. Program Quality, Access & Reach"
+ATTEND = "Y1.13 Attendance & School Stability"
+STUDY = "Y1.11 Learning Strategies & Study Skills"
+REGULATE = "Y4.2 Emotion Regulation & Coping"
+
+
+def district_rows():
+    """The shape of a district program-description export: codebook 3.x, partner IDs, no organization column."""
+    def row(partner, program, text, domain, subcat, specificity="code", source="program_description"):
+        return {
+            "partner_id": partner, "program": program, "outcome_text_original": text,
+            "primary_domain": domain, "primary_subcategory": subcat,
+            "primary_target_population": "students_youth", "primary_confidence": "high",
+            "source_type": source, "specificity": specificity,
+        }
+
+    return pd.DataFrame([
+        row("4", "Social Skills Playgroup", "Students stay on task", Y1, STUDY),
+        row("4", "Social Skills Playgroup", "Students manage frustration", Y4, REGULATE),
+        row("116", "North10", "Increase school attendance", Y1, ATTEND, source="district_program_outcomes"),
+        row("116", "North10", "Grow social-emotionally", Y4, None, specificity="domain"),
+        row("74", "Tennis", "Provide a safe after-school space", A2, "A2.1 Program Quality"),
+        row("74", "Tennis", "Overall youth development", None, None, specificity="uncoded"),
+    ])
+
+
+def test_district_file_without_organization_loads_and_groups_by_partner():
+    frame = app.clean_outcomes(district_rows())
+    assert set(frame[app.COL_ORG]) == {"Partner 4", "Partner 116", "Partner 74"}
+    assert app.count_organizations(frame[app.COL_ORG]) == 3
+
+
+def test_partner_id_fills_rows_with_no_organization_name():
+    raw = pd.concat([raw_rows(), district_rows()], ignore_index=True)
+    frame = app.clean_outcomes(raw)
+    assert "Partner 116" in set(frame[app.COL_ORG])
+    assert "BalletX" in set(frame[app.COL_ORG])
+
+
+def test_source_type_defaults_to_logic_model_and_renames_old_district_value():
+    assert set(app.clean_outcomes(raw_rows())[app.COL_SOURCE_TYPE]) == {"logic_model"}
+    sources = set(app.clean_outcomes(district_rows())[app.COL_SOURCE_TYPE])
+    assert sources == {"program_description"}
+    assert "logic models" in app.intent_note(["logic_model"])
+    assert "program descriptions" in app.intent_note(sources)
+    assert "logic models and program descriptions" in app.intent_note(["logic_model", "program_description"])
+
+
+def test_priorities_recognize_codebook_3_codes():
+    assert app.priority_of(Y1, ATTEND) == "Attendance"
+    assert app.priority_of(Y1, "Y1.1 Literacy: Reading & Writing") == "Literacy"
+    assert app.priority_of(Y1, "Y1.10 Academic Perseverance") == "Engagement & study habits"  # not Literacy
+    assert app.priority_of(Y1, "Y1.18 Postsecondary Enrollment, Persistence & Completion") == "College & career"
+    assert app.priority_of(Y1, "Y1.5 Other Academic Subjects") == "Other academic learning"
+    assert app.priority_of("Domain Y8. Health, Safety & Well-Being", "Y8.6 Mental Health Symptoms & Distress") \
+        == "Mental health"
+    assert app.priority_of(Y4, app.UNASSIGNED_SUBCAT) == "Social-emotional skills"
+    assert app.priority_of("Domain F2. Basic Needs & Economic Stability", "F2.2 Food Security") == \
+        "Families & basic needs"
+    frame = app.clean_outcomes(district_rows())
+    assert app.UNCODED_PRIORITY not in set(frame.loc[frame[app.COL_DOMAIN] != app.UNCODED_DOMAIN, app.COL_PRIORITY])
+
+
+def test_codebook_3_domains_sort_by_part_then_number():
+    frame = app.clean_outcomes(district_rows())
+    assert app.domain_order(frame) == [Y1, Y4, A2, app.UNCODED_DOMAIN]
+    labels = ["A2.1 X", "Y1.13 X", "Y1.2 X", "F1.1 X", "Y4 X, no specific goal", "Y4.1 X"]
+    assert app.sorted_subcategories(labels) == ["Y1.2 X", "Y1.13 X", "Y4 X, no specific goal", "Y4.1 X",
+                                                "F1.1 X", "A2.1 X"]
+
+
+def test_domain_only_rows_get_their_own_goal_and_stay_out_of_coverage_gaps():
+    frame = app.clean_outcomes(district_rows())
+    frame = frame.assign(**{app.COL_ORG_VIEW: frame[app.COL_ORG]})
+    row = frame[frame[app.COL_TEXT] == "Grow social-emotionally"].iloc[0]
+    assert row[app.COL_SUBCAT] == "Y4 Social & Emotional Skills (CASEL), no specific goal"
+    assert row[app.COL_PRIORITY] == "Social-emotional skills"
+    uncoded = frame[frame[app.COL_TEXT] == "Overall youth development"].iloc[0]
+    assert uncoded[app.COL_SUBCAT] == app.UNASSIGNED_SUBCAT
+    coverage = app.subcategory_coverage(frame, app.load_codebook_for(frame))
+    assert not coverage[app.COL_SUBCAT].str.endswith(app.DOMAIN_ONLY_SUFFIX).any()
+
+
+def test_codebook_matches_the_files_numbering():
+    v3 = app.load_codebook_for(app.clean_outcomes(district_rows()))
+    assert len(v3) == 98 and ATTEND in set(v3[app.COL_SUBCAT]) and CONF not in set(v3[app.COL_SUBCAT])
+    v1 = app.load_codebook_for(app.clean_outcomes(raw_rows()))
+    assert CONF in set(v1[app.COL_SUBCAT]) and ATTEND not in set(v1[app.COL_SUBCAT])
+    frame = app.clean_outcomes(district_rows())
+    frame = frame.assign(**{app.COL_ORG_VIEW: frame[app.COL_ORG]})
+    coverage = app.subcategory_coverage(frame, v3)
+    assert (coverage["organizations"] == 0).sum() == 98 - 4   # every 3.x code but the four the file uses
+
+
+def test_peer_and_findings_views_work_on_a_codebook_3_file():
+    frame = app.clean_outcomes(district_rows())
+    frame = frame.assign(**{app.COL_ORG_VIEW: frame[app.COL_ORG]})
+    peers = app.compute_peer_overlap(frame, "Partner 4")
+    assert peers.empty   # nobody else shares Y1.11 or Y4.2
+    counts, samples = app.peer_heatmap_data(frame, "Partner 116", ["Partner 4"])
+    assert counts.shape == samples.shape
+    coverage = app.subcategory_coverage(frame, app.load_codebook_for(frame))
+    assert app.portfolio_findings(frame, coverage)
+
+
+def test_names_differing_only_in_capitals_merge_to_the_mixed_case_spelling():
+    raw = raw_rows()
+    raw.loc[len(raw)] = {**raw.iloc[5].to_dict(), "organization": "MUSICOPIA"}
+    raw.loc[len(raw)] = {**raw.iloc[5].to_dict(), "organization": "MUSICOPIA"}
+    frame = app.clean_outcomes(raw)
+    assert "MUSICOPIA" not in set(frame[app.COL_ORG])
+    assert (frame[app.COL_ORG] == "Musicopia").sum() == 3

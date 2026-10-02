@@ -39,6 +39,7 @@ The deployed app asks each visitor to upload the CSV. The file lives only in tha
 | `charts.py` | Plotly figures and the shared chart theme and palette |
 | `outcomes_data.py` | Loading, cleaning, filtering, aggregation. It makes no Streamlit calls, so other tools can import it. |
 | `reference/codebook_subcategories.csv` | Every subcategory in the codebook (v1.1.1), used to find goals no program targets. Regenerate it from the coder's `codebooks/original.ts` when the codebook changes. |
+| `reference/codebook_subcategories_v3.csv` | The same list for codebook 3.x (98 codes such as `Y4.2`), from the coder's `codebooks/youthOutcomesV3.data.ts`. The app compares a file against whichever codebook its codes come from. |
 
 ### Data clean-up on load
 
