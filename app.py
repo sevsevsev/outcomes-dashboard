@@ -67,7 +67,10 @@ from outcomes_data import (
     DATA_FILENAME,
     INTENT_NOTE,
     MEASURE_ORGS,
+    MEASURE_PROGRAMS,
     MEASURES,
+    SUNBURST_MEASURES,
+    SUNBURST_ROOT,
     ORG_GROUPING_OPTIONS,
     POPULATION_LABELS,
     UNASSIGNED_SUBCAT,
@@ -93,6 +96,7 @@ from outcomes_data import (
     resolve_data_path,
     sorted_subcategories,
     subcategory_coverage,
+    sunburst_nodes,
     to_export_frame,
 )
 
@@ -105,7 +109,7 @@ MAX_PROGRAMS = 6
 DEFAULT_PROGRAMS = 4
 UPLOAD_KEY = "uploaded_csv"          # (file name, bytes) of a CSV uploaded this session
 READ_ERRORS = (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError)
-VIEWS = ["Ranked", "Treemap", "Sunburst"]
+VIEWS = ["Ranked", "Sunburst", "Treemap"]
 # What the first ranked chart groups by: plain priorities, or the codebook's own domains.
 GROUP_PRIORITIES = "Priorities"
 GROUP_DOMAINS = "Codebook domains"
@@ -396,7 +400,7 @@ def page_system_map(df: pd.DataFrame) -> None:
     coverage = subcategory_coverage(df, cached_codebook())
     findings(portfolio_findings(df, coverage))
 
-    with section("Explore the portfolio", "Click a bar to narrow the charts beside and below it, and the "
+    with section("Explore the portfolio", "Click a bar or slice to narrow the charts beside and below it, and the "
                  "outcomes table.", key="explore"):
         t0, t1, t2 = st.columns([3, 3, 3])
         view = t2.segmented_control("View", VIEWS, default="Ranked", key="v1_view") or "Ranked"
@@ -405,12 +409,21 @@ def page_system_map(df: pd.DataFrame) -> None:
             help="Priorities use plain names such as Attendance or Math. Codebook domains are the coder's "
                  "own twelve domains, which the treemap and sunburst always use.",
         ) or GROUP_PRIORITIES
-        measure = t1.segmented_control(
-            "Count", MEASURES, default=MEASURE_ORGS, key="v1_measure",
-            help="Organizations counts each organization once per goal. Outcome statements gives more weight "
-                 "to organizations that list many outcomes.",
-        ) or MEASURE_ORGS
-        if view == "Ranked":
+        if view == "Sunburst":
+            measure = t1.segmented_control(
+                "Count", SUNBURST_MEASURES, default=MEASURE_PROGRAMS, key="v1_measure_sb",
+                help="Programs and organizations count each one once per goal and once per domain. Outcome "
+                     "statements gives more weight to programs that list many outcomes.",
+            ) or MEASURE_PROGRAMS
+        else:
+            measure = t1.segmented_control(
+                "Count", MEASURES, default=MEASURE_ORGS, key="v1_measure",
+                help="Organizations counts each organization once per goal. Outcome statements gives more weight "
+                     "to organizations that list many outcomes.",
+            ) or MEASURE_ORGS
+        if view == "Sunburst":
+            chosen_domain = sunburst_view(df, measure)
+        elif view == "Ranked":
             chosen_domain = linked_explorer(df, measure, grouping)
         else:
             chosen_domain = None
@@ -491,8 +504,48 @@ def linked_explorer(df: pd.DataFrame, measure: str, grouping: str = GROUP_PRIORI
     return domain
 
 
+def sunburst_view(df: pd.DataFrame, measure: str) -> Optional[str]:
+    """Domains and their goals as one sunburst, styled after the codebook explorer's. A click narrows the table.
+
+    Plotly zooms into a clicked domain and back out when its center is
+    clicked, and both clicks report the same domain. So the zoom is tracked
+    here, in a callback that runs once per click (not on other reruns): a
+    domain click opens that domain unless it is already open, in which case
+    it closes it. The chart's key changes with the data and the count, which
+    redraws it unzoomed and so resets the tracked state too.
+
+    Returns the selected domain, if any, so the coverage table can follow it.
+    """
+    nodes = sunburst_nodes(df).set_index("id")
+    signature = abs(hash((measure, len(df), tuple(df.index[:: max(len(df) // 50, 1)]))))
+    key = f"v1sb_{st.session_state.get('v1_nonce', 0)}_{signature}"
+    state = st.session_state.setdefault(f"{key}_state", {"open": None, "pick": None})
+
+    def on_click() -> None:
+        points = selected_points(st.session_state.get(key))
+        node = points[0].get("id") if points else None
+        if node not in nodes.index or node == SUNBURST_ROOT:
+            state.update(open=None, pick=None)
+        elif nodes.at[node, "level"] == "domain":
+            closing = state["open"] == node
+            state.update(open=None if closing else node, pick=None if closing else node)
+        else:
+            state["pick"] = node
+
+    plot(charts.build_codebook_sunburst(df, measure), key=key, on_select=on_click, selection_mode="points")
+    st.caption("Click a domain to open its goals, and the center to go back. Hover for sample outcomes.")
+
+    pick = state["pick"]
+    domain = nodes.at[pick, "domain"] if pick else None
+    goal = nodes.at[pick, "goal"] if pick and nodes.at[pick, "level"] == "goal" else None
+    rows = df if domain is None else filter_outcomes(df, domains=[domain], subcategories=[goal] if goal else None)
+    outcomes_panel(rows, describe(domain_short(domain) if domain else None, goal), key="v1_sb",
+                   nonce_key="v1_nonce" if pick else None)
+    return domain
+
+
 def hierarchy_view(df: pd.DataFrame, measure: str, chart_type: str) -> None:
-    """The treemap or sunburst, with pickers for reading the outcomes behind a block."""
+    """The treemap, with pickers for reading the outcomes behind a block."""
     plot(charts.build_hierarchy_chart(df, measure, chart_type), key="v1_hierarchy")
     back = "the domain's name at the top" if chart_type == "Treemap" else "the center"
     st.caption(f"Click a domain to open its goals, and {back} to go back.")

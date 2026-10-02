@@ -147,7 +147,11 @@ POPULATION_GROUP_ORDER = list(POPULATION_GROUPS.values()) + [OTHER_POPULATION]
 # What the size of a block (or length of a bar) represents in coverage views.
 MEASURE_OUTCOMES = "Outcome statements"
 MEASURE_ORGS = "Organizations"
+MEASURE_PROGRAMS = "Programs"
 MEASURES = [MEASURE_ORGS, MEASURE_OUTCOMES]
+# The sunburst also counts programs, and leads with them.
+SUNBURST_MEASURES = [MEASURE_PROGRAMS, MEASURE_OUTCOMES, MEASURE_ORGS]
+MEASURE_COLUMNS = {MEASURE_PROGRAMS: "programs", MEASURE_OUTCOMES: "outcomes", MEASURE_ORGS: "organizations"}
 
 ORG_GROUPING_OPTIONS = {
     "Name in the logic model": COL_ORG,
@@ -500,6 +504,44 @@ def hierarchy_counts(df: pd.DataFrame) -> pd.DataFrame:
         )
         .reset_index()
     )
+
+
+def count_programs(df: pd.DataFrame) -> int:
+    """Distinct programs, where a program is a program name within one organization."""
+    return int(df[[COL_ORG_VIEW, COL_PROGRAM]].drop_duplicates().shape[0])
+
+
+SUNBURST_ROOT = "all"
+SUNBURST_SEP = "\x1f"   # joins domain and goal in a node id; never appears in a label
+
+
+def sunburst_nodes(df: pd.DataFrame) -> pd.DataFrame:
+    """The nodes of the domain -> goal sunburst: one root, one row per domain, one per goal.
+
+    Columns: id, parent, level ("root", "domain" or "goal"), domain, goal,
+    domain_index (position in domain order, which picks the domain's color),
+    outcomes, programs, organizations (exact distinct counts at that node)
+    and samples (hover snippet). Domains come in numeric order and goals in
+    codebook order, so the ring reads clockwise like the codebook.
+    """
+    def counts(rows: pd.DataFrame) -> dict:
+        return {
+            "outcomes": len(rows),
+            "programs": count_programs(rows),
+            "organizations": count_organizations(rows[COL_ORG_VIEW]),
+            "samples": sample_outcome_texts(rows[COL_OUTCOME]),
+        }
+
+    nodes = [{"id": SUNBURST_ROOT, "parent": "", "level": "root", "domain": None, "goal": None,
+              "domain_index": -1, **counts(df)}]
+    for index, domain in enumerate(domain_order(df)):
+        in_domain = df[df[COL_DOMAIN] == domain]
+        nodes.append({"id": domain, "parent": SUNBURST_ROOT, "level": "domain", "domain": domain, "goal": None,
+                      "domain_index": index, **counts(in_domain)})
+        for goal in sorted_subcategories(in_domain[COL_SUBCAT]):
+            nodes.append({"id": domain + SUNBURST_SEP + goal, "parent": domain, "level": "goal", "domain": domain,
+                          "goal": goal, "domain_index": index, **counts(in_domain[in_domain[COL_SUBCAT] == goal])})
+    return pd.DataFrame(nodes)
 
 
 def distinct_counts_by(df: pd.DataFrame, column: str) -> pd.DataFrame:
