@@ -427,3 +427,12 @@ def test_peer_and_findings_views_work_on_a_codebook_3_file():
     assert counts.shape == samples.shape
     coverage = app.subcategory_coverage(frame, app.load_codebook_for(frame))
     assert app.portfolio_findings(frame, coverage)
+
+
+def test_names_differing_only_in_capitals_merge_to_the_mixed_case_spelling():
+    raw = raw_rows()
+    raw.loc[len(raw)] = {**raw.iloc[5].to_dict(), "organization": "MUSICOPIA"}
+    raw.loc[len(raw)] = {**raw.iloc[5].to_dict(), "organization": "MUSICOPIA"}
+    frame = app.clean_outcomes(raw)
+    assert "MUSICOPIA" not in set(frame[app.COL_ORG])
+    assert (frame[app.COL_ORG] == "Musicopia").sum() == 3

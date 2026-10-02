@@ -127,6 +127,14 @@ ORG_ALIASES = {
     # of the multi-part Historic Fair Hill logic model.
     "HFH": "Historic Fair Hill, Inc.",
     "The Commons": "Historic Fair Hill, Inc.",
+    # Variants that appear in the 3.x recode export (2026-10-02).
+    "ASAP After School Activities Partnerships": "After School Activities Partnerships (ASAP)",
+    "After School Activities Partnerships": "After School Activities Partnerships (ASAP)",
+    "ArtWell Collaborative Inc": "ArtWell",
+    "Heights": "Heights Philadelphia",
+    "Historic Fair Hill (HFH)": "Historic Fair Hill, Inc.",
+    "Cobbs Creek Community Environmental Education Center, Inc. (CCCEEC, Inc.)":
+        "Cobbs Creek Community Environmental Education Center, Inc.",
 }
 
 # Values that were extracted into the organization column but are not names.
@@ -346,6 +354,23 @@ def codebook_scheme(domains: Iterable[str]) -> set[str]:
     return schemes
 
 
+def _merge_case_variants(names: pd.Series) -> pd.Series:
+    """Spell names that differ only in capitals ('PRIDE YOUTH SERVICES') one way.
+
+    Prefers a spelling that is not all capitals, then the one most rows use.
+    """
+    present = names.dropna()
+    if present.empty:
+        return names
+
+    def pick(spellings: pd.Series) -> str:
+        counts = spellings.value_counts()
+        return min(counts.index, key=lambda n: (n.isupper(), -counts[n], n))
+
+    canonical = present.groupby(present.str.casefold()).agg(pick)
+    return names.map(lambda n: canonical.get(n.casefold(), n) if isinstance(n, str) else n).astype("string")
+
+
 def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
     """Validate and tidy a raw coded-outcomes export.
 
@@ -396,7 +421,8 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
 
     org = df[COL_ORG].mask(df[COL_ORG].isin(JUNK_ORG_NAMES))
     org = org.fillna(file_org).mask(lambda s: s.isin(JUNK_ORG_NAMES))
-    df[COL_ORG] = org.replace(ORG_ALIASES).fillna(UNKNOWN_ORG)
+    org = org.replace(ORG_ALIASES)
+    df[COL_ORG] = _merge_case_variants(org).fillna(UNKNOWN_ORG)
 
     df[COL_GRANTEE] = file_org.mask(file_org.isin(JUNK_ORG_NAMES)).fillna(df[COL_ORG])
     df[COL_PROGRAM] = df[COL_PROGRAM].fillna(file_program).fillna(UNKNOWN_PROGRAM)
