@@ -16,9 +16,10 @@ Color rules (so the charts read as one system):
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import textwrap
-from typing import Optional
+from typing import Optional, Sequence
 
 import pandas as pd
 import plotly.express as px
@@ -37,6 +38,7 @@ from outcomes_data import (
     UNCODED_DOMAIN,
     count_organizations,
     distinct_counts_by,
+    domain_code,
     domain_short,
     hierarchy_counts,
     sample_outcome_texts,
@@ -440,6 +442,64 @@ def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = 
         layout["yaxis2"] = dict(domain=[1 - header_share, 1], range=[-0.5, 0.5], visible=False, fixedrange=True)
     fig.update_layout(**layout)
     return fig
+
+
+NOT_CODED_TEXT = "#8a909b"   # rows for partners whose outcomes are not coded
+# A school can touch every 3.x domain, too many columns for full names. Its grid heads
+# each column with the code and a word or two; hovering a header gives the full name.
+DOMAIN_NICKNAMES = {
+    "Y1": "Academics", "Y2": "Interest", "Y3": "Belonging", "Y4": "Social-emotional", "Y5": "Identity",
+    "Y6": "Character, civic", "Y7": "Career", "Y8": "Health, safety", "F1": "Families", "F2": "Basic needs",
+    "A1": "Staff", "A2": "Program quality", "A3": "Systems",
+}
+NICKNAME_WRAP = 10
+
+
+def build_school_dots(flows: pd.DataFrame, partners: list[str], extra_rows: Sequence[tuple[str, str]] = (),
+                      zoomed: bool = False):
+    """build_program_dots for one school's partners, plus grey rows for partners with nothing to plot.
+
+    `extra_rows` is (partner, note) pairs, such as ("Partner 170", "Not yet coded"):
+    they keep the whole portfolio on one chart, so the reader sees how much of
+    it the dots cover. They are left out when zoomed into one domain.
+    """
+    fig = build_program_dots(flows, partners, zoomed=zoomed)
+    if zoomed:
+        return fig
+    header = fig.data[1]
+    header.text = [_nickname(key.removeprefix(DOMAIN_KEY)) for key, *_ in header.customdata]
+    header.textfont = dict(color=TEXT_PRIMARY, size=11)
+    if not extra_rows:
+        return fig
+    plotted = list(fig.layout.yaxis.categoryarray)
+    labels = [short_label(p, 40) for p, _ in extra_rows]
+    first_column = fig.layout.xaxis.categoryarray[0]
+    fig.add_trace(go.Scatter(
+        x=[first_column] * len(labels), y=labels, mode="text",
+        text=[note for _, note in extra_rows], textposition="middle right",
+        textfont=dict(color=NOT_CODED_TEXT, size=12),
+        customdata=[("",)] * len(labels), hoverinfo="skip",
+        selected=dict(textfont=dict(color=NOT_CODED_TEXT)), unselected=dict(textfont=dict(color=NOT_CODED_TEXT)),
+    ))
+    height = 16 + DOT_HEADER + DOT_ROW * (len(plotted) + len(labels))
+    header_share = DOT_HEADER / (height - 16)
+    fig.update_layout(
+        height=height,
+        yaxis=dict(categoryarray=plotted + labels, domain=[0, 1 - header_share], tickmode="array",
+                   tickvals=plotted + labels,
+                   ticktext=plotted + [f"<span style='color:{NOT_CODED_TEXT}'>{html.escape(t)}</span>"
+                                       for t in labels]),
+        yaxis2=dict(domain=[1 - header_share, 1]),
+    )
+    return fig
+
+
+def _nickname(domain: str) -> str:
+    """ "Domain Y4. Social & Emotional Skills" -> "<b>Y4 ›</b><br>Social-<br>emotional" """
+    code = domain_code(domain)
+    if code is None or code not in DOMAIN_NICKNAMES:
+        return f"{wrap_label(domain_short(domain), DOT_GRID_WRAP)} ›"
+    return f"<b>{code} ›</b><br>{wrap_label(DOMAIN_NICKNAMES[code], NICKNAME_WRAP)}"
 
 
 # =============================================================================
