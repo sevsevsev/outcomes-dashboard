@@ -8,6 +8,7 @@ A line under the filter bar says what every page shows: outcomes that programs i
 
 - **What programs aim for**: plain-language priorities (Attendance, Literacy, Social-emotional skills and so on) ranked by how many organizations (or outcome statements) they hold. **Group by** switches to the codebook's own domains. The priorities are defined in `PRIORITIES` in `outcomes_data.py`, and each coded goal belongs to exactly one. Click a priority or domain to rank its goals and see who those outcomes are for; click a goal or an audience to narrow further. The outcomes table under the charts follows every click. A view switch swaps the ranked bars for a sunburst or a treemap. The sunburst follows the codebook explorer's design: domains on the inner ring and their goals on the outer ring, one quiet hue per domain, and the total in the middle. It counts programs, outcome statements or organizations. Clicking a domain opens its goals and narrows the outcomes table; clicking a goal narrows it further, and clicking the center goes back. The last section lists the goals with the thinnest coverage, including codebook goals no program targets yet.
 - **Find peers**: pick an organization to rank its peers by shared goals, then select a peer to read both organizations' outcomes goal by goal. You can also pick a goal and click an organization to read its outcomes, or compare up to six programs in a dot grid of programs by domain. Click a domain name to see the same grid by that domain's goals (**‹ All domains** goes back), or click a dot to list those outcomes.
+- **Partners at a school**: pick a school to see every partner program there, from the district's program-to-school table. The page says how many of the school's partners have coded outcomes, then shows the coded ones in a dot grid of partners by domain (click a domain to see its goals, or a dot to list its outcomes). Partners without coded outcomes stay on the grid as grey "Not yet coded" rows, and the list at the bottom names every partner with its programs. Coded outcomes join to the table on district partner and program IDs, never on names: from `partner_id` and `program_id` columns, a `program_key` such as `54_32`, or the `54_32` in the logic model's file name. Coded programs without IDs can't be placed at a school; the page's **School tables** menu says how many matched.
 - **Review coding**: a searchable table that opens on low and no-confidence rows for a human check.
 
 The filter bar at the top of every page holds **Filters** (domain, audience, organization, confidence) and **Data** (the loaded file, a replacement upload, how organizations are grouped, and notes on the measures). The line beside it says how many outcome statements the page is showing. Hovering over any chart shows sample outcome statements, and every list has a CSV download.
@@ -25,6 +26,8 @@ streamlit run app.py
 
 Put the export in `data/verified_coded_outcomes(5).csv`, or point to it with `OUTCOMES_CSV=/path/to/export.csv`. Without a file, the app opens on an upload screen. CSV files are git-ignored, so partner data never gets committed.
 
+The school page also needs two district files: the program-to-school export (columns `PARTNER ID`, `PROGRAM ID`, `EOS CODE`) and the schools table (`ULCS`, `Publication Name`; `Schools.xlsx` keeps it on its "schools" sheet). Put them in `data/` as `.xlsx` or `.csv` and the app finds them by their columns. On the deployed app, drop both on the school page; like the outcomes CSV they stay in the browser session. Everything in `data/` is git-ignored.
+
 ## Deploy
 
 Deploy on [Streamlit Community Cloud](https://share.streamlit.io) from this repo, with `main` as the branch and `app.py` as the main file. Vercel and other serverless hosts can't run Streamlit.
@@ -37,6 +40,7 @@ The deployed app asks each visitor to upload the CSV. The file lives only in tha
 |---|---|
 | `app.py` | Page layout, navigation, the filter bar, and the chart clicks that filter tables |
 | `charts.py` | Plotly figures and the shared chart theme and palette |
+| `schools.py` | The school page's data: reading the district tables, joining coded outcomes on partner and program IDs, a school's partner portfolio and findings. No Streamlit calls. |
 | `outcomes_data.py` | Loading, cleaning, filtering, aggregation. It makes no Streamlit calls, so other tools can import it. |
 | `reference/codebook_subcategories.csv` | Every subcategory in the codebook (v1.1.1), used to find goals no program targets. Regenerate it from the coder's `codebooks/original.ts` when the codebook changes. |
 | `reference/codebook_subcategories_v3.csv` | The same list for codebook 3.x (98 codes such as `Y4.2`), from the coder's `codebooks/youthOutcomesV3.data.ts`. The app compares a file against whichever codebook its codes come from. |
