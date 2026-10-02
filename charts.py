@@ -28,12 +28,16 @@ from outcomes_data import (
     COL_ORG_VIEW,
     COL_SUBCAT,
     COL_OUTCOME,
+    MEASURE_COLUMNS,
     MEASURE_ORGS,
+    MEASURE_PROGRAMS,
+    UNCODED_DOMAIN,
     count_organizations,
     distinct_counts_by,
     domain_short,
     hierarchy_counts,
     sample_outcome_texts,
+    sunburst_nodes,
 )
 
 # =============================================================================
@@ -205,6 +209,110 @@ def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_t
             title=dict(text="Organizations working on it", side="top", font=dict(size=12, color=TEXT_SECONDARY)),
             tickfont=dict(size=11, color=TEXT_SECONDARY), outlinewidth=0,
         ),
+    )
+    return fig
+
+
+# =============================================================================
+# CODEBOOK SUNBURST
+# =============================================================================
+
+# Borrowed from the codebook explorer's sunburst (the coder repo's
+# components/CodebookSunburst.tsx): one quiet hue per domain, the domain ring
+# in the deeper shade and its goals in a pale tint of the same hue, with both
+# rings on show at once and the totals in the middle. Hues follow domain
+# order, so domain 3 has the same color here as in the explorer.
+DOMAIN_HUES = [28, 350, 262, 214, 158, 190, 4, 232, 44, 292, 128, 16]
+UNCODED_FILL = ("#9aa1ad", "#e3e6ea")   # domain, goal: grey for rows the coder could not place
+SUNBURST_TEXT_SIZE = 13
+SUNBURST_MIN_TEXT_SIZE = 11
+SUNBURST_WRAP_DOMAIN = 14
+SUNBURST_NAMED_SHARE = 0.075   # domains narrower than this share of the ring show only their number
+SUNBURST_WRAP_GOAL = 18
+# Short nouns, so a count fits on its slice.
+NOUNS = {MEASURE_PROGRAMS: "programs", MEASURE_ORGS: "organizations"}
+
+
+def is_coded_domain(domain: str) -> bool:
+    """False for the placeholder domain of rows the coder could not place."""
+    return domain != UNCODED_DOMAIN
+
+
+def domain_fills(domain_index: int, uncoded: bool = False) -> tuple[str, str]:
+    """(domain ring color, goal ring color) for a domain, as in the codebook explorer."""
+    if uncoded:
+        return UNCODED_FILL
+    hue = DOMAIN_HUES[domain_index % len(DOMAIN_HUES)]
+    return f"hsl({hue}, 42%, 50%)", f"hsl({hue}, 52%, 88%)"
+
+
+def build_codebook_sunburst(df: pd.DataFrame, measure: str = MEASURE_PROGRAMS):
+    """Domains on the inner ring, their goals on the outer ring, sized by `measure`.
+
+    Each node's id is the domain, or domain + SUNBURST_SEP + goal, and the
+    root's is SUNBURST_ROOT; a click reports that id. Clicking a domain zooms
+    into it and clicking the center zooms back out (Plotly's own behavior).
+
+    Programs and organizations work in several goals, so a domain's arc is
+    the sum of its goals' counts, while its label and hover give the exact
+    number of distinct programs (or organizations) in the domain.
+    """
+    # Plotly lays slices out counterclockwise in data order; reversed, the
+    # domains read clockwise from 12 o'clock, 1, 2, 3, as in the explorer.
+    nodes = sunburst_nodes(df).iloc[::-1].reset_index(drop=True)
+    size_col = MEASURE_COLUMNS[measure]
+    noun = NOUNS.get(measure, "outcomes")
+    # Arc sizes: goals carry their own count; domains and the root sum what is inside them.
+    sizes = nodes[size_col].astype(float).where(nodes["level"] == "goal", 0.0)
+    domain_sizes = sizes.groupby(nodes["parent"]).sum()
+    sizes = sizes.where(nodes["level"] != "domain", nodes["id"].map(domain_sizes))
+    sizes = sizes.where(nodes["level"] != "root", sizes[nodes["level"] == "domain"].sum())
+
+    total = max(float(sizes[nodes["level"] == "root"].iloc[0]), 1.0)
+    colors, text, names = [], [], []
+    for row in nodes.itertuples():
+        count = f"{getattr(row, size_col):,} {noun}"
+        if row.level == "root":
+            colors.append(SURFACE)
+            n_domains = int(nodes.loc[nodes["level"] == "domain", "domain"].map(is_coded_domain).sum())
+
+            text.append(f"<b>{count}</b><br>in {n_domains} domains")
+            names.append("All domains")
+            continue
+        inner, outer = domain_fills(row.domain_index, not is_coded_domain(row.domain))
+        if row.level == "domain":
+            colors.append(inner)
+            name = domain_short(row.domain)
+            # A narrow domain shows just its number, as every domain does in the explorer; a
+            # full name would not fit and Plotly would hide it. Hover gives the name.
+            if sizes[row.Index] / total >= SUNBURST_NAMED_SHARE:
+                text.append(f"<b>{wrap_label(name, SUNBURST_WRAP_DOMAIN)}</b><br>{count}")
+            else:
+                text.append(f"<b>{name.split('.', 1)[0] if is_coded_domain(row.domain) else ''}</b>")
+            names.append(name)
+        else:
+            colors.append(outer)
+            text.append(f"{wrap_label(row.goal, SUNBURST_WRAP_GOAL)}<br>{count}")
+            names.append(row.goal)
+
+    custom = list(zip(nodes["samples"], names, nodes["outcomes"], nodes["programs"], nodes["organizations"]))
+    fig = go.Figure(go.Sunburst(
+        ids=nodes["id"], labels=names, parents=nodes["parent"], values=sizes, branchvalues="total",
+        text=text, texttemplate="%{text}", customdata=custom,
+        hovertemplate=(
+            "<b>%{customdata[1]}</b><br>%{customdata[3]:,} programs · %{customdata[4]:,} organizations"
+            " · %{customdata[2]:,} outcome statements" + SAMPLE_HOVER_BLOCK + "<extra></extra>"
+        ),
+        marker=dict(colors=colors, line=dict(color=SURFACE, width=1.5)),
+        # Goals are dark text on a pale tint; domains white text on the deeper shade.
+        insidetextfont=dict(size=SUNBURST_TEXT_SIZE,
+                            color=["#ffffff" if lvl == "domain" else TEXT_PRIMARY for lvl in nodes["level"]]),
+        insidetextorientation="auto",
+        sort=False, rotation=90,
+    ))
+    fig.update_layout(
+        height=680, margin=dict(t=8, l=0, r=0, b=8),
+        uniformtext=dict(minsize=SUNBURST_MIN_TEXT_SIZE, mode="hide"),
     )
     return fig
 

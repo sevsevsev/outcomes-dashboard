@@ -320,6 +320,36 @@ def test_rows_with_no_organization_are_not_counted_as_one():
     assert summary.loc["Social-emotional skills", "organizations"] == 2
 
 
+def test_sunburst_nodes_count_programs_and_organizations_at_each_level(df):
+    frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
+    nodes = app.sunburst_nodes(frame).set_index("id")
+    root = nodes.loc[app.SUNBURST_ROOT]
+    assert root["outcomes"] == len(frame)
+    assert root["programs"] == app.count_programs(frame) == 5
+    sel = nodes.loc[SEL]
+    assert (sel["level"], sel["outcomes"], sel["programs"], sel["organizations"]) == ("domain", 4, 2, 2)
+    conf = nodes.loc[SEL + app.SUNBURST_SEP + CONF]
+    assert (conf["level"], conf["parent"], conf["goal"], conf["programs"]) == ("goal", SEL, CONF, 2)
+    # Domains in codebook order, then their goals; Uncoded last.
+    domains = nodes[nodes["level"] == "domain"].index.tolist()
+    assert domains[0] == JOY and domains[-1] == app.UNCODED_DOMAIN
+
+
+def test_codebook_sunburst_sizes_domains_by_their_goals_and_labels_exact_counts(df):
+    frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
+    trace = charts.build_codebook_sunburst(frame, app.MEASURE_PROGRAMS).data[0]
+    by_id = dict(zip(trace.ids, range(len(trace.ids))))
+    goals = [i for i, p in zip(trace.ids, trace.parents) if p == SEL]
+    # Each SEL goal has 2 programs, so the arc is 4 while the label says the 2 distinct programs.
+    assert trace.values[by_id[SEL]] == sum(trace.values[by_id[g]] for g in goals) == 4
+    assert "2 programs" in trace.text[by_id[SEL]]
+    assert trace.branchvalues == "total"
+    # Same domain, same hue on both rings; the Uncoded domain is grey.
+    colors = dict(zip(trace.ids, trace.marker.colors))
+    assert colors[SEL].split(",")[0] == colors[SEL + app.SUNBURST_SEP + CONF].split(",")[0]
+    assert colors[app.UNCODED_DOMAIN] == charts.UNCODED_FILL[0]
+
+
 # --- Codebook 3.x and district program files ----------------------------------
 
 Y1 = "Domain Y1. Academic Learning & Achievement"
