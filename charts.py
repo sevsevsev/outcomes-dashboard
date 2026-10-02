@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import re
 import textwrap
 from typing import Optional, Sequence
 
@@ -112,7 +113,7 @@ ROOT_LABEL = "All domains"
 
 def wrap_label(text: str, width: int) -> str:
     """Break a long name onto several lines (Plotly uses <br> for line breaks)."""
-    return "<br>".join(textwrap.wrap(str(text), width=width, break_long_words=False)) or str(text)
+    return "<br>".join(textwrap.wrap(str(text), width=width, break_long_words=False, break_on_hyphens=False)) or str(text)
 
 
 def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_type: str = "Treemap"):
@@ -234,6 +235,11 @@ NOUNS = {MEASURE_PROGRAMS: "programs", MEASURE_ORGS: "organizations"}
 HOVER_SAMPLE_CHARS = 240   # longer sample statements are cut; the readout clamps them to three lines anyway
 
 
+def _clip(text: str, limit: int) -> str:
+    """A sample statement cut at a word break, with "…" so the reader sees it goes on."""
+    return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+
+
 def is_coded_domain(domain: str) -> bool:
     """False for the placeholder domain of rows the coder could not place."""
     return domain != UNCODED_DOMAIN
@@ -275,7 +281,7 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
             "hue": DOMAIN_HUES[int(row.domain_index) % len(DOMAIN_HUES)] if coded and row.domain_index >= 0 else None,
             "value": size, "count": int(getattr(row, size_col)),
             "programs": int(row.programs), "organizations": int(row.organizations), "outcomes": int(row.outcomes),
-            "samples": [" ".join(str(t).split())[:HOVER_SAMPLE_CHARS] for t in row.sample_list],
+            "samples": [_clip(" ".join(str(t).split()), HOVER_SAMPLE_CHARS) for t in row.sample_list],
         })
     n_domains = int(nodes.loc[nodes["level"] == "domain", "domain"].map(is_coded_domain).sum())
     sig = hashlib.sha1(json.dumps([measure, [(n["id"], n["value"], n["count"]) for n in out]]).encode()).hexdigest()
@@ -289,13 +295,55 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
 # RANKED BARS AND DOTS (the linked, clickable views)
 # =============================================================================
 
-LABEL_CHARS = 44   # longer category names are shortened on the axis; hover shows them in full
-ROW_HEIGHT = 30    # pixels per bar, which keeps each bar under 24px thick
+# How labels fit (the same rules on every page):
+# * A chart never cuts a name. Long names wrap at word breaks onto a second
+#   (rarely a third) line, and rows grow to fit; hover still has the full name.
+# * A row's identity is always its full name. Only the tick text is wrapped, so
+#   two names that share a long prefix can't merge into one row.
+# * Plotly sizes the label gutter from the tick text (automargin), so the
+#   layout follows from the data alone and stays the same on every rerun.
+AXIS_WRAP = 26     # characters per line in row labels
+AXIS_MAX_LINES = 3
+ROW_HEIGHT = 30    # pixels per one-line bar row; two-line rows get more
+LINE_HEIGHT = 16   # pixels per line of 13px label text
+BAR_THICKNESS = 18
+LABEL_GAP = 8      # pixels between a row label and its bar or grid
 
 
-def short_label(text: str, limit: int = LABEL_CHARS) -> str:
+def axis_label(text: str, width: int = AXIS_WRAP, max_lines: int = AXIS_MAX_LINES) -> str:
+    """A row label wrapped at word breaks ("<br>"), never mid-word or at a hyphen.
+
+    Only a name longer than `max_lines` lines loses its tail, with "…".
+    """
     text = str(text)
-    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+    lines = textwrap.wrap(text, width=width, break_long_words=False, break_on_hyphens=False) or [text]
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] = lines[-1].rstrip(" ,;:&-") + "…"
+    return "<br>".join(html.escape(line, quote=False) for line in lines)
+
+
+def line_count(label: str) -> int:
+    return label.count("<br>") + 1
+
+
+def category_ticks(names: Sequence[str], width: int = AXIS_WRAP, color: Optional[dict] = None) -> dict:
+    """Axis settings that keep each row keyed on its full name but print it wrapped.
+
+    `color` maps a name to a text color for rows that should read differently.
+    """
+    color = color or {}
+
+    def tick(name: str) -> str:
+        label = axis_label(name, width)
+        if name not in color:
+            return label
+        return "<br>".join(f"<span style='color:{color[name]}'>{line}</span>" for line in label.split("<br>"))
+
+    # An invisible tick makes the gap between label and plot; unlike a label standoff,
+    # automargin counts tick length when it sizes the gutter, so no label is clipped.
+    return dict(tickmode="array", tickvals=list(names), ticktext=[tick(n) for n in names],
+                ticks="outside", ticklen=LABEL_GAP, tickcolor="rgba(0,0,0,0)")
 
 
 # How a clicked mark and the others look. Plotly applies this in the browser, so
@@ -306,8 +354,6 @@ UNSELECTED = dict(marker=dict(color=FADED, opacity=1))
 # Bars carry their value as text; it stays in text ink whether or not the bar is picked.
 BAR_SELECTED = dict(marker=SELECTED["marker"], textfont=dict(color=TEXT_PRIMARY))
 BAR_UNSELECTED = dict(marker=UNSELECTED["marker"], textfont=dict(color=TEXT_SECONDARY))
-# Dot counts print inside the dot, so a faded dot needs darker ink than white.
-DOT_UNSELECTED = dict(marker=UNSELECTED["marker"], textfont=dict(color=TEXT_SECONDARY))
 
 
 def build_ranked_bars(
@@ -323,13 +369,16 @@ def build_ranked_bars(
     `key_col` goes into customdata[0] so a click tells the app which row was
     picked. Values sit at the bar tips; hover adds `detail` (a
     customdata-based template line) and sample outcomes from the `samples`
-    column.
+    column. Long labels wrap, and every row grows to the tallest label.
     """
     keys = data[key_col].tolist()
-    custom = list(zip(keys, data["samples"], data[label_col]))
+    names = [str(v) for v in data[label_col]]
+    custom = list(zip(keys, data["samples"], names))
+    lines = max((line_count(axis_label(n)) for n in names), default=1)
+    row = max(ROW_HEIGHT, LINE_HEIGHT * lines + 12)
     fig = go.Figure(go.Bar(
         x=data[value_col],
-        y=[short_label(v) for v in data[label_col]],
+        y=names,
         orientation="h",
         marker=dict(color=PRIMARY),
         customdata=custom,
@@ -346,12 +395,13 @@ def build_ranked_bars(
         unselected=BAR_UNSELECTED,
     ))
     fig.update_layout(
-        height=ROW_HEIGHT * max(len(data), 2) + 24,
+        # The top margin keeps Plotly's hover toolbar off the first (longest) bar's value.
+        height=row * max(len(data), 2) + 32,
         xaxis=dict(visible=False, range=[0, (data[value_col].max() or 1) * 1.12]),
-        yaxis=dict(autorange="reversed", automargin=True, tickfont=dict(color=TEXT_PRIMARY, size=13),
-                   showgrid=False),
-        margin=dict(t=4, l=0, r=8, b=4),
-        bargap=0.42,
+        yaxis=dict(type="category", autorange="reversed", automargin=True,
+                   tickfont=dict(color=TEXT_PRIMARY, size=13), showgrid=False, **category_ticks(names)),
+        margin=dict(t=28, l=0, r=8, b=4),
+        bargap=1 - BAR_THICKNESS / row,
         barcornerradius=4,
         showlegend=False,
         dragmode=False,
@@ -359,13 +409,88 @@ def build_ranked_bars(
     return fig
 
 
-DOT_GRID_WRAP = 14   # characters per line in the column labels
-DOT_ROW = 58         # pixels per program row
-DOT_HEADER = 72      # pixels for the column headers
+# --- Dot grids (Find peers, Partners at a school) ----------------------------
+
+DOT_ROW = 58         # pixels per row: room for a three-line name
 DOMAIN_KEY = "domain::"   # customdata[0] prefix for a clicked domain header
-# Header marks are invisible hit areas under the domain names; only the text shows.
-HEADER_SELECTED = dict(marker=dict(opacity=0), textfont=dict(color=PRIMARY))
-HEADER_UNSELECTED = dict(marker=dict(opacity=0), textfont=dict(color=TEXT_PRIMARY))
+# Codebook colors: each domain's dots and header take the hue it has in the
+# codebook explorer and the sunburst (DOMAIN_HUES, by codebook position).
+DOMAIN_ORDER_V3 = ["Y1", "Y2", "Y3", "Y4", "Y5", "Y6", "Y7", "Y8", "F1", "F2", "A1", "A2", "A3"]
+UNCODED_DOT = "#9aa1ad"
+# Column headers: the code large and bold in the domain's color, a short name
+# under it. When columns get narrow, every other header steps up one tier (a
+# thin line drops to its column), so each header has two columns of width.
+HEADER_CODE_SIZE = 15
+HEADER_NAME_SIZE = 12
+HEADER_LINE = 16     # pixels per header line
+STAGGER_AT = 7       # more columns than this and the headers stagger
+DOMAIN_NAME_WRAP = 11
+GOAL_NAME_WRAP = 13
+GOAL_NAME_LINES = 3
+# Header marks are invisible hit areas under the header text; only the text shows.
+HEADER_SELECTED = dict(marker=dict(opacity=0))
+HEADER_UNSELECTED = dict(marker=dict(opacity=0))
+# Dots keep their domain's color when picked; the others fade.
+DOT_SELECTED = dict(marker=dict(opacity=1))
+DOT_UNSELECTED = dict(marker=dict(opacity=0.22), textfont=dict(color=TEXT_SECONDARY))
+# A school can touch every 3.x domain, too many columns for full names, so each
+# domain header carries a word or two; hovering a header gives the full name.
+DOMAIN_NICKNAMES = {
+    "Y1": "Academics", "Y2": "Interest", "Y3": "Belonging", "Y4": "Social-emotional", "Y5": "Identity",
+    "Y6": "Character, civic", "Y7": "Career", "Y8": "Health, safety", "F1": "Families", "F2": "Basic needs",
+    "A1": "Staff", "A2": "Program quality", "A3": "Systems",
+}
+
+
+def label_code(label: str) -> Optional[str]:
+    """The domain code a domain or goal label starts with: "Y4" for "Domain Y4. ..." or "Y4.2 ...",
+    "3" for "3.1.4 ..."; None for placeholders such as "Uncoded"."""
+    match = re.match(r"^\s*(?:Domain\s+)?([YFA]?)(\d+)", str(label))
+    return match.group(1) + match.group(2) if match else None
+
+
+def domain_hue(label: str) -> Optional[int]:
+    """The codebook explorer's hue for the domain a domain or goal label belongs to."""
+    code = label_code(label)
+    if code is None or not is_coded_domain(label):
+        return None
+    index = DOMAIN_ORDER_V3.index(code) if code in DOMAIN_ORDER_V3 else int(code) - 1 if code.isdigit() else None
+    return None if index is None else DOMAIN_HUES[index % len(DOMAIN_HUES)]
+
+
+def domain_color(label: str, lightness: int = 46) -> str:
+    hue = domain_hue(label)
+    return UNCODED_DOT if hue is None else f"hsl({hue}, 55%, {lightness}%)"
+
+
+def _wrap_lines(text: str, width: int, max_lines: int, hyphens: bool = True) -> list[str]:
+    lines = textwrap.wrap(str(text), width=width, break_long_words=False, break_on_hyphens=hyphens) or [str(text)]
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] = lines[-1].rstrip(" ,;:&-") + "…"
+    return lines
+
+
+def _header_parts(target: str, zoomed: bool) -> tuple[str, list[str]]:
+    """(code, name lines) for a column header."""
+    if zoomed:
+        code = str(target).split(" ", 1)[0] if label_code(target) else ""
+        title = str(target).split(" ", 1)[1] if code and " " in str(target) else str(target)
+        return code, _wrap_lines(title, GOAL_NAME_WRAP, GOAL_NAME_LINES, hyphens=False)
+    code = domain_code(target)
+    if code is None or not is_coded_domain(target):
+        return "", ["Uncoded" if not is_coded_domain(target) else domain_short(target)]
+    name = DOMAIN_NICKNAMES.get(code) or domain_short(target).split(" ", 1)[-1]
+    return code, _wrap_lines(name, DOMAIN_NAME_WRAP, 2)
+
+
+def _header_text(code: str, lines: list[str], color: str, arrow: bool) -> str:
+    tail = " ›" if arrow else ""
+    name = "<br>".join(html.escape(line, quote=False) for line in lines)
+    if not code:
+        return f"<b>{name}</b>{tail}"
+    return (f"<span style='font-size:{HEADER_CODE_SIZE}px;color:{color}'><b>{code}</b></span>{tail}"
+            f"<br>{name}")
 
 
 def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = False):
@@ -373,24 +498,27 @@ def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = 
 
     It answers "where do these programs overlap?" without crossing lines.
     customdata[0] is "program||target", so a click tells the app which cell
-    was picked. With domains as columns, each domain name is itself a
+    was picked. With domains as columns, each domain header is itself a
     clickable mark (customdata[0] is DOMAIN_KEY + domain) so the app can
-    drill into that domain's goals; axis labels can't be clicked.
+    drill into that domain's goals; axis labels can't be clicked. Rows are
+    keyed on full names and printed wrapped; dots and headers take their
+    domain's codebook color.
     """
     targets = list(dict.fromkeys(flows["target"]))
     rows = [p for p in programs if p in set(flows["source"])]
-    names = {t: (t if zoomed else domain_short(t)) for t in targets}
-    x_labels = {t: wrap_label(names[t], DOT_GRID_WRAP) for t in targets}
     peak = flows["outcomes"].max() or 1
-    sizes = [12 + 34 * (n / peak) ** 0.5 for n in flows["outcomes"]]
+    # The biggest dot shrinks when columns get narrow, so neighbors don't touch.
+    biggest = max(30, min(46, 640 / max(len(targets), 1)))
+    sizes = [12 + (biggest - 12) * (n / peak) ** 0.5 for n in flows["outcomes"]]
     keys = [f"{src}||{tgt}" for src, tgt in zip(flows["source"], flows["target"])]
+    names = {t: (t if zoomed else domain_short(t)) for t in targets}
     target_names = [names[t] for t in flows["target"]]
     fig = go.Figure(go.Scatter(
-        x=[x_labels[t] for t in flows["target"]],
-        y=[short_label(p, 40) for p in flows["source"]],
+        x=list(flows["target"]),
+        y=list(flows["source"]),
         mode="markers+text",
-        # Plotly fades sized dots to 0.7 by default; keep them the same blue as the bars.
-        marker=dict(size=sizes, color=PRIMARY, opacity=1, line=dict(color=SURFACE, width=2)),
+        marker=dict(size=sizes, color=[domain_color(t) for t in flows["target"]], opacity=1,
+                    line=dict(color=SURFACE, width=2)),
         # Counts print inside dots big enough to hold them; hover gives every count.
         text=[str(n) if size >= 24 else "" for n, size in zip(flows["outcomes"], sizes)],
         textfont=dict(color=SURFACE, size=12),
@@ -399,60 +527,63 @@ def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = 
             "<b>%{customdata[2]}</b> in <b>%{customdata[3]}</b><br>%{customdata[4]} outcome statements"
             "<br><br><b>Sample outcomes</b><br>%{customdata[1]}<extra></extra>"
         ),
-        selected=SELECTED,
+        selected=DOT_SELECTED,
         unselected=DOT_UNSELECTED,
     ))
-    height = 16 + DOT_HEADER + DOT_ROW * len(rows)
-    header_share = DOT_HEADER / (height - 16)
+
+    # The header strip (y2), in pixels: one or two tiers of header text.
+    parts = {t: _header_parts(t, zoomed) for t in targets}
+    tier = HEADER_LINE * (1 + max((len(lines) for _, lines in parts.values()), default=1)) + 6
+    stagger = len(targets) > STAGGER_AT
+    strip = tier * (2 if stagger else 1) + 6
+    lifted = [stagger and i % 2 == 1 for i in range(len(targets))]
+    centers = [tier * (1.5 if up else 0.5) + 4 for up in lifted]
+    totals = flows.groupby("target", sort=False)["outcomes"].sum()
+    fig.add_trace(go.Scatter(
+        x=targets,
+        y=centers,
+        yaxis="y2",
+        mode="markers+text",
+        marker=dict(symbol="square", size=tier - 4, color=SURFACE, opacity=0),
+        text=[_header_text(*parts[t], domain_color(t, 40), arrow=not zoomed) for t in targets],
+        textposition="middle center",
+        textfont=dict(color=TEXT_PRIMARY, size=HEADER_NAME_SIZE),
+        customdata=[((DOMAIN_KEY + t) if not zoomed else "", "", t, names[t], int(totals[t])) for t in targets],
+        hovertemplate=("<b>%{customdata[3]}</b><br>%{customdata[4]} outcome statements from these rows"
+                       + ("" if zoomed else "<br>Click to see its goals") + "<extra></extra>"),
+        selected=HEADER_SELECTED,
+        unselected=HEADER_UNSELECTED,
+    ))
+
+    if any(lifted):
+        # Drawn after the headers, so the header stays fig.data[1]. A thin line from each lifted header down to its column.
+        line_x, line_y = [], []
+        for t, up, c in zip(targets, lifted, centers):
+            if up:
+                line_x += [t, t, None]
+                line_y += [0, c - tier / 2 + 2, None]
+        fig.add_trace(go.Scatter(x=line_x, y=line_y, yaxis="y2", mode="lines", hoverinfo="skip",
+                                 line=dict(color=GRID, width=1), showlegend=False))
+    height = 12 + strip + DOT_ROW * len(rows)
+    header_share = strip / (height - 12)
     grid_axis = dict(showgrid=True, gridcolor=GRID, fixedrange=True)
-    layout = dict(
+    fig.update_layout(
         height=height,
-        xaxis=dict(type="category", categoryorder="array", categoryarray=[x_labels[t] for t in targets],
+        xaxis=dict(type="category", categoryorder="array", categoryarray=targets, showticklabels=False,
                    **grid_axis),
-        yaxis=dict(type="category", categoryorder="array", categoryarray=[short_label(p, 40) for p in rows],
-                   autorange="reversed", automargin=True, tickfont=dict(size=13, color=TEXT_PRIMARY),
-                   domain=[0, 1 - header_share], **grid_axis),
-        margin=dict(t=8, l=0, r=16, b=8),
+        yaxis=dict(type="category", categoryorder="array", categoryarray=rows,
+                   range=[len(rows) - 0.5, -0.5], automargin=True,
+                   tickfont=dict(size=13, color=TEXT_PRIMARY), domain=[0, 1 - header_share],
+                   **category_ticks(rows), **grid_axis),
+        yaxis2=dict(domain=[1 - header_share, 1], range=[0, strip], visible=False, fixedrange=True),
+        margin=dict(t=6, l=0, r=16, b=6),
         showlegend=False,
         dragmode=False,
     )
-    if zoomed:
-        # Goal names stay plain axis labels above the grid.
-        layout["xaxis"].update(side="top", automargin=True, tickfont=dict(size=12, color=TEXT_SECONDARY))
-        layout["yaxis"]["domain"] = [0, 1]
-    else:
-        # Domain names sit on their own strip (y2) as clickable text marks.
-        totals = flows.groupby("target", sort=False)["outcomes"].sum()
-        fig.add_trace(go.Scatter(
-            x=[x_labels[t] for t in targets],
-            y=[0] * len(targets),
-            yaxis="y2",
-            mode="markers+text",
-            marker=dict(symbol="square", size=DOT_HEADER - 8, color=SURFACE, opacity=0),
-            text=[f"{x_labels[t]} ›" for t in targets],
-            textposition="middle center",
-            textfont=dict(color=TEXT_PRIMARY, size=12),
-            customdata=[(DOMAIN_KEY + t, "", t, names[t], int(totals[t])) for t in targets],
-            hovertemplate=("<b>%{customdata[3]}</b><br>%{customdata[4]} outcome statements from these programs"
-                           "<br>Click to see its goals<extra></extra>"),
-            selected=HEADER_SELECTED,
-            unselected=HEADER_UNSELECTED,
-        ))
-        layout["xaxis"]["showticklabels"] = False
-        layout["yaxis2"] = dict(domain=[1 - header_share, 1], range=[-0.5, 0.5], visible=False, fixedrange=True)
-    fig.update_layout(**layout)
     return fig
 
 
 NOT_CODED_TEXT = "#8a909b"   # rows for partners whose outcomes are not coded
-# A school can touch every 3.x domain, too many columns for full names. Its grid heads
-# each column with the code and a word or two; hovering a header gives the full name.
-DOMAIN_NICKNAMES = {
-    "Y1": "Academics", "Y2": "Interest", "Y3": "Belonging", "Y4": "Social-emotional", "Y5": "Identity",
-    "Y6": "Character, civic", "Y7": "Career", "Y8": "Health, safety", "F1": "Families", "F2": "Basic needs",
-    "A1": "Staff", "A2": "Program quality", "A3": "Systems",
-}
-NICKNAME_WRAP = 10
 
 
 def build_school_dots(flows: pd.DataFrame, partners: list[str], extra_rows: Sequence[tuple[str, str]] = (),
@@ -464,42 +595,30 @@ def build_school_dots(flows: pd.DataFrame, partners: list[str], extra_rows: Sequ
     it the dots cover. They are left out when zoomed into one domain.
     """
     fig = build_program_dots(flows, partners, zoomed=zoomed)
-    if zoomed:
-        return fig
-    header = fig.data[1]
-    header.text = [_nickname(key.removeprefix(DOMAIN_KEY)) for key, *_ in header.customdata]
-    header.textfont = dict(color=TEXT_PRIMARY, size=11)
-    if not extra_rows:
+    if zoomed or not extra_rows:
         return fig
     plotted = list(fig.layout.yaxis.categoryarray)
-    labels = [short_label(p, 40) for p, _ in extra_rows]
+    labels = [p for p, _ in extra_rows if p not in plotted]
+    notes = [note for p, note in extra_rows if p not in plotted]
     first_column = fig.layout.xaxis.categoryarray[0]
     fig.add_trace(go.Scatter(
         x=[first_column] * len(labels), y=labels, mode="text",
-        text=[note for _, note in extra_rows], textposition="middle right",
+        text=notes, textposition="middle right",
         textfont=dict(color=NOT_CODED_TEXT, size=12),
         customdata=[("",)] * len(labels), hoverinfo="skip",
         selected=dict(textfont=dict(color=NOT_CODED_TEXT)), unselected=dict(textfont=dict(color=NOT_CODED_TEXT)),
     ))
-    height = 16 + DOT_HEADER + DOT_ROW * (len(plotted) + len(labels))
-    header_share = DOT_HEADER / (height - 16)
+    strip = fig.layout.yaxis2.range[1]
+    rows = plotted + labels
+    height = 12 + strip + DOT_ROW * len(rows)
+    header_share = strip / (height - 12)
     fig.update_layout(
         height=height,
-        yaxis=dict(categoryarray=plotted + labels, domain=[0, 1 - header_share], tickmode="array",
-                   tickvals=plotted + labels,
-                   ticktext=plotted + [f"<span style='color:{NOT_CODED_TEXT}'>{html.escape(t)}</span>"
-                                       for t in labels]),
+        yaxis=dict(categoryarray=rows, range=[len(rows) - 0.5, -0.5], domain=[0, 1 - header_share],
+                   **category_ticks(rows, color={p: NOT_CODED_TEXT for p in labels})),
         yaxis2=dict(domain=[1 - header_share, 1]),
     )
     return fig
-
-
-def _nickname(domain: str) -> str:
-    """ "Domain Y4. Social & Emotional Skills" -> "<b>Y4 ›</b><br>Social-<br>emotional" """
-    code = domain_code(domain)
-    if code is None or code not in DOMAIN_NICKNAMES:
-        return f"{wrap_label(domain_short(domain), DOT_GRID_WRAP)} ›"
-    return f"<b>{code} ›</b><br>{wrap_label(DOMAIN_NICKNAMES[code], NICKNAME_WRAP)}"
 
 
 # =============================================================================
@@ -536,7 +655,7 @@ def build_peer_heatmap(counts: pd.DataFrame, samples: pd.DataFrame):
         height=max(320, 40 * len(counts) + 200),
         plot_bgcolor=EMPTY_CELL,
         xaxis=dict(side="top", tickangle=-30, showgrid=False),
-        yaxis=dict(showgrid=False),
+        yaxis=dict(showgrid=False, automargin=True, **category_ticks([str(i) for i in counts.index])),
         margin=dict(t=8, l=0, r=0, b=0),
         coloraxis_colorbar=dict(thickness=8, len=0.5, outlinewidth=0, tickfont=dict(size=11)),
     )
