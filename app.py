@@ -14,7 +14,8 @@ Pages (top navigation):
 
 1. What programs aim for - findings, linked priority (or domain) / goal / audience charts, coverage gaps
 2. Find peers        - peers for an organization, organizations by goal, program comparison
-3. Review coding     - paginated explorer for checking the coder's categorizations
+3. Partners at a school - a school's partners, coded or not, and where their outcomes meet
+4. Review coding     - paginated explorer for checking the coder's categorizations
 
 Each page opens on a few plain-language findings and simple ranked charts.
 Clicking a bar or dot narrows the charts and the table below it, so readers
@@ -36,12 +37,14 @@ from __future__ import annotations
 import html
 import io
 import re
+from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 import pandas as pd
 import streamlit as st
 
 import charts
+import schools
 from outcomes_data import (
     COL_ATOMIC,
     COL_CONF,
@@ -852,6 +855,209 @@ def page_review(df: pd.DataFrame) -> None:
 
 
 # =============================================================================
+# PAGE 4: PARTNERS AT A SCHOOL
+# =============================================================================
+
+SCHOOL_UPLOAD_KEY = "school_tables"   # {kind: (file name, bytes)} uploaded this session
+
+
+@st.cache_data(show_spinner="Loading the school tables...")
+def load_school_table_bytes(data: bytes, name: str) -> tuple[str, pd.DataFrame]:
+    return schools.read_table_bytes(data, name)
+
+
+@st.cache_data(show_spinner="Loading the school tables...")
+def load_school_table_path(path: str, modified: float) -> tuple[str, pd.DataFrame]:
+    return schools.read_table(path)
+
+
+@st.cache_data(ttl=60)
+def local_school_tables() -> dict[str, str]:
+    return {kind: str(path) for kind, path in schools.find_local_tables().items()}
+
+
+def school_tables() -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
+    """The relationship and schools tables: uploaded this session, else found in data/. Returns (tables, file names)."""
+    uploaded = st.session_state.get(SCHOOL_UPLOAD_KEY, {})
+    local = local_school_tables()
+    tables, names = {}, {}
+    for kind in (schools.RELATIONSHIPS, schools.SCHOOLS):
+        if kind in uploaded:
+            name, data = uploaded[kind]
+            tables[kind] = load_school_table_bytes(data, name)[1]
+            names[kind] = name
+        elif kind in local:
+            path = local[kind]
+            tables[kind] = load_school_table_path(path, Path(path).stat().st_mtime)[1]
+            names[kind] = Path(path).name
+    return tables, names
+
+
+def school_uploader(key: str) -> None:
+    """Takes either table, or both at once, and tells them apart by their columns."""
+    files = st.file_uploader("Program-to-school table and schools table", type=["xlsx", "csv"],
+                             accept_multiple_files=True, key=key, label_visibility="collapsed")
+    stored = st.session_state.setdefault(SCHOOL_UPLOAD_KEY, {})
+    changed = False
+    for file in files or []:
+        try:
+            kind, _ = load_school_table_bytes(file.getvalue(), file.name)
+        except schools.NotASchoolTableError as exc:
+            st.error(str(exc))
+            continue
+        except (ValueError, *READ_ERRORS) as exc:
+            st.error(f"{file.name} could not be read: {exc}")
+            continue
+        if stored.get(kind) != (file.name, file.getvalue()):
+            stored[kind] = (file.name, file.getvalue())
+            changed = True
+    if changed:
+        st.rerun()
+
+
+def page_schools(df: pd.DataFrame, everything: pd.DataFrame) -> None:
+    """Pick a school and see its partners: which have coded outcomes, and where those outcomes meet.
+
+    `df` is the filtered data the charts show; `everything` is the whole file,
+    so whether a partner counts as coded never depends on the filters.
+    """
+    page_header("Partners at a school")
+    tables, names = school_tables()
+    relationships = tables.get(schools.RELATIONSHIPS)
+    if relationships is None:
+        with section("Add the school tables", key="school_upload"):
+            st.markdown(
+                "This page needs the district's program-to-school table (partner, program and school IDs), and "
+                "the schools table that names each ULCS code. Drop both files here; they stay in this browser "
+                "session.")
+            school_uploader("school_upload_first")
+        st.caption("Running locally? Put both files in `data/` and they load automatically.")
+        return
+
+    school_list = tables.get(schools.SCHOOLS)
+    coded_all = schools.with_program_ids(everything)
+    joined = schools.join_summary(coded_all, relationships)
+    year = schools.fiscal_year_label(relationships[schools.COL_YEAR].dropna().max()
+                                     if relationships[schools.COL_YEAR].notna().any() else "")
+    options = schools.school_options(relationships, school_list)
+    by_code = options.set_index(schools.COL_ULCS)
+
+    def school_label(code: str) -> str:
+        level = by_code.at[code, schools.COL_LEVEL] if schools.COL_LEVEL in by_code else None
+        return by_code.at[code, schools.COL_SCHOOL] + (f" · {level}" if isinstance(level, str) else "")
+
+    pick, data_col = st.columns([4, 1], vertical_alignment="bottom")
+    ulcs = pick.selectbox("School", options[schools.COL_ULCS].tolist(), index=None, key="v4_school",
+                          format_func=school_label, placeholder="Type to search schools")
+    with data_col.popover("School tables", width="stretch"):
+        st.markdown(f"Programs and schools from **{names.get(schools.RELATIONSHIPS)}**"
+                    + (f" and **{names[schools.SCHOOLS]}**" if schools.SCHOOLS in names else "")
+                    + (f", fiscal year {year}." if year else "."))
+        st.markdown(
+            f"Coded outcomes join on district partner and program IDs, never on names. "
+            f"**{joined['with_ids']} of {joined['programs']}** coded programs in the loaded file carry those IDs, "
+            f"and **{joined['matched']}** of them appear in the program-to-school table.")
+        school_uploader("school_upload_replace")
+
+    if ulcs is None:
+        with_partners = int((options["programs"] > 0).sum())
+        findings([
+            f"**{with_partners} schools** host partner programs" + (f" in {year}." if year else "."),
+            f"At **{joined['schools']}** of them, at least one partner has coded outcomes. "
+            "Pick a school to see who works there and what they aim for.",
+        ])
+        return
+
+    school_name = by_code.at[ulcs, schools.COL_SCHOOL]
+    portfolio = schools.school_portfolio(relationships, ulcs, coded_all)
+    labels = dict(zip(portfolio[schools.COL_PARTNER_ID], portfolio[schools.COL_PARTNER]))
+    rows = schools.school_outcomes(schools.with_program_ids(df), relationships, ulcs, labels)
+    rows = rows.assign(**{COL_ORG_VIEW: rows[schools.COL_PARTNER]})
+    findings(schools.school_findings(school_name, portfolio, rows, year))
+    if portfolio.empty:
+        return
+
+    coded = portfolio[portfolio["status"] != schools.NOT_CODED]
+    if not coded.empty:
+        school_dots(rows, portfolio, ulcs)
+    school_partner_list(portfolio, school_name, ulcs)
+
+
+def school_dots(rows: pd.DataFrame, portfolio: pd.DataFrame, ulcs: str) -> None:
+    """Partners (rows) by domain, with partners lacking coded outcomes as grey rows; clicks narrow the table."""
+    plotted = [p for p in portfolio.loc[portfolio["status"] != schools.NOT_CODED, schools.COL_PARTNER]
+               if p in set(rows[schools.COL_PARTNER])]
+    overview = schools.partner_flows(rows)
+    domains = list(dict.fromkeys(overview["target"]))
+    if "v4_zoom_next" in st.session_state:
+        st.session_state["v4_zoom"] = st.session_state.pop("v4_zoom_next")
+    zoom = st.session_state.get("v4_zoom")
+    if zoom not in domains:
+        zoom = st.session_state["v4_zoom"] = None
+    flows = schools.partner_flows(rows, domain=zoom) if zoom else overview
+
+    filtered_out = [(p, "None under the current filters")
+                    for p in portfolio.loc[portfolio["status"] != schools.NOT_CODED, schools.COL_PARTNER]
+                    if p not in plotted]
+    not_coded = [(p, "Not yet coded")
+                 for p in portfolio.loc[portfolio["status"] == schools.NOT_CODED, schools.COL_PARTNER]]
+    title = f"Where these partners meet in {plain_domain(zoom)}" if zoom else "Where these partners meet"
+    note = ("Bigger dots mean more outcome statements. Click a dot to list its outcomes below." if zoom else
+            "Bigger dots mean more outcome statements. Click a domain name to see its goals, or a dot to list "
+            "its outcomes below. Grey rows are partners here without coded outcomes.")
+    with section(title, note, key="school_dots"):
+        if zoom:
+            st.button("‹ All domains", key="v4_unzoom", type="tertiary",
+                      on_click=lambda: st.session_state.update(v4_zoom=None))
+        if flows.empty:
+            st.caption("None of these partners' outcomes match the current filters.")
+            cell = None
+        else:
+            key = f"v4_dots_{st.session_state.get('v4_dot_nonce', 0)}_{ulcs}_{slug(zoom or 'all')}_{len(rows)}"
+            fig = charts.build_school_dots(flows, plotted, filtered_out + not_coded, zoomed=bool(zoom))
+            cell = clickable(fig, key) or None
+        if cell and cell.startswith(charts.DOMAIN_KEY):
+            st.session_state["v4_zoom_next"] = cell.removeprefix(charts.DOMAIN_KEY)
+            clear_selection("v4_dot_nonce")
+            st.rerun()
+        shown = rows if not zoom else rows[rows[COL_DOMAIN] == zoom]
+        where = " from the partners at this school"
+        if cell:
+            partner, target = cell.split("||", 1)
+            shown = shown[(shown[schools.COL_PARTNER] == partner)
+                          & (shown[COL_SUBCAT if zoom else COL_DOMAIN] == target)]
+            where = f" from <b>{html.escape(partner)}</b>" + describe(target if zoom else domain_short(target))
+        elif zoom:
+            where += describe(domain_short(zoom))
+        outcomes_panel(shown, where, key="v4_school", nonce_key="v4_dot_nonce" if cell else None, height=360)
+
+
+def school_partner_list(portfolio: pd.DataFrame, school_name: str, ulcs: str) -> None:
+    """Every partner at the school, coded or not, with its programs here."""
+    n_coded = int((portfolio["status"] != schools.NOT_CODED).sum())
+    with section("Every partner here", f"{n_coded} of {len(portfolio)} have coded outcomes. Partners without a "
+                 "name in the loaded file show their district partner ID.", key="school_partners"):
+        st.dataframe(
+            portfolio[[schools.COL_PARTNER, "status", "programs_here", "coded_programs", "outcomes",
+                       "program_names", schools.COL_PARTNER_ID]],
+            hide_index=True,
+            height=min(420, 35 * len(portfolio) + 38),
+            column_config={
+                schools.COL_PARTNER: st.column_config.TextColumn("Partner", width="medium"),
+                "status": st.column_config.TextColumn("Outcomes", width="medium"),
+                "programs_here": st.column_config.NumberColumn("Programs here"),
+                "coded_programs": st.column_config.NumberColumn("Coded"),
+                "outcomes": st.column_config.NumberColumn("Outcome statements"),
+                "program_names": st.column_config.TextColumn("Programs", width="large"),
+                schools.COL_PARTNER_ID: st.column_config.TextColumn("Partner ID", width="small"),
+            },
+        )
+        csv = portfolio.to_csv(index=False).encode("utf-8")
+        st.download_button("Download this list (CSV)", csv, file_name=f"partners_{ulcs}_{slug(school_name)}.csv",
+                           mime="text/csv", key="v4_dl_partners", type="tertiary")
+
+
+# =============================================================================
 # DATA, FILTER BAR, NAVIGATION
 # =============================================================================
 
@@ -956,8 +1162,9 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
                                      key="f_pops", placeholder="Everyone")
         # The peers page compares organizations with each other, so an
         # organization filter there would hide the peers being searched for.
+        # The schools page lists every partner at a school, so it has none either.
         chosen_orgs = None
-        if page_key != "peers":
+        if page_key not in ("peers", "schools"):
             orgs = sorted(df[COL_ORG_VIEW].unique(), key=str.casefold)
             keep_valid("f_orgs", orgs)
             chosen_orgs = st.multiselect("Organizations", orgs, key="f_orgs", placeholder="All organizations")
@@ -1001,6 +1208,8 @@ def main() -> None:
         "map": st.Page(lambda: page_system_map(holder["df"]), title="What programs aim for", url_path="system-map",
                        default=True),
         "peers": st.Page(lambda: page_find_peers(holder["df"]), title="Find peers", url_path="find-peers"),
+        "schools": st.Page(lambda: page_schools(holder["df"], df), title="Partners at a school",
+                           url_path="schools"),
         "review": st.Page(lambda: page_review(holder["df"]), title="Review coding", url_path="review-coding"),
     }
     current = st.navigation(list(pages.values()), position="top")
