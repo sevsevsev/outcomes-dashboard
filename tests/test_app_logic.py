@@ -230,12 +230,14 @@ def test_program_dots_put_programs_in_rows_and_domains_in_codebook_order(df):
     fig = charts.build_program_dots(app.program_flows(df, programs), programs)
     trace = fig.data[0]
     columns = list(fig.layout.xaxis.categoryarray)
-    assert columns[0].startswith("1.") and columns[-1].startswith("3.")
-    assert list(fig.layout.yaxis.categoryarray) == programs
+    assert app.domain_code(columns[0]) == "1" and app.domain_code(columns[-1]) == "3"
+    # Rows are keyed on full names; only the tick text wraps.
+    assert list(fig.layout.yaxis.categoryarray) == programs == list(fig.layout.yaxis.tickvals)
     # customdata[0] names the cell a click picks.
     assert f"BalletX||{JOY}" in [c[0] for c in trace.customdata]
-    assert trace.marker.color == charts.PRIMARY
-    assert trace.unselected.marker.color == charts.FADED
+    # Dots take their domain's codebook color and fade (not recolor) when another is picked.
+    assert set(trace.marker.color) <= {charts.domain_color(c) for c in columns}
+    assert trace.unselected.marker.opacity < 1 and trace.unselected.marker.color is None
 
 
 def test_program_dots_domain_headers_are_clickable_marks_until_zoomed(df):
@@ -248,7 +250,8 @@ def test_program_dots_domain_headers_are_clickable_marks_until_zoomed(df):
     assert fig.layout.xaxis.showticklabels is False
     assert header.marker.opacity == 0 and header.unselected.marker.opacity == 0
     zoomed = charts.build_program_dots(app.program_flows(df, programs, domain=SEL), programs, zoomed=True)
-    assert len(zoomed.data) == 1
+    # Zoomed into a domain, goal headers are labels only: their clicks name nothing.
+    assert {c[0] for c in zoomed.data[1].customdata} == {""}
 
 
 def test_ranked_bars_fade_everything_but_the_clicked_bar(df):
@@ -517,3 +520,40 @@ def test_app_runs_every_view(tmp_path, monkeypatch):
         at.session_state["v1_view"] = view
         at.run()
         assert not at.exception, view
+
+
+def test_axis_labels_wrap_instead_of_cutting():
+    name = "Netter Center for Community Partnerships, University of Pennsylvania"
+    label = charts.axis_label(name)
+    assert "…" not in label and label.replace("<br>", " ") == name
+    # Hyphenated words stay whole.
+    assert "Self-<br>" not in charts.axis_label("Goal-Setting, Organization & Self-Discipline", 20)
+
+
+def test_rows_sharing_a_long_prefix_stay_separate(df):
+    long = "After School Activities Partnerships (ASAP)"
+    programs = [f"{long}: Drama", f"{long}: Chess and Scrabble Clubs"]
+    flows = pd.DataFrame({"source": programs, "target": [JOY, JOY], "outcomes": [4, 5], "samples": ["", ""]})
+    fig = charts.build_program_dots(flows, programs)
+    assert list(fig.data[0].y) == programs
+    assert list(fig.layout.yaxis.categoryarray) == programs
+
+
+def test_ranked_bars_key_rows_on_full_names():
+    names = ["Y4.7 Teamwork, Collaboration & Group Leadership", "Y1.18 Postsecondary Enrollment, Persistence"]
+    data = pd.DataFrame({"label": names, "n": [3, 2], "key": names, "samples": ["", ""]})
+    fig = charts.build_ranked_bars(data, "label", "n", "key")
+    assert list(fig.data[0].y) == names
+    assert all("…" not in t for t in fig.layout.yaxis.ticktext)
+
+
+def test_coded_by_is_an_organization_not_junk():
+    raw = pd.DataFrame({
+        "organization": ["Coded by:", None], "program": ["Coded by: Classroom"] * 2,
+        "outcome_text_original": ["a", "b"], "primary_domain": [SEL] * 2,
+        "primary_subcategory": ["x", "y"], "primary_target_population": ["students_youth"] * 2,
+        "primary_confidence": ["high"] * 2,
+        "source_filename": ["101_127 - Coded by- - Coded by- Classroom - Logic Model.pdf"] * 2,
+    })
+    clean = app.clean_outcomes(raw)
+    assert set(clean["organization"]) == {"Coded by: (formerly Coded by Kids)"}

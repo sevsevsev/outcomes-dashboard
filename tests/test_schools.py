@@ -115,4 +115,4 @@ def test_school_dots_add_grey_rows_for_uncoded_partners():
                                    [("Partner 30", "Not yet coded")])
     assert list(fig.layout.yaxis.categoryarray)[-1] == "Partner 30"
     assert fig.data[-1].text == ("Not yet coded",)
-    assert "Y4 ›" in fig.data[1].text[-1] or "Y4 ›" in fig.data[1].text[0]
+    assert any("<b>Y4</b>" in text for text in fig.data[1].text)

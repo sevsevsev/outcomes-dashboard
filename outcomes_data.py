@@ -117,6 +117,8 @@ CONFIDENCE_ORDER = ["high", "medium", "low", "none"]
 # Map each variant to one canonical spelling so counts and peer matches are not
 # split. Only unambiguous duplicates belong here; distinct departments of the
 # same institution (e.g. the Penn programs) are intentionally left separate.
+CODED_BY = "Coded by: (formerly Coded by Kids)"
+
 ORG_ALIASES = {
     "ASAP (After School Activities Partnerships)": "After School Activities Partnerships (ASAP)",
     "Artwell": "ArtWell",
@@ -136,11 +138,11 @@ ORG_ALIASES = {
     "Historic Fair Hill (HFH)": "Historic Fair Hill, Inc.",
     "Cobbs Creek Community Environmental Education Center, Inc. (CCCEEC, Inc.)":
         "Cobbs Creek Community Environmental Education Center, Inc.",
+    # Coded by Kids renamed itself "Coded by:" (with the colon). File names can't hold a
+    # colon, so the file-name form is "Coded by-". Both read like junk on their own.
+    "Coded by:": CODED_BY,
+    "Coded by-": CODED_BY,
 }
-
-# Values that were extracted into the organization column but are not names.
-# They are treated as missing and back-filled from the file name.
-JUNK_ORG_NAMES = {"Coded by:", "Coded by-"}
 
 # Logic model files are named "<id>_<id> - <Organization> - <Program> - Logic Model.<ext>",
 # sometimes followed by " — Part 2 of 6".
@@ -424,12 +426,10 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
         file_org = pd.Series(pd.NA, index=df.index)
         file_program = pd.Series(pd.NA, index=df.index)
 
-    org = df[COL_ORG].mask(df[COL_ORG].isin(JUNK_ORG_NAMES))
-    org = org.fillna(file_org).mask(lambda s: s.isin(JUNK_ORG_NAMES))
-    org = org.replace(ORG_ALIASES)
+    org = df[COL_ORG].fillna(file_org).replace(ORG_ALIASES)
     df[COL_ORG] = _merge_case_variants(org).fillna(UNKNOWN_ORG)
 
-    df[COL_GRANTEE] = file_org.mask(file_org.isin(JUNK_ORG_NAMES)).fillna(df[COL_ORG])
+    df[COL_GRANTEE] = file_org.replace(ORG_ALIASES).fillna(df[COL_ORG])
     df[COL_PROGRAM] = df[COL_PROGRAM].fillna(file_program).fillna(UNKNOWN_PROGRAM)
 
     # --- Categories -----------------------------------------------------------
@@ -1080,8 +1080,8 @@ def portfolio_findings(df: pd.DataFrame, coverage: Optional[pd.DataFrame] = None
                 parts.append(f"**{_plural(gaps, 'goal')}** in the codebook "
                              f"{'has' if gaps == 1 else 'have'} no program")
             if single:
-                parts.append(f"{'another ' if gaps else ''}**{single}** "
-                             f"{'has' if single == 1 else 'have'} only one organization")
+                count = f"another **{single}**" if gaps else f"**{_plural(single, 'goal')}**"
+                parts.append(f"{count} {'has' if single == 1 else 'have'} only one organization")
             sentence = ", and ".join(parts) + "."
             findings.append(sentence[0].upper() + sentence[1:])
 

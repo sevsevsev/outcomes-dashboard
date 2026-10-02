@@ -232,7 +232,7 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 .crumb b {{ color: {INK}; font-weight: 600; font-variant-numeric: tabular-nums; }}
 
 .goal-name {{ font-weight: 600; font-size: 0.9375rem !important; margin: 0.8rem 0 0.2rem 0; color: {INK}; }}
-.statements {{ margin: 0 0 0.2rem 0; padding: 0; list-style: none; font-size: 0.875rem; line-height: 1.55; }}
+.statements {{ margin: 0 0 0.2rem 0; padding: 0; margin-left: 0 !important; list-style: none; font-size: 0.875rem; line-height: 1.55; }}
 .statements li {{ margin-bottom: 0.35rem; background: #f8fafc; border-radius: 0.5rem; padding: 0.45rem 0.75rem;
                   color: {INK_2}; }}
 .none {{ color: {FAINT}; font-size: 0.875rem; margin: 0; }}
@@ -242,7 +242,7 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 
 /* Segmented controls look like the explorer's tab switcher: a light track, the chosen option a raised white tab. */
 [data-testid="stButtonGroup"] [role="radiogroup"] {{ background: rgba(226, 232, 240, .6); border-radius: 0.5rem;
-  padding: 0.25rem; gap: 0.125rem; width: fit-content; }}
+  padding: 0.25rem; gap: 0.125rem; width: fit-content; max-width: 100%; flex-wrap: wrap; }}
 button[data-variant="segmented_control"] {{ border: 0 !important; background: transparent !important;
   border-radius: 0.375rem !important; min-height: 2rem; padding: 0.3rem 0.75rem; box-shadow: none;
   transition: background-color .15s, color .15s, box-shadow .15s; }}
@@ -260,7 +260,8 @@ button[data-variant*="pills"] {{ transition: background-color .15s, border-color
 [data-testid="stPopoverButton"] {{ border-color: #cbd5e1; border-radius: 0.5rem; min-height: 2.5rem;
   transition: border-color .15s, background-color .15s; }}
 [data-testid="stPopoverButton"]:hover {{ border-color: {FAINT}; background: #f8fafc; color: {INK}; }}
-[data-testid="stPopoverButton"] p {{ font-weight: 500; font-size: 0.875rem; }}
+[data-testid="stPopoverButton"] p {{ font-weight: 500; font-size: 0.875rem; white-space: nowrap; }}
+[data-testid="stPopoverButton"] {{ min-width: max-content; }}
 
 /* Search boxes: the explorer's rounded field with a soft blue focus ring. */
 [data-testid="stTextInputRootElement"] {{ border-radius: 0.75rem; transition: border-color .15s, box-shadow .15s; }}
@@ -275,6 +276,14 @@ button[kind="tertiary"]:hover p {{ color: {INK}; }}
 [data-testid="stMultiSelect"] [data-tag] {{ background: {WASH} !important; color: {INK} !important; }}
 [data-testid="stMultiSelect"] [data-tag] * {{ color: inherit !important; }}
 [data-testid="stMultiSelect"] [data-tag] svg {{ color: {MUTED} !important; }}
+/* Long names: chosen items wrap onto more lines instead of hiding behind a sideways scroll or "…". */
+[data-testid="stMultiSelectTagsContainer"] {{ flex-wrap: wrap !important; overflow: visible !important;
+  height: auto !important; }}
+[data-testid="stMultiSelect"] div:has([data-testid="stMultiSelectTagsContainer"]) {{ height: auto !important;
+  max-height: none !important; }}
+[data-testid="stMultiSelect"] [data-tag] {{ max-width: 100% !important; height: auto !important; }}
+[data-testid="stMultiSelect"] [data-tag] span {{ white-space: normal !important; overflow: visible !important;
+  text-overflow: clip !important; }}
 
 /* Tables and charts sit on the page with a hairline, rounded like the explorer's panels. */
 [data-testid="stDataFrame"] {{ border-radius: 0.75rem; overflow: hidden; }}
@@ -380,7 +389,12 @@ DISPLAY_LABELS = {
     COL_NOTES: "Coder notes",
     COL_SOURCE_FILE: "Source file",
 }
-DISPLAY_COLUMNS = [COL_ORG_VIEW, COL_PROGRAM, COL_OUTCOME, COL_FULL, COL_SUBCAT, COL_POP, COL_CONF]
+# Reading order: who, what they aim for, which goal it counts toward; context last.
+DISPLAY_COLUMNS = [COL_ORG_VIEW, COL_OUTCOME, COL_SUBCAT, COL_POP, COL_CONF, COL_PROGRAM, COL_FULL]
+# Table cells can't wrap, so columns get pixel widths sized to what they hold:
+# names and outcomes get room, short columns stay narrow.
+COLUMN_WIDTHS = {COL_ORG_VIEW: 280, COL_PROGRAM: 200, COL_OUTCOME: 380, COL_FULL: 320, COL_SUBCAT: 260,
+                 COL_POP: 140, COL_CONF: 100, COL_NOTES: 260, COL_QA: 110, COL_SOURCE_FILE: 260}
 # Columns dropped from a table when every row has the same value, since the selection already says it.
 REPEATABLE = [COL_ORG_VIEW, COL_PROGRAM, COL_SUBCAT, COL_POP, COL_CONF]
 
@@ -396,12 +410,11 @@ def outcome_table(df: pd.DataFrame, columns: Sequence[str] = DISPLAY_COLUMNS, he
         cols = [c for c in cols if not (c in REPEATABLE and df[c].nunique() == 1)]
     if COL_FULL in cols and not df[COL_FULL].fillna("").astype(bool).any():
         cols.remove(COL_FULL)
-    widths = {COL_ORG_VIEW: "medium", COL_PROGRAM: "medium", COL_POP: "small", COL_CONF: "small"}
-    config = {c: st.column_config.TextColumn(DISPLAY_LABELS.get(c, c), width=widths.get(c)) for c in cols}
+    config = {c: st.column_config.TextColumn(DISPLAY_LABELS.get(c, c), width=COLUMN_WIDTHS.get(c)) for c in cols}
     config[COL_OUTCOME] = st.column_config.TextColumn(
-        DISPLAY_LABELS[COL_OUTCOME], width="large", help="The outcome as the coder categorized it.")
+        DISPLAY_LABELS[COL_OUTCOME], width=COLUMN_WIDTHS[COL_OUTCOME], help="The outcome as the coder categorized it.")
     config[COL_FULL] = st.column_config.TextColumn(
-        DISPLAY_LABELS[COL_FULL], width="medium",
+        DISPLAY_LABELS[COL_FULL], width=COLUMN_WIDTHS[COL_FULL],
         help="Filled in only when the coder split a longer statement into separate outcomes.")
     shown = df[cols].copy()
     if COL_POP in shown:
@@ -673,13 +686,14 @@ def thin_goals(coverage: pd.DataFrame, domain: Optional[str]) -> None:
             hide_index=True,
             height=min(400, 35 * len(shown) + 38),
             column_config={
-                COL_SUBCAT: st.column_config.TextColumn("Goal", width="large"),
-                COL_DOMAIN_SHORT: st.column_config.TextColumn("Domain", width="medium"),
+                COL_SUBCAT: st.column_config.TextColumn("Goal", width=320),
+                COL_DOMAIN_SHORT: st.column_config.TextColumn("Domain", width=300),
                 "organizations": st.column_config.ProgressColumn(
                     "Organizations", format="%d", min_value=0,
                     max_value=int(coverage["organizations"].max() or 1)),
-                "programs": st.column_config.NumberColumn("Programs"),
-                "outcomes": st.column_config.NumberColumn("Outcome statements"),
+                "programs": st.column_config.NumberColumn("Programs", width="small"),
+                "outcomes": st.column_config.NumberColumn("Statements", width="small",
+                                                          help="Outcome statements"),
             },
         )
         download_button(shown.drop(columns=["samples"]), "Download this table (CSV)", "goal_coverage.csv",
@@ -739,10 +753,10 @@ def peers_for_organization(df: pd.DataFrame) -> None:
             key=f"v2_peer_table_{slug(org)}",
             on_select="rerun",
             selection_mode="single-row",
-            height=min(380, 35 * len(peers) + 38),
+            height=min(400, 35 * len(peers) + 38),
             column_order=["organization", "shared_subcategories", "coverage", "jaccard", "shared_list"],
             column_config={
-                "organization": st.column_config.TextColumn("Peer organization", pinned=True),
+                "organization": st.column_config.TextColumn("Peer organization", width=260),
                 "shared_subcategories": st.column_config.NumberColumn(
                     "Shared goals", help="Goals both organizations target."),
                 "coverage": st.column_config.ProgressColumn(
@@ -752,7 +766,8 @@ def peers_for_organization(df: pd.DataFrame) -> None:
                     "Overall overlap", help="Shared goals divided by all goals either organization targets. "
                                             "High means the two portfolios look alike overall.",
                     min_value=0.0, max_value=1.0, format="%.2f"),
-                "shared_list": st.column_config.TextColumn("Shared goals, listed", width="large"),
+                "shared_list": st.column_config.TextColumn("Shared goals, listed", width=420,
+                                                           help="The full list is in the CSV download."),
             },
         )
         download_button(peers, "Download the peer list (CSV)", f"peers_{slug(org)}.csv", key="v2_dl_peers")
@@ -935,7 +950,8 @@ def page_review(df: pd.DataFrame) -> None:
     shown = (f"Showing {start + 1:,}–{min(start + page_size, len(filtered)):,}, sorted by domain and goal."
              if len(filtered) > page_size else "Sorted by domain and goal.")
     with section(f"{len(filtered):,} outcomes to check", shown, key="review_table"):
-        columns = [COL_ORG_VIEW, COL_PROGRAM, COL_OUTCOME, COL_FULL, COL_SUBCAT, COL_CONF, COL_NOTES, COL_QA,
+        # What a reviewer checks first (outcome, goal, confidence, notes) comes before the context.
+        columns = [COL_ORG_VIEW, COL_OUTCOME, COL_SUBCAT, COL_CONF, COL_NOTES, COL_QA, COL_PROGRAM, COL_FULL,
                    COL_SOURCE_FILE]
         outcome_table(filtered.iloc[start:start + page_size], columns=columns, height=560)
         if n_pages > 1:
@@ -1137,12 +1153,12 @@ def school_partner_list(portfolio: pd.DataFrame, school_name: str, ulcs: str) ->
             hide_index=True,
             height=min(420, 35 * len(portfolio) + 38),
             column_config={
-                schools.COL_PARTNER: st.column_config.TextColumn("Partner", width="medium"),
-                "status": st.column_config.TextColumn("Outcomes", width="medium"),
+                schools.COL_PARTNER: st.column_config.TextColumn("Partner", width=240),
+                "status": st.column_config.TextColumn("Outcomes", width="small"),
                 "programs_here": st.column_config.NumberColumn("Programs here"),
                 "coded_programs": st.column_config.NumberColumn("Coded"),
-                "outcomes": st.column_config.NumberColumn("Outcome statements"),
-                "program_names": st.column_config.TextColumn("Programs", width="large"),
+                "outcomes": st.column_config.NumberColumn("Statements", help="Outcome statements"),
+                "program_names": st.column_config.TextColumn("Programs", width=320),
                 schools.COL_PARTNER_ID: st.column_config.TextColumn("Partner ID", width="small"),
             },
         )
@@ -1217,7 +1233,7 @@ FILTER_NOUNS = {"f_domains": ("domain", "domains"), "f_pops": ("audience", "audi
 
 def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
     """One row above every page: what is showing, a Filters menu and a Data menu. Returns the filtered frame."""
-    status, filters_col, data_col = st.columns([8, 1.3, 1], vertical_alignment="center")
+    status, filters_col, data_col = st.columns([6, 1.5, 1.2], vertical_alignment="center")
     active = [k for k in FILTER_KEYS if st.session_state.get(k)]
 
     # The Data menu runs first because the organization grouping changes the filter options.
