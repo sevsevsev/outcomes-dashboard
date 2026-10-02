@@ -6,7 +6,7 @@ A Streamlit dashboard for exploring outcomes coded from partner programs' logic 
 
 A line under the filter bar says what every page shows: outcomes that programs intend, taken from their logic models, not measured results. Each page opens with a few sentences that state what the data shows, worked out from the loaded file. Charts come next, and clicking a bar or dot narrows the charts and table below it. A **Clear selection** button undoes the clicks.
 
-- **What programs aim for**: plain-language priorities (Attendance, Literacy, Social-emotional skills and so on) ranked by how many organizations (or outcome statements) they hold. **Group by** switches to the codebook's own domains. The priorities are defined in `PRIORITIES` in `outcomes_data.py`, and each coded goal belongs to exactly one. Click a priority or domain to rank its goals and see who those outcomes are for; click a goal or an audience to narrow further. The outcomes table under the charts follows every click. A view switch swaps the ranked bars for a sunburst or a treemap. The sunburst follows the codebook explorer's design: domains on the inner ring and their goals on the outer ring, one quiet hue per domain, and the total in the middle. It counts programs, outcome statements or organizations. Clicking a domain opens its goals and narrows the outcomes table; clicking a goal narrows it further, and clicking the center goes back. The last section lists the goals with the thinnest coverage, including codebook goals no program targets yet.
+- **What programs aim for**: plain-language priorities (Attendance, Literacy, Social-emotional skills and so on) ranked by how many organizations (or outcome statements) they hold. **Group by** switches to the codebook's own domains. The priorities are defined in `PRIORITIES` in `outcomes_data.py`, and each coded goal belongs to exactly one. Click a priority or domain to rank its goals and see who those outcomes are for; click a goal or an audience to narrow further. The outcomes table under the charts follows every click. A view switch swaps the ranked bars for a sunburst or a treemap. The sunburst follows the codebook explorer's design and behaves like it: domains on the inner ring and their goals on the outer ring, one quiet hue per domain, and the total in the middle. Pointing at a slice lifts it out, fades the other domains, and shows its name, its counts and a few sample outcomes beside the chart. It counts programs, outcome statements or organizations. Clicking a domain opens its goals and narrows the outcomes table; clicking a goal narrows it further, and clicking the center goes back. The last section lists the goals with the thinnest coverage, including codebook goals no program targets yet.
 - **Find peers**: pick an organization to rank its peers by shared goals, then select a peer to read both organizations' outcomes goal by goal. You can also pick a goal and click an organization to read its outcomes, or compare up to six programs in a dot grid of programs by domain. Click a domain name to see the same grid by that domain's goals (**‹ All domains** goes back), or click a dot to list those outcomes.
 - **Review coding**: a searchable table that opens on low and no-confidence rows for a human check.
 
@@ -29,14 +29,15 @@ Put the export in `data/verified_coded_outcomes(5).csv`, or point to it with `OU
 
 Deploy on [Streamlit Community Cloud](https://share.streamlit.io) from this repo, with `main` as the branch and `app.py` as the main file. Vercel and other serverless hosts can't run Streamlit.
 
-The deployed app asks each visitor to upload the CSV. The file lives only in that browser session. The look is set in `.streamlit/config.toml` and the CSS at the top of `app.py`: one sans font, a white page, cool greys, and one blue that marks what is selected.
+The deployed app asks each visitor to upload the CSV. The file lives only in that browser session. The look follows the codebook explorer site and is set in `.streamlit/config.toml` and the CSS at the top of `app.py`: Inter, a white page, slate greys, and one blue that marks what is selected.
 
 ## Code layout
 
 | File | What it holds |
 |---|---|
 | `app.py` | Page layout, navigation, the filter bar, and the chart clicks that filter tables |
-| `charts.py` | Plotly figures and the shared chart theme and palette |
+| `charts.py` | Plotly figures, the shared chart theme and palette, and the sunburst's data |
+| `sunburst_component.py`, `components/codebook_sunburst.*` | The sunburst, drawn as SVG in the browser (a `st.components.v2` component), so hovering and zooming need no rerun. Only a click's result comes back to Python. |
 | `outcomes_data.py` | Loading, cleaning, filtering, aggregation. It makes no Streamlit calls, so other tools can import it. |
 | `reference/codebook_subcategories.csv` | Every subcategory in the codebook (v1.1.1), used to find goals no program targets. Regenerate it from the coder's `codebooks/original.ts` when the codebook changes. |
 | `reference/codebook_subcategories_v3.csv` | The same list for codebook 3.x (98 codes such as `Y4.2`), from the coder's `codebooks/youthOutcomesV3.data.ts`. The app compares a file against whichever codebook its codes come from. |

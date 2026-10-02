@@ -22,6 +22,7 @@ import textwrap
 from pathlib import Path
 from typing import IO, Iterable, Optional, Sequence, Union
 
+import numpy as np
 import pandas as pd
 
 # =============================================================================
@@ -592,16 +593,26 @@ def _wrap_for_hover(text: str) -> str:
     return "<br>   ".join(lines)
 
 
-def sample_outcome_texts(texts: pd.Series, n: int = HOVER_SAMPLE_SIZE, seed: int = 0) -> str:
-    """A few distinct outcome statements, formatted as a bulleted hover snippet.
+def sample_outcomes(texts: pd.Series, n: int = HOVER_SAMPLE_SIZE, seed: int = 0) -> list[str]:
+    """A few distinct, non-empty outcome statements, picked the same way on every run.
 
-    Uses a fixed seed so the same chart always shows the same samples (users
-    are less likely to distrust a chart whose tooltip changes on every rerun).
+    A fixed seed keeps the same chart showing the same samples (users are less
+    likely to distrust a chart whose examples change on every rerun). This is
+    called once per bar, slice or cell, so it avoids pandas' slower
+    `Series.sample`.
     """
-    unique = texts.dropna().loc[lambda s: s.str.len() > 0].drop_duplicates()
-    if unique.empty:
+    unique = list(dict.fromkeys(t for t in texts if isinstance(t, str) and t))
+    if len(unique) <= n:
+        return unique
+    picks = np.random.RandomState(seed).choice(len(unique), size=n, replace=False)
+    return [unique[i] for i in picks]
+
+
+def sample_outcome_texts(texts: pd.Series, n: int = HOVER_SAMPLE_SIZE, seed: int = 0) -> str:
+    """A few distinct outcome statements (see sample_outcomes), formatted as a bulleted hover snippet."""
+    picked = sample_outcomes(texts, n, seed)
+    if not picked:
         return "<i>(no outcome text)</i>"
-    picked = unique.sample(n=min(n, len(unique)), random_state=seed)
     return "<br>".join("• " + _wrap_for_hover(t) for t in picked)
 
 
@@ -656,33 +667,76 @@ SUNBURST_ROOT = "all"
 SUNBURST_SEP = "\x1f"   # joins domain and goal in a node id; never appears in a label
 
 
-def sunburst_nodes(df: pd.DataFrame) -> pd.DataFrame:
+def split_code(label: str) -> tuple[str, str]:
+    """ "Y1.3 Mathematics" -> ("Y1.3", "Mathematics"); "Domain Y1. Academic..." -> ("Y1", "Academic...").
+
+    Labels with no code (Uncoded, Unassigned subcategory) come back as ("", label).
+    """
+    text = re.sub(r"^\s*Domain\s+", "", str(label))
+    match = re.match(r"([YFA]?\d+(?:\.\d+)*)\.?\s+(.*)$", text)
+    if not match:
+        return "", str(label)
+    return match.group(1), re.sub(r"\s*\(.*?\)\s*$", "", match.group(2))
+
+
+def sunburst_nodes(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     """The nodes of the domain -> goal sunburst: one root, one row per domain, one per goal.
 
     Columns: id, parent, level ("root", "domain" or "goal"), domain, goal,
-    domain_index (position in domain order, which picks the domain's color),
-    outcomes, programs, organizations (exact distinct counts at that node)
-    and samples (hover snippet). Domains come in numeric order and goals in
-    codebook order, so the ring reads clockwise like the codebook.
-    """
-    def counts(rows: pd.DataFrame) -> dict:
-        return {
-            "outcomes": len(rows),
-            "programs": count_programs(rows),
-            "organizations": count_organizations(rows[COL_ORG_VIEW]),
-            "samples": sample_outcome_texts(rows[COL_OUTCOME]),
-        }
+    code and title (the label split into "Y1.3" and "Mathematics"),
+    domain_index (picks the domain's color: its position in `codebook` when
+    given, so a domain keeps its color under any filter, else its position
+    in the data), outcomes, programs, organizations (exact distinct counts at
+    that node), samples (hover snippet) and sample_list (the same statements
+    as plain text). Domains come in numeric order and goals in codebook
+    order, so the ring reads clockwise like the codebook.
 
-    nodes = [{"id": SUNBURST_ROOT, "parent": "", "level": "root", "domain": None, "goal": None,
-              "domain_index": -1, **counts(df)}]
-    for index, domain in enumerate(domain_order(df)):
-        in_domain = df[df[COL_DOMAIN] == domain]
-        nodes.append({"id": domain, "parent": SUNBURST_ROOT, "level": "domain", "domain": domain, "goal": None,
-                      "domain_index": index, **counts(in_domain)})
-        for goal in sorted_subcategories(in_domain[COL_SUBCAT]):
-            nodes.append({"id": domain + SUNBURST_SEP + goal, "parent": domain, "level": "goal", "domain": domain,
-                          "goal": goal, "domain_index": index, **counts(in_domain[in_domain[COL_SUBCAT] == goal])})
-    return pd.DataFrame(nodes)
+    Everything is counted with one groupby per level, because this runs on
+    every rerun of the sunburst view.
+    """
+    programs = df[[COL_DOMAIN, COL_SUBCAT, COL_ORG_VIEW, COL_PROGRAM]].drop_duplicates()
+    named = df[df[COL_ORG_VIEW] != UNKNOWN_ORG]
+
+    def level_counts(keys: list[str]) -> pd.DataFrame:
+        if not keys:
+            return pd.DataFrame({
+                "outcomes": [len(df)], "programs": [count_programs(df)],
+                "organizations": [count_organizations(df[COL_ORG_VIEW])],
+                "sample_list": [sample_outcomes(df[COL_OUTCOME])],
+            })
+        return pd.DataFrame({
+            "outcomes": df.groupby(keys, sort=False).size(),
+            "programs": programs.drop_duplicates(keys + [COL_ORG_VIEW, COL_PROGRAM]).groupby(keys, sort=False).size(),
+            "organizations": named.groupby(keys, sort=False)[COL_ORG_VIEW].nunique(),
+            "sample_list": df.groupby(keys, sort=False)[COL_OUTCOME].agg(sample_outcomes),
+        }).fillna({"organizations": 0})
+
+    by_goal, by_domain, root = level_counts([COL_DOMAIN, COL_SUBCAT]), level_counts([COL_DOMAIN]), level_counts([])
+    order = domain_order(df)
+    if codebook is not None and not codebook.empty:
+        known = list(dict.fromkeys(codebook[COL_DOMAIN]))
+        hue_index = {d: known.index(d) if d in known else len(known) + i for i, d in enumerate(order)}
+    else:
+        hue_index = {d: i for i, d in enumerate(order)}
+
+    def node(node_id, parent, level, domain, goal, label, stats) -> dict:
+        code, title = split_code(label) if label else ("", "All domains")
+        return {"id": node_id, "parent": parent, "level": level, "domain": domain, "goal": goal,
+                "code": code, "title": title, "domain_index": hue_index.get(domain, -1),
+                "outcomes": int(stats["outcomes"]), "programs": int(stats["programs"]),
+                "organizations": int(stats["organizations"]), "sample_list": stats["sample_list"]}
+
+    nodes = [node(SUNBURST_ROOT, "", "root", None, None, None, root.iloc[0])]
+    goals_by_domain = by_goal.reset_index().groupby(COL_DOMAIN, sort=False)[COL_SUBCAT].agg(list)
+    for domain in order:
+        nodes.append(node(domain, SUNBURST_ROOT, "domain", domain, None, domain, by_domain.loc[domain]))
+        for goal in sorted_subcategories(goals_by_domain.get(domain, [])):
+            nodes.append(node(domain + SUNBURST_SEP + goal, domain, "goal", domain, goal, goal,
+                              by_goal.loc[(domain, goal)]))
+    frame = pd.DataFrame(nodes)
+    frame["samples"] = frame["sample_list"].map(
+        lambda texts: "<br>".join("• " + _wrap_for_hover(t) for t in texts) or "<i>(no outcome text)</i>")
+    return frame
 
 
 def distinct_counts_by(df: pd.DataFrame, column: str) -> pd.DataFrame:

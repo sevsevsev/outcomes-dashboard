@@ -15,6 +15,8 @@ Color rules (so the charts read as one system):
 
 from __future__ import annotations
 
+import hashlib
+import json
 import textwrap
 from typing import Optional
 
@@ -28,6 +30,7 @@ from outcomes_data import (
     COL_ORG_VIEW,
     COL_SUBCAT,
     COL_OUTCOME,
+    DOMAIN_ONLY_SUFFIX,
     MEASURE_COLUMNS,
     MEASURE_ORGS,
     MEASURE_PROGRAMS,
@@ -37,7 +40,7 @@ from outcomes_data import (
     domain_short,
     hierarchy_counts,
     sample_outcome_texts,
-    sunburst_nodes,
+    SUNBURST_SEP,
 )
 
 # =============================================================================
@@ -51,14 +54,15 @@ CATEGORICAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300",
 # One-hue sequential ramp for magnitude (light = little, dark = a lot).
 SEQUENTIAL_BLUE = ["#e6f0fc", "#b7d3f6", "#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281", "#0d366b"]
 
-PRIMARY = CATEGORICAL[0]
-FADED = "#cfd3da"          # marks that are not selected
-TEXT_PRIMARY = "#16181d"
-TEXT_SECONDARY = "#5b616d"
-GRID = "#e6e8ec"
+# The codebook explorer's colors (Tailwind blue-600 and slate), so the two sites read as one family.
+PRIMARY = "#3b82f6"       # blue-500: the explorer's blue, a step lighter so long bars don't shout
+FADED = "#cbd5e1"          # marks that are not selected (slate-300)
+TEXT_PRIMARY = "#0f172a"   # slate-900
+TEXT_SECONDARY = "#64748b" # slate-500
+GRID = "#e2e8f0"           # slate-200
 SURFACE = "#ffffff"
 
-FONT_FAMILY = '"Source Sans", "Source Sans 3", "Source Sans Pro", -apple-system, "Segoe UI", sans-serif'
+FONT_FAMILY = '"Inter", -apple-system, "Segoe UI", sans-serif'
 
 pio.templates["outcomes"] = go.layout.Template(
     layout=dict(
@@ -66,7 +70,8 @@ pio.templates["outcomes"] = go.layout.Template(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor=SURFACE,
         colorway=CATEGORICAL,
-        hoverlabel=dict(bgcolor=SURFACE, bordercolor=GRID, font=dict(family=FONT_FAMILY, size=13, color=TEXT_PRIMARY)),
+        hoverlabel=dict(bgcolor=SURFACE, bordercolor=GRID, align="left",
+                        font=dict(family=FONT_FAMILY, size=13, color=TEXT_PRIMARY)),
         xaxis=dict(gridcolor=GRID, zeroline=False, linecolor=GRID, tickfont=dict(color=TEXT_SECONDARY)),
         yaxis=dict(gridcolor=GRID, zeroline=False, linecolor=GRID, tickfont=dict(color=TEXT_SECONDARY)),
         legend=dict(font=dict(color=TEXT_SECONDARY), title=dict(font=dict(color=TEXT_SECONDARY))),
@@ -217,20 +222,14 @@ def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_t
 # CODEBOOK SUNBURST
 # =============================================================================
 
-# Borrowed from the codebook explorer's sunburst (the coder repo's
-# components/CodebookSunburst.tsx): one quiet hue per domain, the domain ring
-# in the deeper shade and its goals in a pale tint of the same hue, with both
-# rings on show at once and the totals in the middle. Hues follow domain
-# order, so domain 3 has the same color here as in the explorer.
+# The sunburst is drawn in the browser (components/codebook_sunburst.js, after
+# the codebook explorer's components/CodebookSunburst.tsx in the coder repo);
+# this section builds its data. One quiet hue per domain, taken by the
+# domain's position in the codebook, so a domain has the same color here as
+# in the explorer whatever the filters.
 DOMAIN_HUES = [28, 350, 262, 214, 158, 190, 4, 232, 44, 292, 128, 16]
-UNCODED_FILL = ("#9aa1ad", "#e3e6ea")   # domain, goal: grey for rows the coder could not place
-SUNBURST_TEXT_SIZE = 13
-SUNBURST_MIN_TEXT_SIZE = 11
-SUNBURST_WRAP_DOMAIN = 14
-SUNBURST_NAMED_SHARE = 0.075   # domains narrower than this share of the ring show only their number
-SUNBURST_WRAP_GOAL = 18
-# Short nouns, so a count fits on its slice.
 NOUNS = {MEASURE_PROGRAMS: "programs", MEASURE_ORGS: "organizations"}
+HOVER_SAMPLE_CHARS = 240   # longer sample statements are cut; the readout clamps them to three lines anyway
 
 
 def is_coded_domain(domain: str) -> bool:
@@ -238,83 +237,50 @@ def is_coded_domain(domain: str) -> bool:
     return domain != UNCODED_DOMAIN
 
 
-def domain_fills(domain_index: int, uncoded: bool = False) -> tuple[str, str]:
-    """(domain ring color, goal ring color) for a domain, as in the codebook explorer."""
-    if uncoded:
-        return UNCODED_FILL
-    hue = DOMAIN_HUES[domain_index % len(DOMAIN_HUES)]
-    return f"hsl({hue}, 42%, 50%)", f"hsl({hue}, 52%, 88%)"
-
-
-def build_codebook_sunburst(df: pd.DataFrame, measure: str = MEASURE_PROGRAMS):
-    """Domains on the inner ring, their goals on the outer ring, sized by `measure`.
-
-    Each node's id is the domain, or domain + SUNBURST_SEP + goal, and the
-    root's is SUNBURST_ROOT; a click reports that id. Clicking a domain zooms
-    into it and clicking the center zooms back out (Plotly's own behavior).
+def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
+                           selected: Optional[dict] = None) -> dict:
+    """What the browser-side sunburst (sunburst_component.py) draws, from `sunburst_nodes`.
 
     Programs and organizations work in several goals, so a domain's arc is
-    the sum of its goals' counts, while its label and hover give the exact
-    number of distinct programs (or organizations) in the domain.
+    the sum of its goals' counts, while its readout gives the exact number
+    of distinct programs (or organizations) in the domain. `sig` changes only
+    when what is drawn changes, so reruns caused by a click leave the chart
+    (and its zoom) alone.
     """
-    # Plotly lays slices out counterclockwise in data order; reversed, the
-    # domains read clockwise from 12 o'clock, 1, 2, 3, as in the explorer.
-    nodes = sunburst_nodes(df).iloc[::-1].reset_index(drop=True)
     size_col = MEASURE_COLUMNS[measure]
-    noun = NOUNS.get(measure, "outcomes")
-    # Arc sizes: goals carry their own count; domains and the root sum what is inside them.
-    sizes = nodes[size_col].astype(float).where(nodes["level"] == "goal", 0.0)
-    domain_sizes = sizes.groupby(nodes["parent"]).sum()
-    sizes = sizes.where(nodes["level"] != "domain", nodes["id"].map(domain_sizes))
-    sizes = sizes.where(nodes["level"] != "root", sizes[nodes["level"] == "domain"].sum())
-
-    total = max(float(sizes[nodes["level"] == "root"].iloc[0]), 1.0)
-    colors, text, names = [], [], []
-    for row in nodes.itertuples():
-        count = f"{getattr(row, size_col):,} {noun}"
-        if row.level == "root":
-            colors.append(SURFACE)
-            n_domains = int(nodes.loc[nodes["level"] == "domain", "domain"].map(is_coded_domain).sum())
-
-            text.append(f"<b>{count}</b><br>in {n_domains} domains")
-            names.append("All domains")
-            continue
-        inner, outer = domain_fills(row.domain_index, not is_coded_domain(row.domain))
+    noun = NOUNS.get(measure, "outcome statements")
+    goal_sizes = nodes[size_col].astype(float).where(nodes["level"] == "goal", 0.0)
+    domain_sizes = goal_sizes.groupby(nodes["parent"]).sum()
+    out = []
+    for row, size in zip(nodes.itertuples(index=False), goal_sizes):
+        coded = row.level == "root" or is_coded_domain(row.domain)
         if row.level == "domain":
-            colors.append(inner)
-            name = domain_short(row.domain)
-            # A narrow domain shows just its number, as every domain does in the explorer; a
-            # full name would not fit and Plotly would hide it. Hover gives the name.
-            if sizes[row.Index] / total >= SUNBURST_NAMED_SHARE:
-                text.append(f"<b>{wrap_label(name, SUNBURST_WRAP_DOMAIN)}</b><br>{count}")
-            else:
-                text.append(f"<b>{name.split('.', 1)[0] if is_coded_domain(row.domain) else ''}</b>")
-            names.append(name)
+            eyebrow = f"Domain {row.code}" if row.code else "Not coded"
+            label = row.code if coded else "–"
+            size = float(domain_sizes.get(row.id, 0.0))
+        elif row.level == "goal":
+            # A domain-only row's "goal" carries the domain's number and no code of its own.
+            has_code = "." in row.code
+            eyebrow = (f"Goal {row.code}" if has_code else "Not coded" if not coded
+                       else "Domain only" if row.goal.endswith(DOMAIN_ONLY_SUFFIX) else "No goal assigned")
+            label = row.code if has_code else ""
         else:
-            colors.append(outer)
-            text.append(f"{wrap_label(row.goal, SUNBURST_WRAP_GOAL)}<br>{count}")
-            names.append(row.goal)
-
-    custom = list(zip(nodes["samples"], names, nodes["outcomes"], nodes["programs"], nodes["organizations"]))
-    fig = go.Figure(go.Sunburst(
-        ids=nodes["id"], labels=names, parents=nodes["parent"], values=sizes, branchvalues="total",
-        text=text, texttemplate="%{text}", customdata=custom,
-        hovertemplate=(
-            "<b>%{customdata[1]}</b><br>%{customdata[3]:,} programs · %{customdata[4]:,} organizations"
-            " · %{customdata[2]:,} outcome statements" + SAMPLE_HOVER_BLOCK + "<extra></extra>"
-        ),
-        marker=dict(colors=colors, line=dict(color=SURFACE, width=1.5)),
-        # Goals are dark text on a pale tint; domains white text on the deeper shade.
-        insidetextfont=dict(size=SUNBURST_TEXT_SIZE,
-                            color=["#ffffff" if lvl == "domain" else TEXT_PRIMARY for lvl in nodes["level"]]),
-        insidetextorientation="auto",
-        sort=False, rotation=90,
-    ))
-    fig.update_layout(
-        height=680, margin=dict(t=8, l=0, r=0, b=8),
-        uniformtext=dict(minsize=SUNBURST_MIN_TEXT_SIZE, mode="hide"),
-    )
-    return fig
+            eyebrow, label = "", ""
+        out.append({
+            "id": row.id, "parent": row.parent, "level": row.level,
+            "goal": row.goal if isinstance(row.goal, str) else None,
+            "eyebrow": eyebrow, "title": row.title, "label": label,
+            "hue": DOMAIN_HUES[int(row.domain_index) % len(DOMAIN_HUES)] if coded and row.domain_index >= 0 else None,
+            "value": size, "count": int(getattr(row, size_col)),
+            "programs": int(row.programs), "organizations": int(row.organizations), "outcomes": int(row.outcomes),
+            "samples": [" ".join(str(t).split())[:HOVER_SAMPLE_CHARS] for t in row.sample_list],
+        })
+    n_domains = int(nodes.loc[nodes["level"] == "domain", "domain"].map(is_coded_domain).sum())
+    sig = hashlib.sha1(json.dumps([measure, [(n["id"], n["value"], n["count"]) for n in out]]).encode()).hexdigest()
+    return {
+        "sig": sig[:16], "sep": SUNBURST_SEP, "noun": noun, "noun_one": noun.removesuffix("s"),
+        "n_domains": n_domains, "nodes": out, "selected": selected,
+    }
 
 
 # =============================================================================
@@ -383,7 +349,7 @@ def build_ranked_bars(
         yaxis=dict(autorange="reversed", automargin=True, tickfont=dict(color=TEXT_PRIMARY, size=13),
                    showgrid=False),
         margin=dict(t=4, l=0, r=8, b=4),
-        bargap=0.34,
+        bargap=0.42,
         barcornerradius=4,
         showlegend=False,
         dragmode=False,
@@ -524,7 +490,7 @@ def build_peer_heatmap(counts: pd.DataFrame, samples: pd.DataFrame):
 
 def build_confidence_bar(counts: pd.Series):
     """One stacked bar showing how the coder's confidence is distributed (a compact overview)."""
-    colors = {"high": "#1c5cab", "medium": "#5598e7", "low": "#eb6834", "none": "#8a8984"}
+    colors = {"high": "#2563eb", "medium": "#93c5fd", "low": "#f59e0b", "none": "#94a3b8"}
     fig = go.Figure()
     total = int(counts.sum()) or 1
     for level, n in counts.items():
@@ -532,18 +498,19 @@ def build_confidence_bar(counts: pd.Series):
         fig.add_bar(
             # The legend gives each level's share; the filter pills below it give the counts.
             x=[n], y=[""], orientation="h", name=f"{level.title()} · {share}",
-            marker=dict(color=colors.get(level, "#8a8984"), line=dict(color=SURFACE, width=2)),
+            marker=dict(color=colors.get(level, "#94a3b8"), line=dict(color=SURFACE, width=2)),
             hovertemplate=f"<b>{level.title()}</b>: {n:,} outcomes ({n / total:.0%})<extra></extra>",
         )
     fig.update_layout(
         barmode="stack",
-        height=74,
+        height=58,
         bargap=0,
         showlegend=True,
         legend=dict(orientation="h", y=-0.12, yanchor="top", x=0, traceorder="normal", itemwidth=30,
                     font=dict(size=12, color=TEXT_SECONDARY)),
         xaxis=dict(visible=False, range=[0, total]),
         yaxis=dict(visible=False),
-        margin=dict(t=0, l=0, r=0, b=34),
+        margin=dict(t=0, l=0, r=0, b=36),
+        barcornerradius=4,
     )
     return fig

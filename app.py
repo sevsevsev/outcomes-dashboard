@@ -42,6 +42,7 @@ import pandas as pd
 import streamlit as st
 
 import charts
+from sunburst_component import codebook_sunburst
 from outcomes_data import (
     COL_ATOMIC,
     COL_CONF,
@@ -70,7 +71,7 @@ from outcomes_data import (
     MEASURE_PROGRAMS,
     MEASURES,
     SUNBURST_MEASURES,
-    SUNBURST_ROOT,
+    SUNBURST_SEP,
     ORG_GROUPING_OPTIONS,
     POPULATION_LABELS,
     UNASSIGNED_SUBCAT,
@@ -141,53 +142,151 @@ def _codebook_for_domains(domains: tuple[str, ...]) -> pd.DataFrame:
     return load_codebook_for(pd.DataFrame({COL_DOMAIN: list(domains)}))
 
 
+# Every click reruns the whole page, so the counts behind the findings, the
+# sunburst and the coverage table are kept per filtered frame instead of being
+# worked out again. Streamlit keys these caches on the frame's contents.
+@st.cache_data(show_spinner=False, max_entries=24)
+def cached_sunburst_nodes(df: pd.DataFrame) -> pd.DataFrame:
+    return sunburst_nodes(df, cached_codebook(df))
+
+
+@st.cache_data(show_spinner=False, max_entries=24)
+def cached_coverage(df: pd.DataFrame) -> pd.DataFrame:
+    return subcategory_coverage(df, cached_codebook(df))
+
+
+@st.cache_data(show_spinner=False, max_entries=24)
+def cached_findings(df: pd.DataFrame, coverage: pd.DataFrame) -> list[str]:
+    return portfolio_findings(df, coverage)
+
+
 # =============================================================================
 # STYLE
 # =============================================================================
 
-# A plain white page in one sans typeface. Sections are separated by space and
-# a hairline rather than boxed, and color is saved for the data. Colors match
-# the theme in .streamlit/config.toml and the chart palette in charts.py.
+# The codebook explorer's look (the coder repo's public explorer site): Inter on
+# a plain white page, slate greys, one blue, rounded-lg controls, small
+# uppercase labels, and quiet hover transitions. Sections are separated by
+# space and a hairline rather than boxed, and color is saved for the data.
+# Colors match .streamlit/config.toml and charts.py.
 INK = charts.TEXT_PRIMARY
 MUTED = charts.TEXT_SECONDARY
 HAIRLINE = charts.GRID
+INK_2 = "#334155"     # slate-700, body text
+FAINT = "#94a3b8"     # slate-400
+WASH = "#f1f5f9"      # slate-100, the explorer's active-tab and hover fill
+ACCENT = charts.PRIMARY
 CSS = f"""
 <style>
 /* The browser's scroll anchoring shifts the page when a table below a chart changes; keep it still. */
 [data-testid="stMain"], html, body {{ overflow-anchor: none; }}
-.block-container {{ padding-top: 4.2rem; padding-bottom: 4rem; max-width: 1240px; }}
-h1 {{ font-size: 1.7rem !important; font-weight: 600 !important; letter-spacing: -0.01em;
-      padding: 0.2rem 0 0 0 !important; }}
-.page-lede {{ color: {MUTED}; font-size: 0.98rem !important; line-height: 1.5; margin: -0.4rem 0 0.4rem 0;
+.block-container {{ padding-top: 5.25rem; padding-bottom: 4rem; max-width: 1240px; }}
+body, .stApp {{ -webkit-font-smoothing: antialiased; }}
+
+/* Top bar, as on the explorer site: the site name, then the pages as quiet pills. */
+[data-testid="stHeader"] {{ background: #fff; border-bottom: 1px solid {HAIRLINE}; height: 4rem; }}
+[data-testid="stHeader"]::before {{
+  content: "{APP_TITLE}"; position: absolute; left: 1.5rem; top: 50%; transform: translateY(-50%);
+  font-weight: 700; font-size: 1.15rem; letter-spacing: -0.02em; color: #1e293b; pointer-events: none;
+}}
+[data-testid="stToolbar"] {{ padding-left: 12.5rem; height: 4rem; align-items: center; }}
+[data-testid="stTopNavLink"] {{ border-radius: 0.5rem; padding: 0.45rem 0.8rem; transition: background-color .15s, color .15s; }}
+[data-testid="stTopNavLink"] p {{ font-size: 0.875rem; font-weight: 500; color: {MUTED}; transition: color .15s; }}
+[data-testid="stTopNavLink"]:hover {{ background: #f8fafc; }}
+[data-testid="stTopNavLink"]:hover p {{ color: {INK}; }}
+[data-testid="stTopNavLink"][aria-current="page"] {{ background: {WASH}; }}
+[data-testid="stTopNavLink"][aria-current="page"] p {{ color: {INK}; }}
+
+h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing: -0.025em; line-height: 1.2 !important;
+      padding: 0.35rem 0 0 0 !important; color: {INK}; }}
+.page-lede {{ color: {MUTED}; font-size: 1rem !important; line-height: 1.6; margin: -0.3rem 0 0.4rem 0;
               max-width: 46rem; }}
 
-.findings {{ margin: 0.2rem 0 0.6rem 0; padding-left: 1.15rem; max-width: 52rem; font-size: 1.08rem;
-             line-height: 1.5; color: {INK}; }}
-.findings li {{ margin: 0 0 0.35rem 0; }}
-.findings li::marker {{ color: #9aa0ab; }}
+.findings {{ margin: 0.35rem 0 0.8rem 0; padding-left: 1.1rem; max-width: 52rem; font-size: 1.0625rem;
+             line-height: 1.6; color: {INK_2}; }}
+.findings li {{ margin: 0 0 0.3rem 0; padding-left: 0.15rem; }}
+.findings li::marker {{ color: #cbd5e1; }}
+.findings b {{ color: {INK}; font-weight: 600; }}
 
 /* Sections: a hairline above, no box (see section()). */
+[class*="st-key-sec-"] {{ border-top: 1px solid {HAIRLINE}; padding-top: 1.5rem; margin-top: 1.25rem; }}
+.sec-title {{ font-size: 1.125rem !important; font-weight: 600; letter-spacing: -0.01em; margin: 0; color: {INK}; }}
+.sec-note {{ color: {MUTED}; font-size: 0.875rem !important; margin: 0.15rem 0 0.6rem 0; }}
+/* Chart labels are the explorer's small uppercase eyebrows. */
+.subhead {{ font-size: 0.6875rem !important; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+            color: {MUTED}; margin: 0.4rem 0 0.25rem 0; }}
+.subhead-note {{ font-weight: 500; color: {FAINT}; }}
+
+.status {{ color: {MUTED}; font-size: 0.875rem !important; margin: 0; }}
+.status b {{ color: {INK}; font-weight: 600; font-variant-numeric: tabular-nums; }}
+.intent {{ color: {MUTED}; font-size: 0.875rem !important; margin: 0.1rem 0 0 0; }}
+.intent b {{ color: {INK}; font-weight: 600; }}
+.crumb {{ font-size: 0.9375rem !important; margin: 0; color: {MUTED}; }}
+.crumb b {{ color: {INK}; font-weight: 600; font-variant-numeric: tabular-nums; }}
+
+.goal-name {{ font-weight: 600; font-size: 0.9375rem !important; margin: 0.8rem 0 0.2rem 0; color: {INK}; }}
+.statements {{ margin: 0 0 0.2rem 0; padding: 0; list-style: none; font-size: 0.875rem; line-height: 1.55; }}
+.statements li {{ margin-bottom: 0.35rem; background: #f8fafc; border-radius: 0.5rem; padding: 0.45rem 0.75rem;
+                  color: {INK_2}; }}
+.none {{ color: {FAINT}; font-size: 0.875rem; margin: 0; }}
+
+/* Widget labels: small and medium weight, as in the explorer's forms. */
+[data-testid="stWidgetLabel"] p {{ font-size: 0.8125rem !important; font-weight: 500; color: {INK_2}; }}
+
+/* Segmented controls look like the explorer's tab switcher: a light track, the chosen option a raised white tab. */
+[data-testid="stButtonGroup"] [role="radiogroup"] {{ background: rgba(226, 232, 240, .6); border-radius: 0.5rem;
+  padding: 0.25rem; gap: 0.125rem; width: fit-content; }}
+button[data-variant="segmented_control"] {{ border: 0 !important; background: transparent !important;
+  border-radius: 0.375rem !important; min-height: 2rem; padding: 0.3rem 0.75rem; box-shadow: none;
+  transition: background-color .15s, color .15s, box-shadow .15s; }}
+button[data-variant="segmented_control"] p {{ font-size: 0.875rem; color: #475569; }}
+button[data-variant="segmented_control"]:hover p {{ color: {INK}; }}
+button[data-variant="segmented_control"][aria-checked="true"] {{ background: #fff !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .08), 0 0 0 1px rgba(15, 23, 42, .04); }}
+button[data-variant="segmented_control"][aria-checked="true"] p {{ color: {INK}; font-weight: 500; }}
+button[data-variant="segmented_control"]:disabled {{ opacity: .45; }}
+
+/* Pills (review page) follow the same idea: quiet until chosen. */
+button[data-variant*="pills"] {{ transition: background-color .15s, border-color .15s, color .15s; }}
+
+/* Filters and Data: the explorer's secondary button (white, slate border that darkens on hover). */
+[data-testid="stPopoverButton"] {{ border-color: #cbd5e1; border-radius: 0.5rem; min-height: 2.5rem;
+  transition: border-color .15s, background-color .15s; }}
+[data-testid="stPopoverButton"]:hover {{ border-color: {FAINT}; background: #f8fafc; color: {INK}; }}
+[data-testid="stPopoverButton"] p {{ font-weight: 500; font-size: 0.875rem; }}
+
+/* Search boxes: the explorer's rounded field with a soft blue focus ring. */
+[data-testid="stTextInputRootElement"] {{ border-radius: 0.75rem; transition: border-color .15s, box-shadow .15s; }}
+[data-testid="stTextInputRootElement"]:focus-within {{ border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(59, 130, 246, .2); }}
+[data-testid="stTextInputRootElement"] input::placeholder {{ color: {FAINT}; }}
+
+/* Text buttons (Clear selection, downloads): slate until hovered. */
+button[kind="tertiary"] p {{ color: {MUTED}; font-size: 0.875rem; transition: color .15s; }}
+button[kind="tertiary"]:hover p {{ color: {INK}; }}
+
 /* Chosen items in multiselects read as quiet chips, not blue buttons. */
-[data-testid="stMultiSelect"] [data-tag] {{ background: {HAIRLINE} !important; color: {INK} !important; }}
+[data-testid="stMultiSelect"] [data-tag] {{ background: {WASH} !important; color: {INK} !important; }}
 [data-testid="stMultiSelect"] [data-tag] * {{ color: inherit !important; }}
 [data-testid="stMultiSelect"] [data-tag] svg {{ color: {MUTED} !important; }}
-[class*="st-key-sec-"] {{ border-top: 1px solid {HAIRLINE}; padding-top: 1.1rem; margin-top: 0.8rem; }}
-.sec-title {{ font-size: 1.12rem !important; font-weight: 600; margin: 0; color: {INK}; }}
-.sec-note {{ color: {MUTED}; font-size: 0.9rem !important; margin: 0.05rem 0 0.4rem 0; }}
-.subhead {{ font-size: 0.92rem !important; font-weight: 600; color: {INK}; margin: 0 0 0.1rem 0; }}
-.subhead-note {{ font-weight: 400; color: {MUTED}; }}
 
-.status {{ color: {MUTED}; font-size: 0.9rem !important; margin: 0; }}
-.status b {{ color: {INK}; font-weight: 600; }}
-.intent {{ color: {MUTED}; font-size: 0.9rem !important; margin: 0.1rem 0 0 0; }}
-.intent b {{ color: {INK}; font-weight: 600; }}
-.crumb {{ font-size: 0.98rem !important; margin: 0; color: {MUTED}; }}
-.crumb b {{ color: {INK}; font-weight: 600; }}
+/* Tables and charts sit on the page with a hairline, rounded like the explorer's panels. */
+[data-testid="stDataFrame"] {{ border-radius: 0.75rem; overflow: hidden; }}
+/* Tabs use the same track as the segmented controls, instead of an underline. */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {{ background: rgba(226, 232, 240, .6); border-radius: 0.5rem;
+  padding: 0.25rem; gap: 0.125rem; width: fit-content; }}
+[data-testid="stTabs"] [data-baseweb="tab-highlight"], [data-testid="stTabs"] [data-baseweb="tab-border"] {{ display: none; }}
+[data-testid="stTabs"] [data-baseweb="tab"] {{ border-radius: 0.375rem; padding: 0.35rem 0.85rem; height: auto;
+  transition: background-color .15s, box-shadow .15s; }}
+[data-testid="stTabs"] [data-baseweb="tab"] p {{ font-size: 0.875rem; font-weight: 500; color: #475569; }}
+[data-testid="stTabs"] [data-baseweb="tab"]:hover p {{ color: {INK}; }}
+[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] {{ background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .08), 0 0 0 1px rgba(15, 23, 42, .04); }}
+[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] p {{ color: {INK}; }}
 
-.goal-name {{ font-weight: 600; font-size: 0.95rem !important; margin: 0.6rem 0 0.1rem 0; }}
-.statements {{ margin: 0 0 0.2rem 0; padding-left: 1.1rem; font-size: 0.93rem; line-height: 1.45; }}
-.statements li {{ margin-bottom: 0.2rem; }}
-.none {{ color: {MUTED}; font-size: 0.9rem; font-style: italic; margin: 0; }}
+/* New content fades in instead of popping, as the explorer's pages do. */
+@keyframes od-fade {{ from {{ opacity: 0; transform: translateY(2px); }} to {{ opacity: 1; transform: none; }} }}
+.findings, .sec-title, .crumb {{ animation: od-fade .25s ease-out both; }}
+@media (prefers-reduced-motion: reduce) {{ .findings, .sec-title, .crumb {{ animation: none; }} }}
 </style>
 """
 
@@ -402,8 +501,8 @@ def page_system_map(df: pd.DataFrame) -> None:
         st.warning("No outcomes match the current filters. Clear some of them to see results.")
         return
 
-    coverage = subcategory_coverage(df, cached_codebook(df))
-    findings(portfolio_findings(df, coverage))
+    coverage = cached_coverage(df)
+    findings(cached_findings(df, coverage))
 
     with section("Explore the portfolio", "Click a bar or slice to narrow the charts beside and below it, and the "
                  "outcomes table.", key="explore"):
@@ -512,37 +611,28 @@ def linked_explorer(df: pd.DataFrame, measure: str, grouping: str = GROUP_PRIORI
 def sunburst_view(df: pd.DataFrame, measure: str) -> Optional[str]:
     """Domains and their goals as one sunburst, styled after the codebook explorer's. A click narrows the table.
 
-    Plotly zooms into a clicked domain and back out when its center is
-    clicked, and both clicks report the same domain. So the zoom is tracked
-    here, in a callback that runs once per click (not on other reruns): a
-    domain click opens that domain unless it is already open, in which case
-    it closes it. The chart's key changes with the data and the count, which
-    redraws it unzoomed and so resets the tracked state too.
+    The chart is drawn in the browser (sunburst_component.py): hovering,
+    zooming into a domain and back out cost no rerun. A click sends back the
+    picked domain and goal, and only then does this page rerun, to filter
+    the table. Changing the count or the filters redraws the chart with its
+    open domain kept.
 
     Returns the selected domain, if any, so the coverage table can follow it.
     """
-    nodes = sunburst_nodes(df).set_index("id")
-    signature = abs(hash((measure, len(df), tuple(df.index[:: max(len(df) // 50, 1)]))))
-    key = f"v1sb_{st.session_state.get('v1_nonce', 0)}_{signature}"
-    state = st.session_state.setdefault(f"{key}_state", {"open": None, "pick": None})
+    nodes = cached_sunburst_nodes(df)
+    key = f"v1sb_{st.session_state.get('v1_nonce', 0)}"
+    last_key = f"{key}_last"
+    data = charts.codebook_sunburst_data(nodes, measure, selected=st.session_state.get(last_key))
+    pick = codebook_sunburst(data, key=key)
+    ids = set(nodes["id"])
+    if pick and pick["domain"] not in ids:
+        pick = None
+    if pick and pick.get("goal") and pick["domain"] + SUNBURST_SEP + pick["goal"] not in ids:
+        pick = {"domain": pick["domain"], "goal": None}
+    st.session_state[last_key] = pick
 
-    def on_click() -> None:
-        points = selected_points(st.session_state.get(key))
-        node = points[0].get("id") if points else None
-        if node not in nodes.index or node == SUNBURST_ROOT:
-            state.update(open=None, pick=None)
-        elif nodes.at[node, "level"] == "domain":
-            closing = state["open"] == node
-            state.update(open=None if closing else node, pick=None if closing else node)
-        else:
-            state["pick"] = node
-
-    plot(charts.build_codebook_sunburst(df, measure), key=key, on_select=on_click, selection_mode="points")
-    st.caption("Click a domain to open its goals, and the center to go back. Hover for sample outcomes.")
-
-    pick = state["pick"]
-    domain = nodes.at[pick, "domain"] if pick else None
-    goal = nodes.at[pick, "goal"] if pick and nodes.at[pick, "level"] == "goal" else None
+    domain = pick["domain"] if pick else None
+    goal = pick.get("goal") if pick else None
     rows = df if domain is None else filter_outcomes(df, domains=[domain], subcategories=[goal] if goal else None)
     outcomes_panel(rows, describe(domain_short(domain) if domain else None, goal), key="v1_sb",
                    nonce_key="v1_nonce" if pick else None)

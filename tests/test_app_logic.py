@@ -4,6 +4,7 @@ Run from the repository root with:  python -m pytest
 Uses a small synthetic export, so the real CSV is not needed.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -335,19 +336,52 @@ def test_sunburst_nodes_count_programs_and_organizations_at_each_level(df):
     assert domains[0] == JOY and domains[-1] == app.UNCODED_DOMAIN
 
 
-def test_codebook_sunburst_sizes_domains_by_their_goals_and_labels_exact_counts(df):
+def test_codebook_sunburst_data_sizes_domains_by_their_goals_and_reads_exact_counts(df):
     frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
-    trace = charts.build_codebook_sunburst(frame, app.MEASURE_PROGRAMS).data[0]
-    by_id = dict(zip(trace.ids, range(len(trace.ids))))
-    goals = [i for i, p in zip(trace.ids, trace.parents) if p == SEL]
-    # Each SEL goal has 2 programs, so the arc is 4 while the label says the 2 distinct programs.
-    assert trace.values[by_id[SEL]] == sum(trace.values[by_id[g]] for g in goals) == 4
-    assert "2 programs" in trace.text[by_id[SEL]]
-    assert trace.branchvalues == "total"
-    # Same domain, same hue on both rings; the Uncoded domain is grey.
-    colors = dict(zip(trace.ids, trace.marker.colors))
-    assert colors[SEL].split(",")[0] == colors[SEL + app.SUNBURST_SEP + CONF].split(",")[0]
-    assert colors[app.UNCODED_DOMAIN] == charts.UNCODED_FILL[0]
+    data = charts.codebook_sunburst_data(app.sunburst_nodes(frame), app.MEASURE_PROGRAMS)
+    nodes = {n["id"]: n for n in data["nodes"]}
+    goals = [n for n in data["nodes"] if n["parent"] == SEL]
+    # Each SEL goal has 2 programs, so the arc is 4 while the readout gives the 2 distinct programs.
+    assert nodes[SEL]["value"] == sum(g["value"] for g in goals) == 4
+    assert nodes[SEL]["count"] == nodes[SEL]["programs"] == 2
+    assert (nodes[SEL]["eyebrow"], nodes[SEL]["label"], nodes[SEL]["title"]) == (
+        "Domain 3", "3", "Social & Emotional Learning")
+    conf = nodes[SEL + app.SUNBURST_SEP + CONF]
+    assert (conf["eyebrow"], conf["label"], conf["goal"]) == ("Goal 3.1.4", "3.1.4", CONF)
+    # Same domain, same hue on both rings; the Uncoded domain has none (the chart draws it grey).
+    assert nodes[SEL]["hue"] == conf["hue"] is not None
+    assert nodes[app.UNCODED_DOMAIN]["hue"] is None
+    # Plain-text samples, and JSON-safe values throughout (the browser parses this).
+    assert all(isinstance(t, str) and "<br>" not in t for t in conf["samples"])
+    json.dumps(data, allow_nan=False)
+    # The signature follows the counts, not the selection.
+    again = charts.codebook_sunburst_data(app.sunburst_nodes(frame), app.MEASURE_PROGRAMS,
+                                          selected={"domain": SEL, "goal": None})
+    assert again["sig"] == data["sig"]
+    assert charts.codebook_sunburst_data(app.sunburst_nodes(frame), app.MEASURE_ORGS)["sig"] != data["sig"]
+
+
+def test_sunburst_colors_follow_the_codebook_not_the_filters(df):
+    frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
+    codebook = app.load_codebook_for(frame)
+    full = app.sunburst_nodes(frame, codebook).set_index("id")
+    only_sel = app.sunburst_nodes(frame[frame[app.COL_DOMAIN] == SEL], codebook).set_index("id")
+    assert full.at[SEL, "domain_index"] == only_sel.at[SEL, "domain_index"]
+
+
+def test_split_code():
+    assert app.split_code("Y1.3 Mathematics") == ("Y1.3", "Mathematics")
+    assert app.split_code("Domain Y4. Social & Emotional Skills (CASEL)") == ("Y4", "Social & Emotional Skills")
+    assert app.split_code(CONF) == ("3.1.4", "Confidence, self-efficacy & growth mindset")
+    assert app.split_code(app.UNCODED_DOMAIN) == ("", app.UNCODED_DOMAIN)
+
+
+def test_sample_outcomes_are_distinct_stable_and_skip_blanks():
+    texts = pd.Series(["a", "b", "a", "", None, "c", "d"])
+    picked = app.sample_outcomes(texts, n=3)
+    assert len(picked) == len(set(picked)) == 3 and set(picked) <= {"a", "b", "c", "d"}
+    assert app.sample_outcomes(texts, n=3) == picked
+    assert app.sample_outcomes(pd.Series(["x", "x"])) == ["x"]
 
 
 # --- Codebook 3.x and district program files ----------------------------------
@@ -466,3 +500,20 @@ def test_names_differing_only_in_capitals_merge_to_the_mixed_case_spelling():
     frame = app.clean_outcomes(raw)
     assert "MUSICOPIA" not in set(frame[app.COL_ORG])
     assert (frame[app.COL_ORG] == "Musicopia").sum() == 3
+
+
+# --- The app itself -------------------------------------------------------------
+
+
+def test_app_runs_every_view(tmp_path, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    path = tmp_path / "export.csv"
+    raw_rows().to_csv(path, index=False)
+    monkeypatch.setenv(app.DATA_ENV_VAR, str(path))
+    at = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"), default_timeout=60).run()
+    assert not at.exception
+    for view in ("Sunburst", "Treemap", "Ranked"):
+        at.session_state["v1_view"] = view
+        at.run()
+        assert not at.exception, view

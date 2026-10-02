@@ -1,16 +1,18 @@
 # Look and feel for the outcomes dashboard (read by Streamlit locally and on Streamlit Community Cloud).
-# A plain white page, cool greys and one blue; the charts in charts.py use the same values.
+# Matches the codebook explorer site: Inter, a plain white page, slate greys and one blue (Tailwind
+# slate and blue-600). The charts in charts.py and the CSS in app.py use the same values.
 
 [theme]
 base = "light"
-primaryColor = "#2a78d6"
+primaryColor = "#2563eb"
 backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f4f5f7"
-textColor = "#16181d"
-font = "sans-serif"
-borderColor = "#e6e8ec"
+secondaryBackgroundColor = "#f8fafc"
+textColor = "#0f172a"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+borderColor = "#e2e8f0"
 showWidgetBorder = true
-baseRadius = "small"
+baseRadius = "0.5rem"
 
 [client]
 # Hide the developer menu (Deploy button, rerun, settings) from viewers.
