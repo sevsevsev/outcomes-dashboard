@@ -48,6 +48,10 @@ DEFAULT_DATA_PATHS = [
 # Qualitative Outcomes Coder's codebooks/original.ts. Lets the dashboard show
 # goals that no program targets yet. Regenerate it when the codebook changes.
 CODEBOOK_PATH = APP_DIR / "reference" / "codebook_subcategories.csv"
+# The same list for codebook 3.x (codes like "Y4.2"), exported from the coder's
+# codebooks/youthOutcomesV3.data.ts. load_codebook_for() picks the one that
+# matches the loaded file's codes.
+CODEBOOK_V3_PATH = APP_DIR / "reference" / "codebook_subcategories_v3.csv"
 
 # Column names used throughout the app. Keeping them in one place means a
 # renamed column in a future export only needs changing here.
@@ -64,8 +68,14 @@ COL_SOURCE_FILE = "source_filename"
 COL_QA = "qa_status"
 COL_ATOMIC = "outcome_text_atomic"
 COL_NOTES = "notes"
+COL_PARTNER_ID = "partner_id"       # district files carry a partner ID instead of an organization name
+COL_SOURCE_TYPE = "source_type"     # where the outcome text came from (logic_model, program_description, ...)
+COL_SPECIFICITY = "specificity"     # codebook 3.1+: code, domain (domain-only) or uncoded
 
-REQUIRED_COLUMNS = [COL_ORG, COL_PROGRAM, COL_TEXT, COL_DOMAIN, COL_SUBCAT, COL_POP, COL_CONF]
+# Organization and program are optional: district program-description files
+# have neither an organization name nor (always) a program, so they fall back
+# to the partner ID and placeholders instead of being refused.
+REQUIRED_COLUMNS = [COL_TEXT, COL_DOMAIN, COL_SUBCAT, COL_POP, COL_CONF]
 
 # Derived columns added by clean_outcomes().
 COL_GRANTEE = "grantee_from_filename"   # organization parsed from the logic model's file name
@@ -83,6 +93,21 @@ UNASSIGNED_SUBCAT = "Unassigned subcategory"
 UNKNOWN_POP = "unspecified"
 UNKNOWN_ORG = "Unknown organization"
 UNKNOWN_PROGRAM = "Unknown program"
+# Codebook 3.1 codes a statement that names a domain but nothing specific to
+# the domain alone. Those rows get a goal label of their own, e.g.
+# "Y4 Social & Emotional Skills (CASEL), no specific goal".
+DOMAIN_ONLY_SUFFIX = ", no specific goal"
+
+# source_type values. A blank means the row predates the column, when every
+# coded outcome came from a logic model. Early district files used
+# "district_program_outcomes" for what is now "program_description".
+SOURCE_LOGIC_MODEL = "logic_model"
+SOURCE_ALIASES = {"district_program_outcomes": "program_description"}
+SOURCE_LABELS = {
+    "logic_model": "logic models",
+    "program_description": "program descriptions",
+    "other_outcome_text": "other outcome text",
+}
 
 # Confidence levels in review order. "none" means the coder could not code it.
 CONFIDENCE_ORDER = ["high", "medium", "low", "none"]
@@ -156,28 +181,30 @@ ORG_GROUPING_OPTIONS = {
 
 # Plain-language priorities, named the way school plans and public agendas name
 # things, so a reader can find "Attendance" without knowing it is goal 11.5.
-# Each rule lists codebook numbers (a domain like "3" or a goal like "11.5").
-# A row takes the first priority whose number matches its goal, so the specific
-# school measures come before their domain's catch-all. The list is editorial:
+# Each rule lists codebook numbers: a domain like "3" or a goal like "11.5" from
+# codebook 1.x, and a domain like "Y4" or a code like "Y1.13" from codebook 3.x.
+# The two schemes never collide, so one table serves files coded with either.
+# A row takes the priority with the most specific matching number, so the
+# school measures win over their domain's catch-all. The list is editorial:
 # edit it here and the landing chart follows.
 PRIORITIES: list[tuple[str, tuple[str, ...]]] = [
-    ("Attendance", ("11.5",)),
-    ("Literacy", ("11.1",)),
-    ("Math", ("11.2",)),
-    ("Graduation & on-track", ("11.6",)),
-    ("Other academic learning", ("11",)),
-    ("Mental health", ("7.2", "7.3", "7.4")),
-    ("Physical health & safety", ("7",)),
-    ("College & career", ("8",)),
-    ("Social-emotional skills", ("3",)),
-    ("Belonging & relationships", ("2",)),
-    ("Joy & interest in learning", ("1",)),
-    ("Engagement & study habits", ("4",)),
-    ("Positive youth development", ("5",)),
-    ("Civic voice & community", ("6",)),
-    ("Access & equity", ("9",)),
-    ("Staff & system capacity", ("10",)),
-    ("Families & basic needs", ("12",)),
+    ("Attendance", ("11.5", "Y1.13")),
+    ("Literacy", ("11.1", "Y1.1")),
+    ("Math", ("11.2", "Y1.3")),
+    ("Graduation & on-track", ("11.6", "Y1.15", "Y1.17")),
+    ("Other academic learning", ("11", "Y1")),
+    ("Mental health", ("7.2", "7.3", "7.4", "Y8.6", "Y8.7", "Y8.8", "Y8.9")),
+    ("Physical health & safety", ("7", "Y8")),
+    ("College & career", ("8", "Y7", "Y1.18")),
+    ("Social-emotional skills", ("3", "Y4")),
+    ("Belonging & relationships", ("2", "Y3")),
+    ("Joy & interest in learning", ("1", "Y2")),
+    ("Engagement & study habits", ("4", "Y1.9", "Y1.10", "Y1.11", "Y1.12")),
+    ("Positive youth development", ("5", "Y5")),
+    ("Civic voice & community", ("6", "Y6")),
+    ("Access & equity", ("9", "A2")),
+    ("Staff & system capacity", ("10", "A1", "A3")),
+    ("Families & basic needs", ("12", "F1", "F2")),
 ]
 UNCODED_PRIORITY = "Not coded"
 # Priorities schools report on, which the findings compare with the most shared aim.
@@ -187,6 +214,15 @@ SCHOOL_MEASURES = ["Attendance", "Literacy", "Math"]
 # first misreading: taking what programs intend for what they achieved.
 INTENT_NOTE = ("Outcomes that programs <b>intend</b>, taken from their logic models. "
                "They are not measured results.")
+
+
+def intent_note(sources: Iterable[str] = (SOURCE_LOGIC_MODEL,)) -> str:
+    """INTENT_NOTE, naming the documents the loaded outcomes actually came from."""
+    labels = [SOURCE_LABELS.get(s, s.replace("_", " ")) for s in sorted(set(sources), key=str)]
+    if not labels or labels == [SOURCE_LABELS[SOURCE_LOGIC_MODEL]]:
+        return INTENT_NOTE
+    named = labels[0] if len(labels) == 1 else ", ".join(labels[:-1]) + " and " + labels[-1]
+    return f"Outcomes that programs <b>intend</b>, taken from their {named}. They are not measured results."
 
 
 # =============================================================================
@@ -225,10 +261,27 @@ def parse_filename(filename: object) -> tuple[Optional[str], Optional[str]]:
     return match.group("org").strip(), match.group("program").strip()
 
 
+# Codebook 3.x prefixes its numbers with the part (Y young people, F families,
+# A staff, organizations and systems). Parts sort in that order, after 1.x's
+# plain numbers would, so a file mixing both schemes still sorts sensibly.
+PART_OFFSETS = {"": 0, "Y": 0, "F": 100, "A": 200}
+DOMAIN_CODE_PATTERN = re.compile(r"\s*Domain\s+([YFA]?)(\d+)\b")
+CODE_PATTERN = re.compile(r"\s*([YFA]?)(\d+(?:\.\d+)*)\b")
+
+
+def domain_code(domain: object) -> Optional[str]:
+    """'3' for 'Domain 3. Social & ...', 'Y4' for 'Domain Y4. Social & ...'; None when there is no number."""
+    match = DOMAIN_CODE_PATTERN.match(str(domain))
+    return match.group(1) + match.group(2) if match else None
+
+
 def _domain_number(domain: object) -> float:
-    """3.0 for 'Domain 3. Social & ...'; infinity for anything unparseable (sorts last)."""
-    match = re.match(r"\s*Domain\s+(\d+)", str(domain))
-    return float(match.group(1)) if match else float("inf")
+    """A sort key: 3.0 for 'Domain 3. ...', 4.0 for 'Domain Y4. ...', 201.0 for 'Domain A1. ...'.
+
+    Infinity for anything unparseable, so it sorts last.
+    """
+    match = DOMAIN_CODE_PATTERN.match(str(domain))
+    return float(PART_OFFSETS[match.group(1)] + int(match.group(2))) if match else float("inf")
 
 
 def domain_short(domain: str) -> str:
@@ -238,33 +291,59 @@ def domain_short(domain: str) -> str:
 
 
 def subcategory_sort_key(label: str) -> tuple:
-    """Sort '3.1.4 Confidence...' after '3.1.2 ...' and before '10.1 ...' (numeric, not alphabetical)."""
-    match = re.match(r"\s*([\d.]+)", str(label))
+    """Sort '3.1.4 Confidence...' after '3.1.2 ...' and before '10.1 ...' (numeric, not alphabetical).
+
+    3.x codes sort the same way within their part: Y1.2 before Y1.10, all Y before F, all F before A.
+    """
+    match = CODE_PATTERN.match(str(label))
     if not match:
-        return (float("inf"), str(label))
-    parts = tuple(int(p) for p in match.group(1).strip(".").split(".") if p.isdigit())
-    return parts + (str(label),)
+        return ((float("inf"),), str(label))
+    parts = [int(p) for p in match.group(2).strip(".").split(".") if p.isdigit()]
+    parts[0] += PART_OFFSETS[match.group(1)]
+    # Numbers in their own tuple, so "Y4 ..." (a domain-only label) sorts just
+    # before "Y4.1 ..." instead of comparing its text with a number.
+    return (tuple(parts), str(label))
 
 
-def _code_number(domain_number: float, subcategory: str) -> Optional[str]:
-    """The most specific codebook number for a row: '3.1.4' from its goal, else '3' from its domain."""
-    match = re.match(r"\s*(\d+(?:\.\d+)+)", str(subcategory))
+def _code_number(domain: object, subcategory: str) -> Optional[str]:
+    """The most specific codebook number for a row: '3.1.4' or 'Y4.2' from its goal, else '3' or 'Y4'.
+
+    `domain` is the domain label, or (as before) its number from _domain_number().
+    """
+    match = re.match(r"\s*([YFA]?\d+(?:\.\d+)+)\b", str(subcategory))
     if match:
         return match.group(1)
-    if pd.isna(domain_number) or domain_number == float("inf"):
+    if isinstance(domain, str):
+        return domain_code(domain)
+    if pd.isna(domain) or domain == float("inf"):
         return None
-    return str(int(domain_number))
+    return str(int(domain))
 
 
-def priority_of(domain_number: float, subcategory: str) -> str:
-    """The plain-language priority (PRIORITIES) for a row's domain number and goal."""
-    code = _code_number(domain_number, subcategory)
+def priority_of(domain: object, subcategory: str) -> str:
+    """The plain-language priority (PRIORITIES) for a row's domain and goal.
+
+    The most specific matching number wins ("11.5" over "11", "Y1.13" over "Y1").
+    """
+    code = _code_number(domain, subcategory)
     if code is None:
         return UNCODED_PRIORITY
+    best, best_len = UNCODED_PRIORITY, -1
     for label, numbers in PRIORITIES:
-        if any(code == n or code.startswith(n + ".") for n in numbers):
-            return label
-    return UNCODED_PRIORITY
+        for n in numbers:
+            if (code == n or code.startswith(n + ".")) and len(n) > best_len:
+                best, best_len = label, len(n)
+    return best
+
+
+def codebook_scheme(domains: Iterable[str]) -> set[str]:
+    """Which codebook numbering the domain labels use: {'1.x'}, {'3.x'}, both, or neither."""
+    schemes = set()
+    for domain in domains:
+        code = domain_code(domain)
+        if code:
+            schemes.add("3.x" if code[0].isalpha() else "1.x")
+    return schemes
 
 
 def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
@@ -290,6 +369,22 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
     for col in df.select_dtypes(include=["object", "string"]).columns:
         df[col] = df[col].astype("string").str.strip().replace("", pd.NA)
 
+    # District program files name a partner by ID only. Label it so rows from
+    # one partner still group together, rather than all collapsing into
+    # "Unknown organization".
+    if COL_ORG not in df.columns:
+        df[COL_ORG] = pd.Series(pd.NA, index=df.index, dtype="string")
+    if COL_PARTNER_ID in df.columns:
+        df[COL_ORG] = df[COL_ORG].fillna("Partner " + df[COL_PARTNER_ID])
+    if COL_PROGRAM not in df.columns:
+        df[COL_PROGRAM] = pd.Series(pd.NA, index=df.index, dtype="string")
+
+    # --- Where each outcome came from ------------------------------------------
+    if COL_SOURCE_TYPE in df.columns:
+        df[COL_SOURCE_TYPE] = df[COL_SOURCE_TYPE].replace(SOURCE_ALIASES).fillna(SOURCE_LOGIC_MODEL)
+    else:
+        df[COL_SOURCE_TYPE] = SOURCE_LOGIC_MODEL
+
     # --- Organization and program names ---------------------------------------
     if COL_SOURCE_FILE in df.columns:
         parsed = df[COL_SOURCE_FILE].map(parse_filename)
@@ -307,6 +402,13 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
     df[COL_PROGRAM] = df[COL_PROGRAM].fillna(file_program).fillna(UNKNOWN_PROGRAM)
 
     # --- Categories -----------------------------------------------------------
+    if COL_SPECIFICITY in df.columns:
+        # Codebook 3.1 domain-only rows: a domain and deliberately no code.
+        domain_only = (df[COL_SPECIFICITY].str.lower() == "domain") & df[COL_SUBCAT].isna() & df[COL_DOMAIN].notna()
+        df.loc[domain_only, COL_SUBCAT] = (
+            df.loc[domain_only, COL_DOMAIN].str.replace(r"^\s*Domain\s+", "", regex=True)
+            .str.replace(".", "", n=1, regex=False) + DOMAIN_ONLY_SUFFIX
+        )
     df[COL_DOMAIN] = df[COL_DOMAIN].fillna(UNCODED_DOMAIN)
     df[COL_SUBCAT] = df[COL_SUBCAT].fillna(UNASSIGNED_SUBCAT)
     df[COL_POP] = df[COL_POP].fillna(UNKNOWN_POP)
@@ -328,7 +430,7 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
     # --- Helper columns -------------------------------------------------------
     df[COL_DOMAIN_NUM] = df[COL_DOMAIN].map(_domain_number)
     df[COL_DOMAIN_SHORT] = df[COL_DOMAIN].map(domain_short)
-    df[COL_PRIORITY] = [priority_of(n, g) for n, g in zip(df[COL_DOMAIN_NUM], df[COL_SUBCAT])]
+    df[COL_PRIORITY] = [priority_of(d, g) for d, g in zip(df[COL_DOMAIN], df[COL_SUBCAT])]
 
     # Default grouping; main() may switch this to the grantee column.
     df[COL_ORG_VIEW] = df[COL_ORG]
@@ -343,6 +445,19 @@ def read_outcomes_csv(source: Union[str, Path, IO[bytes]]) -> pd.DataFrame:
     """
     raw = pd.read_csv(source, dtype=str, keep_default_na=True)
     return clean_outcomes(raw)
+
+
+def load_codebook_for(df: pd.DataFrame) -> pd.DataFrame:
+    """The codebook (or codebooks) whose numbering the loaded file uses.
+
+    A file coded with 3.x must not be compared against the 1.x goal list, or
+    every 3.x goal looks like a gap and every 1.x goal looks untouched.
+    """
+    schemes = codebook_scheme(df[COL_DOMAIN].dropna().unique())
+    paths = [CODEBOOK_PATH] if not schemes or "1.x" in schemes else []
+    if "3.x" in schemes:
+        paths.append(CODEBOOK_V3_PATH)
+    return pd.concat([load_codebook(p) for p in paths], ignore_index=True)
 
 
 def load_codebook(path: Union[str, Path] = CODEBOOK_PATH) -> pd.DataFrame:
@@ -529,7 +644,8 @@ def subcategory_coverage(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = No
     zero counts, so real gaps show up. Placeholder labels (Uncoded /
     Unassigned) are left out. Sorted from least to most covered.
     """
-    coded = df[(df[COL_SUBCAT] != UNASSIGNED_SUBCAT) & (df[COL_DOMAIN] != UNCODED_DOMAIN)]
+    coded = df[(df[COL_SUBCAT] != UNASSIGNED_SUBCAT) & (df[COL_DOMAIN] != UNCODED_DOMAIN)
+               & ~df[COL_SUBCAT].str.endswith(DOMAIN_ONLY_SUFFIX)]
     counts = (
         coded.groupby([COL_DOMAIN, COL_SUBCAT], observed=True)
         .agg(
