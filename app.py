@@ -193,6 +193,10 @@ body, .stApp {{ -webkit-font-smoothing: antialiased; }}
   font-weight: 700; font-size: 1.15rem; letter-spacing: -0.02em; color: #1e293b; pointer-events: none;
 }}
 [data-testid="stToolbar"] {{ padding-left: 12.5rem; height: 4rem; align-items: center; }}
+@media (max-width: 640px) {{
+  [data-testid="stHeader"]::before {{ display: none; }}
+  [data-testid="stToolbar"] {{ padding-left: 0.5rem; }}
+}}
 [data-testid="stTopNavLink"] {{ border-radius: 0.5rem; padding: 0.45rem 0.8rem; transition: background-color .15s, color .15s; }}
 [data-testid="stTopNavLink"] p {{ font-size: 0.875rem; font-weight: 500; color: {MUTED}; transition: color .15s; }}
 [data-testid="stTopNavLink"]:hover {{ background: #f8fafc; }}
