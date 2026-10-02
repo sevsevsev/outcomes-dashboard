@@ -60,12 +60,12 @@ from outcomes_data import (
     COL_PROGRAM_LABEL,
     COL_QA,
     COL_SOURCE_FILE,
+    COL_SOURCE_TYPE,
     COL_SUBCAT,
     COL_TEXT,
     CONFIDENCE_ORDER,
     DATA_ENV_VAR,
     DATA_FILENAME,
-    INTENT_NOTE,
     MEASURE_ORGS,
     MEASURES,
     ORG_GROUPING_OPTIONS,
@@ -79,7 +79,8 @@ from outcomes_data import (
     domain_summary,
     filter_outcomes,
     goal_summary,
-    load_codebook,
+    intent_note,
+    load_codebook_for,
     organizations_for_subcategory,
     peer_heatmap_data,
     population_group,
@@ -127,9 +128,13 @@ def load_from_bytes(data: bytes) -> pd.DataFrame:
     return read_outcomes_csv(io.BytesIO(data))
 
 
+def cached_codebook(df: pd.DataFrame) -> pd.DataFrame:
+    return _codebook_for_domains(tuple(sorted(df[COL_DOMAIN].dropna().unique())))
+
+
 @st.cache_data
-def cached_codebook() -> pd.DataFrame:
-    return load_codebook()
+def _codebook_for_domains(domains: tuple[str, ...]) -> pd.DataFrame:
+    return load_codebook_for(pd.DataFrame({COL_DOMAIN: list(domains)}))
 
 
 # =============================================================================
@@ -393,7 +398,7 @@ def page_system_map(df: pd.DataFrame) -> None:
         st.warning("No outcomes match the current filters. Clear some of them to see results.")
         return
 
-    coverage = subcategory_coverage(df, cached_codebook())
+    coverage = subcategory_coverage(df, cached_codebook(df))
     findings(portfolio_findings(df, coverage))
 
     with section("Explore the portfolio", "Click a bar to narrow the charts beside and below it, and the "
@@ -871,7 +876,9 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
                  "The file name groups sub-units under the organization that applied.",
         )
         replacement = st.file_uploader("Load a different CSV", type="csv", key="replace_upload")
-        if replacement is not None and st.session_state.get(UPLOAD_KEY, ("",))[0] != replacement.name:
+        # Compare contents as well as names: a fresh export often keeps the old file's name.
+        if replacement is not None and st.session_state.get(UPLOAD_KEY) != (replacement.name,
+                                                                             replacement.getvalue()):
             remember_upload(replacement)
             st.rerun()
         st.markdown(
@@ -922,7 +929,7 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
                 f"<b>{n_orgs}</b> organizations")
     else:
         text = f"All <b>{len(df):,}</b> outcome statements from <b>{n_orgs}</b> organizations"
-    status.markdown(f"<p class='status'>{text}</p><p class='intent'>{INTENT_NOTE}</p>", unsafe_allow_html=True)
+    status.markdown(f"<p class='status'>{text}</p><p class='intent'>{intent_note(df[COL_SOURCE_TYPE].unique())}</p>", unsafe_allow_html=True)
     return filtered
 
 
