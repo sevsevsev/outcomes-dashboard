@@ -53,6 +53,7 @@ CODEBOOK_PATH = APP_DIR / "reference" / "codebook_subcategories.csv"
 # codebooks/youthOutcomesV3.data.ts. load_codebook_for() picks the one that
 # matches the loaded file's codes.
 CODEBOOK_V3_PATH = APP_DIR / "reference" / "codebook_subcategories_v3.csv"
+CODEBOOK_TERMS_V3_PATH = APP_DIR / "reference" / "codebook_terms_v3.csv"   # codebook words for the chart search
 
 # Column names used throughout the app. Keeping them in one place means a
 # renamed column in a future export only needs changing here.
@@ -751,6 +752,46 @@ def sunburst_nodes(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = None,
     frame["samples"] = frame["sample_list"].map(
         lambda texts: "<br>".join("• " + _wrap_for_hover(t) for t in texts) or "<i>(no outcome text)</i>")
     return frame
+
+
+def load_codebook_terms(path: Union[str, Path] = CODEBOOK_TERMS_V3_PATH) -> dict[str, str]:
+    """Code ("Y3", "Y3.2") -> the codebook's own words for it, for the chart search; {} if missing.
+
+    Built by scripts/build_codebook_terms.py from the coder's codebook.
+    """
+    try:
+        terms = pd.read_csv(path, dtype=str).dropna()
+    except FileNotFoundError:
+        return {}
+    return dict(zip(terms["code"], terms["terms"]))
+
+
+def chart_search_index(df: pd.DataFrame, nodes: pd.DataFrame, terms: Optional[dict] = None) -> dict:
+    """What the sunburst's search box looks through, all of it searched in the browser.
+
+    * texts - every distinct outcome statement in `df`, once
+    * rows  - goal node id -> one [text, program, organization] triple per
+              outcome statement under that goal (indexes; organization is -1
+              when unknown), so the browser can count matching programs,
+              organizations and statements the way the chart counts them
+    * terms - node id -> the codebook's description of that domain or goal
+              (from `terms`, keyed by code), so a word the codebook uses
+              finds its goal even when no program uses it
+
+    `nodes` comes from `sunburst_nodes` for the same `df`.
+    """
+    terms = terms or {}
+    goal_ids = df[COL_DOMAIN].astype(str) + SUNBURST_SEP + df[COL_SUBCAT].astype(str)
+    text_idx, texts = pd.factorize(df[COL_OUTCOME].fillna("").astype(str))
+    prog_idx, _ = pd.factorize(pd.Series(list(zip(df[COL_ORG_VIEW], df[COL_PROGRAM])), index=df.index))
+    org_idx, _ = pd.factorize(df[COL_ORG_VIEW].where(df[COL_ORG_VIEW] != UNKNOWN_ORG))
+    triples = pd.DataFrame({"id": goal_ids.to_numpy(), "t": text_idx, "p": prog_idx, "o": org_idx})
+    rows = {gid: group[["t", "p", "o"]].to_numpy().tolist() for gid, group in triples.groupby("id", sort=False)}
+    node_terms = {}
+    for node in nodes.itertuples(index=False):
+        if node.level != "root" and node.code in terms:
+            node_terms[node.id] = terms[node.code]
+    return {"texts": list(texts), "rows": rows, "terms": node_terms}
 
 
 def distinct_counts_by(df: pd.DataFrame, column: str) -> pd.DataFrame:
