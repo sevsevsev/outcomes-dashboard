@@ -679,7 +679,8 @@ def split_code(label: str) -> tuple[str, str]:
     return match.group(1), re.sub(r"\s*\(.*?\)\s*$", "", match.group(2))
 
 
-def sunburst_nodes(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+def sunburst_nodes(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = None,
+                   include_empty_goals: bool = False) -> pd.DataFrame:
     """The nodes of the domain -> goal sunburst: one root, one row per domain, one per goal.
 
     Columns: id, parent, level ("root", "domain" or "goal"), domain, goal,
@@ -690,6 +691,11 @@ def sunburst_nodes(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = None) ->
     that node), samples (hover snippet) and sample_list (the same statements
     as plain text). Domains come in numeric order and goals in codebook
     order, so the ring reads clockwise like the codebook.
+
+    With `include_empty_goals` (and a codebook), every codebook goal gets a
+    node, with zero counts when no outcome in `df` names it, so the
+    equal-slice wheel can show the gaps. Codebook domains with no outcomes
+    at all are added the same way.
 
     Everything is counted with one groupby per level, because this runs on
     every rerun of the sunburst view.
@@ -727,12 +733,20 @@ def sunburst_nodes(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = None) ->
                 "organizations": int(stats["organizations"]), "sample_list": stats["sample_list"]}
 
     nodes = [node(SUNBURST_ROOT, "", "root", None, None, None, root.iloc[0])]
-    goals_by_domain = by_goal.reset_index().groupby(COL_DOMAIN, sort=False)[COL_SUBCAT].agg(list)
+    goals_by_domain = by_goal.reset_index().groupby(COL_DOMAIN, sort=False)[COL_SUBCAT].agg(list).to_dict()
+    if include_empty_goals and codebook is not None and not codebook.empty:
+        for domain, goals in codebook.groupby(COL_DOMAIN, sort=False)[COL_SUBCAT]:
+            goals_by_domain[domain] = list(goals_by_domain.get(domain, [])) + list(goals)
+        order = sorted(set(order) | set(codebook[COL_DOMAIN]), key=lambda d: (_domain_number(d), d))
+        for domain in order:
+            hue_index.setdefault(domain, known.index(domain) if domain in known else len(known))
+    empty = {"outcomes": 0, "programs": 0, "organizations": 0, "sample_list": []}
     for domain in order:
-        nodes.append(node(domain, SUNBURST_ROOT, "domain", domain, None, domain, by_domain.loc[domain]))
+        nodes.append(node(domain, SUNBURST_ROOT, "domain", domain, None, domain,
+                          by_domain.loc[domain] if domain in by_domain.index else empty))
         for goal in sorted_subcategories(goals_by_domain.get(domain, [])):
             nodes.append(node(domain + SUNBURST_SEP + goal, domain, "goal", domain, goal, goal,
-                              by_goal.loc[(domain, goal)]))
+                              by_goal.loc[(domain, goal)] if (domain, goal) in by_goal.index else empty))
     frame = pd.DataFrame(nodes)
     frame["samples"] = frame["sample_list"].map(
         lambda texts: "<br>".join("• " + _wrap_for_hover(t) for t in texts) or "<i>(no outcome text)</i>")

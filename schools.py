@@ -9,7 +9,8 @@ Two district tables feed it, both kept out of git like every partner file:
 * The program-to-school relationship table (the partnerships database's
   "Program Schools" export): one row per program per school per fiscal year,
   keyed by PARTNER ID, PROGRAM ID and EOS CODE (the school's ULCS code).
-* The schools table (Schools.xlsx): ULCS code, school name, level and network.
+* The schools table (Schools.xlsx): ULCS code, school name, level, learning
+  network, zip code and City Council district.
 
 Coded outcomes join to the relationship table on the district partner and
 program IDs, never on names. A coded file carries them in `partner_id` and
@@ -61,6 +62,9 @@ SCHOOL_CODE = "ULCS"
 SCHOOL_NAME = "PUBLICATION NAME"
 SCHOOL_LEVEL = "SCHOOL LEVEL"
 SCHOOL_NETWORK = "LEARNING NETWORK SHORT"
+SCHOOL_NETWORK_NAME = "LEARNING NETWORK"
+SCHOOL_ZIP = "ZIP CODE"
+SCHOOL_COUNCIL = "CITY COUNCIL DISTRICT"
 SCHOOL_SHEET = "schools"         # Schools.xlsx has other sheets; this one lists every school
 
 # --- Tidy column names ----------------------------------------------------------
@@ -70,6 +74,9 @@ COL_YEAR = "fiscal_year"
 COL_SCHOOL = "school"
 COL_LEVEL = "level"
 COL_NETWORK = "network"
+COL_NETWORK_NAME = "network_name"   # "Learning Network 5"
+COL_ZIP = "zip"                     # "19104"
+COL_COUNCIL = "council_district"    # "5"
 COL_PARTNER = "partner"          # a readable partner name: the coded data's, else "Partner 170"
 COL_PARTNER_NAME = "partner_name"
 COL_PROGRAM_NAME = "program_name"
@@ -176,14 +183,23 @@ def tidy_relationships(raw: pd.DataFrame) -> pd.DataFrame:
 
 
 def tidy_schools(raw: pd.DataFrame) -> pd.DataFrame:
-    """One row per school: ulcs, school, level, network."""
+    """One row per school: ulcs, school, level, network, network_name, zip, council_district.
+
+    Columns the file lacks are left empty; zip codes keep their first five digits.
+    """
     df = _upper_columns(raw)
     out = pd.DataFrame({
         COL_ULCS: _id_text(df[SCHOOL_CODE]),
         COL_SCHOOL: df[SCHOOL_NAME].astype("string").str.strip(),
     })
-    for source, target in ((SCHOOL_LEVEL, COL_LEVEL), (SCHOOL_NETWORK, COL_NETWORK)):
+    for source, target in ((SCHOOL_LEVEL, COL_LEVEL), (SCHOOL_NETWORK, COL_NETWORK),
+                           (SCHOOL_NETWORK_NAME, COL_NETWORK_NAME)):
         out[target] = df[source].astype("string").str.strip() if source in df.columns else pd.NA
+    out[COL_NETWORK_NAME] = out[COL_NETWORK_NAME].fillna(out[COL_NETWORK])
+    out[COL_ZIP] = (_id_text(df[SCHOOL_ZIP]).str.zfill(5).str[:5] if SCHOOL_ZIP in df.columns
+                    else pd.Series(pd.NA, index=df.index, dtype="string"))
+    out[COL_COUNCIL] = (_id_text(df[SCHOOL_COUNCIL]) if SCHOOL_COUNCIL in df.columns
+                        else pd.Series(pd.NA, index=df.index, dtype="string"))
     return out.dropna(subset=[COL_ULCS]).drop_duplicates(COL_ULCS).reset_index(drop=True)
 
 
@@ -431,3 +447,59 @@ def school_findings(school: str, portfolio: pd.DataFrame, rows: pd.DataFrame, ye
                      f"{'partner names' if count == 1 else 'partners name'} at least one outcome in "
                      f"{'it' if len(top) == 1 else 'each'}.")
     return found
+
+
+# =============================================================================
+# PLACE FILTERS (zip code, council district, learning network, school)
+# =============================================================================
+
+PLACE_COLUMNS = (COL_ZIP, COL_COUNCIL, COL_NETWORK_NAME)
+
+
+def number_order(value: object) -> tuple:
+    """Sorts "Learning Network 10" after "Learning Network 9", and "District 2" before "District 10"."""
+    text = str(value)
+    digits = re.findall(r"\d+", text)
+    return (re.sub(r"\d+", "", text), int(digits[0]) if digits else -1, text)
+
+
+def place_values(schools_table: Optional[pd.DataFrame], relationships: pd.DataFrame, column: str) -> list[str]:
+    """The values of one place column among schools that host at least one program, in natural order."""
+    if schools_table is None or column not in schools_table.columns:
+        return []
+    hosting = schools_table[schools_table[COL_ULCS].isin(set(relationships[COL_ULCS]))]
+    return sorted(hosting[column].dropna().unique().tolist(), key=number_order)
+
+
+def matching_schools(schools_table: Optional[pd.DataFrame], relationships: pd.DataFrame,
+                     places: Optional[dict[str, Iterable[str]]] = None,
+                     school_codes: Optional[Iterable[str]] = None) -> set[str]:
+    """ULCS codes of the schools that match every place choice (any value within one choice).
+
+    `places` maps a place column (zip, council_district, network_name) to the
+    chosen values; empty choices are ignored. Picked schools narrow the result further.
+    """
+    codes = set(relationships[COL_ULCS])
+    if schools_table is not None:
+        table = schools_table
+        for column, values in (places or {}).items():
+            values = set(values or [])
+            if values and column in table.columns:
+                table = table[table[column].isin(values)]
+        if any(values for values in (places or {}).values()):
+            codes &= set(table[COL_ULCS])
+    if school_codes:
+        codes &= {str(c) for c in school_codes}
+    return codes
+
+
+def at_schools(outcomes: pd.DataFrame, relationships: pd.DataFrame, codes: Iterable[str]) -> pd.Series:
+    """True for the outcome rows whose program runs at one of these schools.
+
+    `outcomes` needs partner_id and program_id (see with_program_ids); rows
+    without them can't be placed at any school, so they are always False.
+    """
+    here = relationships[relationships[COL_ULCS].isin(set(codes))]
+    pairs = set(zip(here[COL_PARTNER_ID], here[COL_PROGRAM_ID]))
+    return pd.Series([(a, b) in pairs for a, b in zip(outcomes[COL_PARTNER_ID], outcomes[COL_PROGRAM_ID])],
+                     index=outcomes.index)

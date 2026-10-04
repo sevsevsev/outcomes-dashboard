@@ -108,13 +108,14 @@ from outcomes_data import (
 APP_TITLE = "Outcomes Explorer"
 
 # Session-state keys for the filters, so "Clear filters" can reset them.
-FILTER_KEYS = ["f_domains", "f_pops", "f_orgs", "f_conf"]
+PLACE_KEYS = {"f_zip": schools.COL_ZIP, "f_council": schools.COL_COUNCIL, "f_network": schools.COL_NETWORK_NAME}
+FILTER_KEYS = ["f_domains", "f_pops", "f_orgs", "f_conf", *PLACE_KEYS, "f_schools"]
 ALL_DOMAINS = "All domains"
 MAX_PROGRAMS = 6
 DEFAULT_PROGRAMS = 4
 UPLOAD_KEY = "uploaded_csv"          # (file name, bytes) of a CSV uploaded this session
 READ_ERRORS = (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError)
-VIEWS = ["Ranked", "Sunburst", "Treemap"]
+VIEWS = ["Wheel", "Ranked", "Sunburst", "Treemap"]
 # What the first ranked chart groups by: plain priorities, or the codebook's own domains.
 GROUP_PRIORITIES = "Priorities"
 GROUP_DOMAINS = "Codebook domains"
@@ -151,6 +152,11 @@ def _codebook_for_domains(domains: tuple[str, ...]) -> pd.DataFrame:
 @st.cache_data(show_spinner=False, max_entries=24)
 def cached_sunburst_nodes(df: pd.DataFrame) -> pd.DataFrame:
     return sunburst_nodes(df, cached_codebook(df))
+
+
+@st.cache_data(show_spinner=False, max_entries=24)
+def cached_wheel_nodes(df: pd.DataFrame) -> pd.DataFrame:
+    return sunburst_nodes(df, cached_codebook(df), include_empty_goals=True)
 
 
 @st.cache_data(show_spinner=False, max_entries=24)
@@ -527,13 +533,13 @@ def page_system_map(df: pd.DataFrame) -> None:
     with section("Explore the portfolio", "Click a bar or slice to narrow the charts beside and below it, and the "
                  "outcomes table.", key="explore"):
         t0, t1, t2 = st.columns([3, 3, 3])
-        view = t2.segmented_control("View", VIEWS, default="Ranked", key="v1_view") or "Ranked"
+        view = t2.segmented_control("View", VIEWS, default="Wheel", key="v1_view") or "Wheel"
         grouping = t0.segmented_control(
             "Group by", GROUPINGS, default=GROUP_PRIORITIES, key="v1_grouping", disabled=view != "Ranked",
             help="Priorities use plain names such as Attendance or Math. Codebook domains are the coder's "
                  "own twelve domains, which the treemap and sunburst always use.",
         ) or GROUP_PRIORITIES
-        if view == "Sunburst":
+        if view in ("Wheel", "Sunburst"):
             measure = t1.segmented_control(
                 "Count", SUNBURST_MEASURES, default=MEASURE_PROGRAMS, key="v1_measure_sb",
                 help="Programs and organizations count each one once per goal and once per domain. Outcome "
@@ -545,8 +551,8 @@ def page_system_map(df: pd.DataFrame) -> None:
                 help="Organizations counts each organization once per goal. Outcome statements gives more weight "
                      "to organizations that list many outcomes.",
             ) or MEASURE_ORGS
-        if view == "Sunburst":
-            chosen_domain = sunburst_view(df, measure)
+        if view in ("Wheel", "Sunburst"):
+            chosen_domain = sunburst_view(df, measure, layout="equal" if view == "Wheel" else "value")
         elif view == "Ranked":
             chosen_domain = linked_explorer(df, measure, grouping)
         else:
@@ -628,8 +634,11 @@ def linked_explorer(df: pd.DataFrame, measure: str, grouping: str = GROUP_PRIORI
     return domain
 
 
-def sunburst_view(df: pd.DataFrame, measure: str) -> Optional[str]:
+def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value") -> Optional[str]:
     """Domains and their goals as one sunburst, styled after the codebook explorer's. A click narrows the table.
+
+    `layout="equal"` draws the wheel: every codebook goal gets the same slice,
+    including goals no outcome names, and its count is the length of its bar.
 
     The chart is drawn in the browser (sunburst_component.py): hovering,
     zooming into a domain and back out cost no rerun. A click sends back the
@@ -639,10 +648,10 @@ def sunburst_view(df: pd.DataFrame, measure: str) -> Optional[str]:
 
     Returns the selected domain, if any, so the coverage table can follow it.
     """
-    nodes = cached_sunburst_nodes(df)
-    key = f"v1sb_{st.session_state.get('v1_nonce', 0)}"
+    nodes = cached_wheel_nodes(df) if layout == "equal" else cached_sunburst_nodes(df)
+    key = f"v1sb_{layout}_{st.session_state.get('v1_nonce', 0)}"
     last_key = f"{key}_last"
-    data = charts.codebook_sunburst_data(nodes, measure, selected=st.session_state.get(last_key))
+    data = charts.codebook_sunburst_data(nodes, measure, selected=st.session_state.get(last_key), layout=layout)
     pick = codebook_sunburst(data, key=key)
     ids = set(nodes["id"])
     if pick and pick["domain"] not in ids:
@@ -1228,7 +1237,54 @@ def reset_filters() -> None:
 
 
 FILTER_NOUNS = {"f_domains": ("domain", "domains"), "f_pops": ("audience", "audiences"),
-                "f_orgs": ("organization", "organizations"), "f_conf": ("confidence level", "confidence levels")}
+                "f_orgs": ("organization", "organizations"), "f_conf": ("confidence level", "confidence levels"),
+                "f_zip": ("zip code", "zip codes"), "f_council": ("council district", "council districts"),
+                "f_network": ("learning network", "learning networks"), "f_schools": ("school", "schools")}
+
+
+def place_filters(df: pd.DataFrame) -> Optional[pd.Series]:
+    """Zip code, council district, learning network and school pickers, inside the Filters menu.
+
+    A place keeps the outcomes of programs that run at its schools, joined on
+    district partner and program IDs (the school tables must be loaded).
+    Returns a row mask for `df`, or None when no place is picked.
+    """
+    st.markdown("**Where programs run**")
+    tables, _ = school_tables()
+    relationships = tables.get(schools.RELATIONSHIPS)
+    if relationships is None:
+        st.caption("Add the program-to-school table and the schools table to filter by zip code, council "
+                   "district, learning network or school.")
+        school_uploader("school_upload_filters")
+        return None
+    school_list = tables.get(schools.SCHOOLS)
+    labels = {"f_zip": "Zip codes", "f_council": "City Council districts", "f_network": "Learning networks"}
+    places = {}
+    for key, column in PLACE_KEYS.items():
+        values = schools.place_values(school_list, relationships, column)
+        if not values:
+            continue
+        keep_valid(key, values)
+        places[column] = st.multiselect(
+            labels[key], values, key=key, placeholder="Anywhere",
+            format_func=(lambda v: f"District {v}") if key == "f_council" else str)
+    # The school list follows the other place choices.
+    options = schools.school_options(relationships, school_list)
+    nearby = schools.matching_schools(school_list, relationships, places)
+    options = options[options[schools.COL_ULCS].isin(nearby | set(st.session_state.get("f_schools", [])))]
+    names = dict(zip(options[schools.COL_ULCS], options[schools.COL_SCHOOL]))
+    keep_valid("f_schools", list(names))
+    picked = st.multiselect("Schools", list(names), key="f_schools", placeholder="All schools",
+                            format_func=lambda code: names.get(code, f"School {code}"))
+    if not any(places.values()) and not picked:
+        return None
+    codes = schools.matching_schools(school_list, relationships, places, picked)
+    with_ids = schools.with_program_ids(df)
+    unplaced = with_ids[schools.COL_PROGRAM_ID].isna()
+    if unplaced.any():
+        st.caption(f"{int(unplaced.sum()):,} outcome statements have no district program ID, so they can't be "
+                   "placed at a school and drop out while a place is picked.")
+    return schools.at_schools(with_ids, relationships, codes)
 
 
 def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
@@ -1285,11 +1341,15 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
             keep_valid("f_conf", levels)
             chosen_conf = st.multiselect("Coder confidence", levels, key="f_conf", placeholder="Any confidence",
                                          format_func=str.title)
+        # The school page picks one school itself, so the place filters live on the other pages.
+        at_places = place_filters(df) if page_key != "schools" else None
         if active:
             st.button("Clear filters", on_click=reset_filters, type="tertiary")
 
     filtered = filter_outcomes(df, domains=chosen_domains, populations=chosen_pops,
                                organizations=chosen_orgs, confidences=chosen_conf)
+    if at_places is not None:
+        filtered = filtered[at_places.reindex(filtered.index, fill_value=False)]
     n_orgs = count_organizations(filtered[COL_ORG_VIEW])
     active = [k for k in FILTER_KEYS if st.session_state.get(k)]
     if active:

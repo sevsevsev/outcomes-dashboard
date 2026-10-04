@@ -24,6 +24,7 @@
 }
 .sb-slice:focus { outline: none; }
 .sb-slice:focus-visible { stroke: var(--ink); stroke-width: 2.5; }
+.sb-track { pointer-events: none; }
 .sb-label { pointer-events: none; user-select: none; transition: opacity .35s ease; font-variant-numeric: tabular-nums; }
 
 @keyframes sb-in { from { opacity: 0; transform: scale(.92) rotate(-8deg); } to { opacity: 1; transform: none; } }
@@ -37,6 +38,7 @@
   pointer-events: none; text-align: center;
 }
 .sb-center-inner { width: 40%; }
+.sb-equal .sb-center-inner { width: 30%; }   /* the wheel's centre is smaller */
 .sb-eyebrow {
   font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
 }
