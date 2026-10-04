@@ -246,8 +246,13 @@ def is_coded_domain(domain: str) -> bool:
 
 
 def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
-                           selected: Optional[dict] = None) -> dict:
+                           selected: Optional[dict] = None, layout: str = "value") -> dict:
     """What the browser-side sunburst (sunburst_component.py) draws, from `sunburst_nodes`.
+
+    `layout` "value" sizes each slice by its count (the sunburst). "equal"
+    gives every goal the same angle and shows its count as the length of its
+    bar (the wheel), so goals with few or no programs keep a visible place;
+    build its nodes with `sunburst_nodes(..., include_empty_goals=True)`.
 
     Programs and organizations work in several goals, so a domain's arc is
     the sum of its goals' counts, while its readout gives the exact number
@@ -284,9 +289,9 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
             "samples": [_clip(" ".join(str(t).split()), HOVER_SAMPLE_CHARS) for t in row.sample_list],
         })
     n_domains = int(nodes.loc[nodes["level"] == "domain", "domain"].map(is_coded_domain).sum())
-    sig = hashlib.sha1(json.dumps([measure, [(n["id"], n["value"], n["count"]) for n in out]]).encode()).hexdigest()
+    sig = hashlib.sha1(json.dumps([measure, layout, [(n["id"], n["value"], n["count"]) for n in out]]).encode()).hexdigest()
     return {
-        "sig": sig[:16], "sep": SUNBURST_SEP, "noun": noun, "noun_one": noun.removesuffix("s"),
+        "sig": sig[:16], "layout": layout, "sep": SUNBURST_SEP, "noun": noun, "noun_one": noun.removesuffix("s"),
         "n_domains": n_domains, "nodes": out, "selected": selected,
     }
 

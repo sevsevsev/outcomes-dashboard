@@ -11,10 +11,17 @@
 // and goal to Python as the "selection" state, which filters the table below.
 // Python sends `data` (see sunburst_component.py); `data.sig` changes only
 // when the counts change, so reruns caused by a click leave the chart alone.
+//
+// With `data.layout === 'equal'` it is the equal-slice wheel instead: every
+// goal gets the same angle, and its count sets how far its bar reaches out
+// from the domain ring. A goal no program names keeps its place as a short
+// dashed stub, so gaps stay visible instead of shrinking to a hairline.
 
 const SIZE = 600;
 const C = SIZE / 2;
-const R = { hole: 138, domain: 202, goal: 284 };
+const R_VALUE = { hole: 138, domain: 202, goal: 284 };
+const R_EQUAL = { hole: 104, domain: 152, goal: 290 };   // a smaller centre leaves the bars room to grow
+const STUB = 14;             // depth of a zero goal's dashed stub, and the shortest bar
 const POP = 1.04;            // how far the active goal lifts out of the ring
 const ANIM_MS = 520;         // zoom in / out
 const LEAVE_MS = 70;         // grace period so moving between slices doesn't flash the resting readout
@@ -53,21 +60,24 @@ function arcPath(r0, r1, start, end) {
 /** Where every slice sits when `zoom` (a domain id, or null) is open. */
 function targetAngles(model, zoom) {
   const out = new Map();
+  // The wheel weighs every goal the same, so a domain's arc follows how many goals it has.
+  const weight = n => (!model.equal ? n.value
+    : n.level === 'domain' ? Math.max((model.children.get(n.id) || []).length, 1) : 1);
   const placeGoals = (domain, a0, a1) => {
     const goals = model.children.get(domain.id) || [];
-    const total = goals.reduce((n, g) => n + g.value, 0) || 1;
+    const total = goals.reduce((n, g) => n + weight(g), 0) || 1;
     let a = a0;
     for (const g of goals) {
-      const span = ((a1 - a0) * g.value) / total;
+      const span = ((a1 - a0) * weight(g)) / total;
       out.set(g.id, [a, a + span]);
       a += span;
     }
   };
   if (!zoom) {
-    const total = model.domains.reduce((n, d) => n + d.value, 0) || 1;
+    const total = model.domains.reduce((n, d) => n + weight(d), 0) || 1;
     let a = 0;
     for (const d of model.domains) {
-      const span = (360 * d.value) / total;
+      const span = (360 * weight(d)) / total;
       out.set(d.id, [a, a + span]);
       placeGoals(d, a, a + span);
       a += span;
@@ -104,6 +114,14 @@ function fills(node, state) {
   }
   const on = activeId === node.id || state.pick === node.id;
   const inDomain = activeDomain === node.parent;
+  if (state.equal) {
+    return {
+      fill: node.count === 0 ? '#fff' : grey ? (on ? '#7c8492' : '#cbd5e1')
+        : on ? `hsl(${h} 62% 40%)` : `hsl(${h} 58% ${inDomain ? 52 : 60}%)`,
+      opacity: hovering && !inDomain ? 0.3 : 1,
+      lift: on && (activeId === node.id || !hovering),
+    };
+  }
   return {
     fill: grey
       ? (on ? '#9aa1ad' : '#e3e6ea')
@@ -148,7 +166,7 @@ export default function (component) {
 }
 
 function mount(root, sb, data) {
-  const model = { byId: new Map(), domains: [], children: new Map(), root: null, data };
+  const model = { byId: new Map(), domains: [], children: new Map(), root: null, data, equal: data.layout === 'equal' };
   for (const n of data.nodes) {
     model.byId.set(n.id, n);
     if (n.level === 'root') model.root = n;
@@ -161,6 +179,8 @@ function mount(root, sb, data) {
   const firstMount = sb.sig === null;
   sb.sig = data.sig;
   sb.model = model;
+  sb.R = model.equal ? R_EQUAL : R_VALUE;
+  sb.maxCount = Math.max(1, ...data.nodes.filter(n => n.level === 'goal').map(n => n.count));
 
   // The pick comes from Python on the first draw (a page revisit); after that the chart owns it.
   if (firstMount && data.selected) {
@@ -181,32 +201,45 @@ function mount(root, sb, data) {
   sb.hover = null;
 
   root.replaceChildren();
+  root.classList.toggle('sb-equal', model.equal);
   const figure = el('div', 'sb-figure');
   const svg = svgEl('svg', {
     viewBox: `0 0 ${SIZE} ${SIZE}`, class: 'sb-svg', role: 'group',
-    'aria-label': `${model.domains.length} domains and their goals, sized by ${data.noun}. Each slice is a button.`,
+    'aria-label': model.equal
+      ? `${model.domains.length} domains and their goals, one equal slice per goal; bar length shows ${data.noun}. Each slice is a button.`
+      : `${model.domains.length} domains and their goals, sized by ${data.noun}. Each slice is a button.`,
   });
+  const trackLayer = svgEl('g');
   const goalLayer = svgEl('g');
   const domainLayer = svgEl('g');
   const labelLayer = svgEl('g');
-  const hole = svgEl('circle', { cx: C, cy: C, r: R.hole - 3, class: 'sb-hole' });
-  svg.append(goalLayer, domainLayer, hole, labelLayer);
+  const hole = svgEl('circle', { cx: C, cy: C, r: sb.R.hole - 3, class: 'sb-hole' });
+  svg.append(trackLayer, goalLayer, domainLayer, hole, labelLayer);
   const center = el('div', 'sb-center');
   figure.append(svg, center);
   const panel = el('div', 'sb-panel');
   root.append(figure, panel);
 
-  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map() };
+  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map(), tracks: new Map() };
   const animate = firstMount && !reducedMotion();
   if (animate) svg.classList.add('sb-enter');
 
   let i = 0;
   for (const n of data.nodes) {
     if (n.level === 'root') continue;
+    const gap = model.equal && n.level === 'goal' && n.count === 0;
     const path = svgEl('path', {
-      class: 'sb-slice', stroke: '#fff', 'fill-rule': 'evenodd', 'stroke-width': n.level === 'domain' ? 2 : 1.25,
+      class: 'sb-slice', stroke: gap ? '#94a3b8' : '#fff', 'fill-rule': 'evenodd',
+      'stroke-width': n.level === 'domain' ? 2 : 1.25,
       tabindex: 0, role: 'button', 'aria-label': `${n.eyebrow}: ${n.title}, ${plural(n.count, data.noun_one, data.noun)}`,
     });
+    if (gap) path.setAttribute('stroke-dasharray', '3 2');
+    if (model.equal && n.level === 'goal') {
+      // The pale track behind each bar shows how far the bar could reach.
+      const track = svgEl('path', { class: 'sb-track', fill: '#f1f5f9', stroke: '#fff', 'stroke-width': 1.25 });
+      trackLayer.appendChild(track);
+      sb.els.tracks.set(n.id, track);
+    }
     path.style.transformOrigin = `${C}px ${C}px`;
     if (animate) path.style.animationDelay = n.level === 'domain' ? `${i * 40}ms` : `${120 + i * 6}ms`;
     i += 1;
@@ -312,12 +345,27 @@ function tween(sb, target) {
   sb.frame = requestAnimationFrame(step);
 }
 
+/** How far a goal's slice reaches: the full ring in the sunburst, its bar length on the wheel. */
+function outerRadius(sb, n) {
+  const R = sb.R;
+  if (!sb.model.equal) return R.goal;
+  const base = R.domain + 3;
+  if (n.count === 0) return base + STUB;
+  // Square root, so the bar's area (not its length) follows the count, and thin goals stay visible.
+  return base + STUB + Math.sqrt(n.count / sb.maxCount) * (R.goal - base - STUB);
+}
+
 function draw(sb) {
   const { model, els } = sb;
+  const R = sb.R;
+  for (const [id, track] of els.tracks) {
+    const [a0, a1] = sb.angles.get(id) || [0, 0];
+    track.setAttribute('d', arcPath(R.domain + 3, R.goal, a0, a1));
+  }
   for (const [id, path] of els.slices) {
     const n = model.byId.get(id);
     const [a0, a1] = sb.angles.get(id) || [0, 0];
-    const d = n.level === 'domain' ? arcPath(R.hole, R.domain, a0, a1) : arcPath(R.domain + 3, R.goal, a0, a1);
+    const d = n.level === 'domain' ? arcPath(R.hole, R.domain, a0, a1) : arcPath(R.domain + 3, outerRadius(sb, n), a0, a1);
     path.setAttribute('d', d);
     const hidden = !d;
     path.style.display = hidden ? 'none' : '';
@@ -330,7 +378,7 @@ function draw(sb) {
         : !!sb.zoom && span >= MIN_LABEL_DEG.goal;
       const [x, y] = n.level === 'domain'
         ? point((R.hole + R.domain) / 2, (a0 + a1) / 2)
-        : point((R.domain + R.goal) / 2 + 2, (a0 + a1) / 2);
+        : point(model.equal ? R.goal - 16 : (R.domain + R.goal) / 2 + 2, (a0 + a1) / 2);
       label.setAttribute('x', f(x));
       label.setAttribute('y', f(y));
       label.style.display = show ? '' : 'none';
@@ -346,7 +394,7 @@ function paint(sb) {
   const picked = sb.pick ? model.byId.get(sb.pick) : null;
   const lead = hovered || picked;
   const activeDomain = lead ? (lead.level === 'domain' ? lead.id : lead.parent) : null;
-  const state = { activeDomain, activeId: sb.hover, hovering: !!hovered, pick: sb.pick };
+  const state = { activeDomain, activeId: sb.hover, hovering: !!hovered, pick: sb.pick, equal: model.equal };
   for (const [id, path] of els.slices) {
     const n = model.byId.get(id);
     const look = fills(n, state);
@@ -356,7 +404,7 @@ function paint(sb) {
     const label = els.labels.get(id);
     if (label) {
       label.setAttribute('fill', n.level === 'domain' ? '#fff' : (n.hue === null || n.hue === undefined
-        ? '#334155' : `hsl(${n.hue} 55% ${look.lift ? 97 : 26}%)`));
+        ? '#334155' : model.equal ? `hsl(${n.hue} 45% 18%)` : `hsl(${n.hue} 55% ${look.lift ? 97 : 26}%)`));
       label.style.opacity = look.opacity < 1 ? 0.55 : 1;
     }
   }
@@ -411,10 +459,12 @@ function readout(sb, hovered) {
     const share = model.root.count ? focus.count / model.root.count : 0;
     const bar = el('div', 'sb-share');
     const fill = el('span');
-    fill.style.width = `${Math.max(share * 100, 1.5)}%`;
+    fill.style.width = focus.count ? `${Math.max(share * 100, 1.5)}%` : '0';
     fill.style.background = swatchColor(focus);
     bar.append(fill);
-    children.push(bar, el('div', 'sb-share-note', `${Math.round(share * 100)}% of all ${data.noun}`));
+    children.push(bar, el('div', 'sb-share-note', focus.level === 'goal' && focus.count === 0
+      ? 'No program in this view names this goal yet.'
+      : `${Math.round(share * 100)}% of all ${data.noun}`));
   }
   if (focus.samples && focus.samples.length) {
     const list = el('ul', 'sb-samples');
@@ -429,7 +479,8 @@ function readout(sb, hovered) {
 function hint(sb, hovered) {
   if (hovered) {
     if (hovered.level === 'domain') return sb.zoom === hovered.id ? 'Click to go back to all domains.' : 'Click to open its goals.';
-    return sb.pick === hovered.id ? 'Click again to show the whole domain.' : 'Click to list its outcomes in the table below.';
+    if (sb.pick === hovered.id) return 'Click again to show the whole domain.';
+    return hovered.count ? 'Click to list its outcomes in the table below.' : 'Nothing to list yet.';
   }
   if (sb.zoom) return 'Click the center to go back to all domains.';
   return 'Point at a slice to read it. Click a domain to open its goals.';

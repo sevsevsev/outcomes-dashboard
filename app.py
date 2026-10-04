@@ -114,7 +114,7 @@ MAX_PROGRAMS = 6
 DEFAULT_PROGRAMS = 4
 UPLOAD_KEY = "uploaded_csv"          # (file name, bytes) of a CSV uploaded this session
 READ_ERRORS = (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError)
-VIEWS = ["Ranked", "Sunburst", "Treemap"]
+VIEWS = ["Wheel", "Ranked", "Sunburst", "Treemap"]
 # What the first ranked chart groups by: plain priorities, or the codebook's own domains.
 GROUP_PRIORITIES = "Priorities"
 GROUP_DOMAINS = "Codebook domains"
@@ -151,6 +151,11 @@ def _codebook_for_domains(domains: tuple[str, ...]) -> pd.DataFrame:
 @st.cache_data(show_spinner=False, max_entries=24)
 def cached_sunburst_nodes(df: pd.DataFrame) -> pd.DataFrame:
     return sunburst_nodes(df, cached_codebook(df))
+
+
+@st.cache_data(show_spinner=False, max_entries=24)
+def cached_wheel_nodes(df: pd.DataFrame) -> pd.DataFrame:
+    return sunburst_nodes(df, cached_codebook(df), include_empty_goals=True)
 
 
 @st.cache_data(show_spinner=False, max_entries=24)
@@ -527,13 +532,13 @@ def page_system_map(df: pd.DataFrame) -> None:
     with section("Explore the portfolio", "Click a bar or slice to narrow the charts beside and below it, and the "
                  "outcomes table.", key="explore"):
         t0, t1, t2 = st.columns([3, 3, 3])
-        view = t2.segmented_control("View", VIEWS, default="Ranked", key="v1_view") or "Ranked"
+        view = t2.segmented_control("View", VIEWS, default="Wheel", key="v1_view") or "Wheel"
         grouping = t0.segmented_control(
             "Group by", GROUPINGS, default=GROUP_PRIORITIES, key="v1_grouping", disabled=view != "Ranked",
             help="Priorities use plain names such as Attendance or Math. Codebook domains are the coder's "
                  "own twelve domains, which the treemap and sunburst always use.",
         ) or GROUP_PRIORITIES
-        if view == "Sunburst":
+        if view in ("Wheel", "Sunburst"):
             measure = t1.segmented_control(
                 "Count", SUNBURST_MEASURES, default=MEASURE_PROGRAMS, key="v1_measure_sb",
                 help="Programs and organizations count each one once per goal and once per domain. Outcome "
@@ -545,8 +550,8 @@ def page_system_map(df: pd.DataFrame) -> None:
                 help="Organizations counts each organization once per goal. Outcome statements gives more weight "
                      "to organizations that list many outcomes.",
             ) or MEASURE_ORGS
-        if view == "Sunburst":
-            chosen_domain = sunburst_view(df, measure)
+        if view in ("Wheel", "Sunburst"):
+            chosen_domain = sunburst_view(df, measure, layout="equal" if view == "Wheel" else "value")
         elif view == "Ranked":
             chosen_domain = linked_explorer(df, measure, grouping)
         else:
@@ -628,8 +633,11 @@ def linked_explorer(df: pd.DataFrame, measure: str, grouping: str = GROUP_PRIORI
     return domain
 
 
-def sunburst_view(df: pd.DataFrame, measure: str) -> Optional[str]:
+def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value") -> Optional[str]:
     """Domains and their goals as one sunburst, styled after the codebook explorer's. A click narrows the table.
+
+    `layout="equal"` draws the wheel: every codebook goal gets the same slice,
+    including goals no outcome names, and its count is the length of its bar.
 
     The chart is drawn in the browser (sunburst_component.py): hovering,
     zooming into a domain and back out cost no rerun. A click sends back the
@@ -639,10 +647,10 @@ def sunburst_view(df: pd.DataFrame, measure: str) -> Optional[str]:
 
     Returns the selected domain, if any, so the coverage table can follow it.
     """
-    nodes = cached_sunburst_nodes(df)
-    key = f"v1sb_{st.session_state.get('v1_nonce', 0)}"
+    nodes = cached_wheel_nodes(df) if layout == "equal" else cached_sunburst_nodes(df)
+    key = f"v1sb_{layout}_{st.session_state.get('v1_nonce', 0)}"
     last_key = f"{key}_last"
-    data = charts.codebook_sunburst_data(nodes, measure, selected=st.session_state.get(last_key))
+    data = charts.codebook_sunburst_data(nodes, measure, selected=st.session_state.get(last_key), layout=layout)
     pick = codebook_sunburst(data, key=key)
     ids = set(nodes["id"])
     if pick and pick["domain"] not in ids:

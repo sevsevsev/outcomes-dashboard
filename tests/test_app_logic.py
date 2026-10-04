@@ -372,6 +372,28 @@ def test_sunburst_colors_follow_the_codebook_not_the_filters(df):
     assert full.at[SEL, "domain_index"] == only_sel.at[SEL, "domain_index"]
 
 
+def test_wheel_nodes_keep_every_codebook_goal_with_zero_counts(df):
+    frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
+    codebook = app.load_codebook_for(frame)
+    nodes = app.sunburst_nodes(frame, codebook, include_empty_goals=True).set_index("id")
+    goals = nodes[nodes["level"] == "goal"]
+    # Every codebook goal has a node; the ones no outcome names count zero.
+    codebook_ids = {d + app.SUNBURST_SEP + g for d, g in zip(codebook[app.COL_DOMAIN], codebook[app.COL_SUBCAT])}
+    assert codebook_ids <= set(goals.index)
+    conf = goals.loc[SEL + app.SUNBURST_SEP + CONF]
+    assert conf["programs"] == 2
+    assert (goals.loc[list(codebook_ids - set(app.sunburst_nodes(frame)["id"])), "programs"] == 0).all()
+    # Same counts and colors as the sunburst where both have the node.
+    plain = app.sunburst_nodes(frame, codebook).set_index("id")
+    shared = plain.index
+    assert (nodes.loc[shared, "programs"] == plain["programs"]).all()
+    assert (nodes.loc[shared, "domain_index"] == plain["domain_index"]).all()
+    data = charts.codebook_sunburst_data(nodes.reset_index(), app.MEASURE_PROGRAMS, layout="equal")
+    assert data["layout"] == "equal"
+    json.dumps(data, allow_nan=False)
+    assert data["sig"] != charts.codebook_sunburst_data(nodes.reset_index(), app.MEASURE_PROGRAMS)["sig"]
+
+
 def test_split_code():
     assert app.split_code("Y1.3 Mathematics") == ("Y1.3", "Mathematics")
     assert app.split_code("Domain Y4. Social & Emotional Skills (CASEL)") == ("Y4", "Social & Emotional Skills")
