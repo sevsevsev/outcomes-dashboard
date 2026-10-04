@@ -79,6 +79,38 @@
 .sb-hint { margin-top: auto; padding-top: 12px; font-size: 12px; color: var(--faint); }
 
 @media (prefers-reduced-motion: reduce) {
-  .sb-slice, .sb-label, .sb-share span { transition: none; }
+  .sb-slice, .sb-hit, .sb-label, .sb-share span { transition: none; }
   .sb-enter .sb-slice, .sb-fade { animation: none; }
 }
+
+/* Search: one quiet input above the chart. Its row keeps one height, so the chart never moves while typing. */
+.sb-search {
+  display: flex; align-items: center; gap: 14px; height: 40px; max-width: 980px; margin: 0 auto 12px;
+}
+.sb-search-box {
+  position: relative; display: flex; align-items: center; flex: 0 1 340px; height: 36px;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; transition: border-color .15s ease;
+}
+.sb-search-box:focus-within { border-color: var(--faint); }
+.sb-search-icon { flex: none; margin-left: 10px; color: var(--faint); }
+.sb-search input {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent;
+  padding: 0 4px 0 8px; font: inherit; font-size: 14px; color: var(--ink);
+}
+.sb-search input::placeholder { color: var(--faint); }
+.sb-search-clear {
+  flex: none; width: 28px; height: 28px; margin-right: 4px; border: 0; border-radius: 6px; background: transparent;
+  font: inherit; font-size: 18px; line-height: 1; color: var(--muted); cursor: pointer; visibility: hidden;
+}
+.sb-search.has-query .sb-search-clear { visibility: visible; }
+.sb-search-clear:hover { background: var(--wash); color: var(--ink); }
+.sb-search-note {
+  font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.sb-hit { pointer-events: none; transition: fill .35s ease, fill-opacity .35s ease, transform .45s cubic-bezier(.3, 1.4, .5, 1); }
+.sb-samples mark { background: #fef3c7; color: inherit; border-radius: 2px; padding: 0 1px; }
+.sb-match-note { margin-top: 12px; font-size: 13px; line-height: 1.45; }
+.sb-goals { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.sb-goals li { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--ink-2); }
+.sb-goal-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-goal-n { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }

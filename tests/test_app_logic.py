@@ -339,6 +339,26 @@ def test_sunburst_nodes_count_programs_and_organizations_at_each_level(df):
     assert domains[0] == JOY and domains[-1] == app.UNCODED_DOMAIN
 
 
+def test_chart_search_index_lists_each_goals_statements_with_program_and_org(df):
+    frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
+    nodes = app.sunburst_nodes(frame)
+    index = app.chart_search_index(frame, nodes, {"3.1.4": "self-efficacy belief", "3": "social emotional"})
+    conf = index["rows"][SEL + app.SUNBURST_SEP + CONF]
+    assert sorted(index["texts"][t] for t, _, _ in conf) == ["Increased student confidence", "Youth feel confident"]
+    # Two programs at two organizations, as the chart counts them.
+    assert len({p for _, p, _ in conf}) == 2 and len({o for _, _, o in conf}) == 2
+    assert set(index["rows"]) <= set(nodes["id"])
+    assert index["terms"] == {SEL + app.SUNBURST_SEP + CONF: "self-efficacy belief", SEL: "social emotional"}
+    json.dumps(index)  # it goes to the browser as JSON
+
+
+def test_codebook_terms_cover_every_3x_goal():
+    terms = app.load_codebook_terms()
+    codes = {app.split_code(g)[0] for g in app.load_codebook(app.CODEBOOK_V3_PATH)[app.COL_SUBCAT]}
+    assert codes <= set(terms)
+    assert "mentor" in terms["Y3.2"]
+
+
 def test_codebook_sunburst_data_sizes_domains_by_their_goals_and_reads_exact_counts(df):
     frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
     data = charts.codebook_sunburst_data(app.sunburst_nodes(frame), app.MEASURE_PROGRAMS)

@@ -16,6 +16,13 @@
 // goal gets the same angle, and its count sets how far its bar reaches out
 // from the domain ring. A goal no program names keeps its place as a short
 // dashed stub, so gaps stay visible instead of shrinking to a hairline.
+//
+// The search box above the chart greys out every slice that doesn't contain
+// what was typed, while the reader types, with no round trip to Python. A
+// goal matches when its name or the codebook's description of it does (so
+// "mentoring" finds Supportive adults), or when outcome statements under it
+// do; then its colour fills only the share of it that matches. `data.search`
+// carries the statements and codebook words (outcomes_data.chart_search_index).
 
 const SIZE = 600;
 const C = SIZE / 2;
@@ -26,6 +33,9 @@ const POP = 1.04;            // how far the active goal lifts out of the ring
 const ANIM_MS = 520;         // zoom in / out
 const LEAVE_MS = 70;         // grace period so moving between slices doesn't flash the resting readout
 const MIN_LABEL_DEG = { domain: 9, goal: 8 };
+const MIN_QUERY = 2;         // characters before the search starts greying slices
+const GREY = { domain: '#cbd5e1', goal: '#e2e8f0', label: '#94a3b8' };
+let lastQuery = '';          // the search outlives a fresh chart (a cleared selection, a page revisit)
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -101,7 +111,29 @@ function targetAngles(model, zoom) {
 
 // ---------------------------------------------------------------- colour
 
+/** The resting look, then greyed or paled by the search when one is active. */
 function fills(node, state) {
+  const look = baseFills(node, state);
+  const hits = state.hits;
+  if (!hits) return look;
+  if (node.level === 'domain') {
+    if (!hits.domains.has(node.id)) look.fill = GREY.domain;
+    return look;
+  }
+  const hit = hits.goals.get(node.id);
+  if (!hit) {
+    if (!(state.equal && node.count === 0)) look.fill = GREY.goal;
+  } else if (hit.partial) {
+    // The slice keeps a pale wash of its hue; the overlay (see draw) fills the share that matches.
+    look.overlay = look.fill;
+    look.fill = node.hue === null || node.hue === undefined ? '#eef0f3' : `hsl(${node.hue} 55% 90%)`;
+  } else if (state.equal && node.count === 0) {
+    look.fill = `hsl(${node.hue ?? 215} 50% 88%)`;
+  }
+  return look;
+}
+
+function baseFills(node, state) {
   const { activeDomain, activeId, hovering } = state;
   const h = node.hue;
   const grey = h === null || h === undefined;
@@ -160,9 +192,150 @@ export default function (component) {
     root = el('div', 'sb');
     parentElement.appendChild(root);
   }
-  const sb = root.__sb || (root.__sb = { sig: null, hover: null, zoom: null, pick: null, angles: new Map(), first: true });
+  const sb = root.__sb || (root.__sb = { sig: null, hover: null, zoom: null, pick: null, angles: new Map(), first: true, query: lastQuery });
   sb.send = setStateValue;
+  if (!sb.searchBar) sb.searchBar = searchBar(parentElement, root, sb);
   if (sb.sig !== data.sig) mount(root, sb, data);
+}
+
+// ---------------------------------------------------------------- search
+
+const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const words = q => {
+  const w = norm(q).split(/\s+/).filter(Boolean);
+  return w.join('').length >= MIN_QUERY ? w : [];
+};
+
+function searchBar(parentElement, root, sb) {
+  const bar = el('div', 'sb-search');
+  const box = el('label', 'sb-search-box');
+  const icon = svgEl('svg', { viewBox: '0 0 20 20', width: 16, height: 16, 'aria-hidden': 'true', class: 'sb-search-icon' });
+  icon.append(svgEl('circle', { cx: 8.5, cy: 8.5, r: 5.5, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.8 }),
+    svgEl('path', { d: 'M13 13l4 4', stroke: 'currentColor', 'stroke-width': 1.8, 'stroke-linecap': 'round' }));
+  const input = el('input');
+  Object.assign(input, { type: 'text', value: sb.query || '', placeholder: 'Search goals and outcomes, e.g. mentoring',
+    autocomplete: 'off', spellcheck: false });
+  input.setAttribute('aria-label', 'Search the chart: slices without the word turn grey');
+  const clear = el('button', 'sb-search-clear', '×');
+  Object.assign(clear, { type: 'button', title: 'Clear search' });
+  clear.setAttribute('aria-label', 'Clear search');
+  const note = el('span', 'sb-search-note');
+  note.setAttribute('aria-live', 'polite');
+  box.append(icon, input, clear);
+  bar.append(box, note);
+  parentElement.insertBefore(bar, root);
+
+  let frame = 0;
+  const update = () => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      sb.query = lastQuery = input.value;
+      if (sb.model) { runSearch(sb); draw(sb); }
+    });
+  };
+  input.addEventListener('input', update);
+  input.addEventListener('keydown', e => { if (e.key === 'Escape' && input.value) { e.preventDefault(); input.value = ''; update(); } });
+  clear.addEventListener('click', () => { input.value = ''; update(); input.focus(); });
+  return { bar, input, clear, note };
+}
+
+/** Normalized text for the search, worked out once per drawing. */
+function prepareSearch(model, data) {
+  const s = data.search || {};
+  const terms = s.terms || {};
+  const names = new Map();
+  for (const n of data.nodes) {
+    if (n.level === 'root') continue;
+    names.set(n.id, { title: norm(`${n.eyebrow} ${n.title}`), terms: norm(terms[n.id]) });
+  }
+  return { texts: (s.texts || []).map(norm), raw: s.texts || [], rows: s.rows || {}, names };
+}
+
+/** Which slices hold the query, and how much of each. Sets sb.hits (null when the box is empty). */
+function runSearch(sb) {
+  const { model, search } = sb;
+  const w = words(sb.query);
+  sb.hits = null;
+  sb.focusKey = null;
+  if (!w.length || !search) return updateNote(sb);
+  // Each word must start a word in the text: "mentor" finds "mentoring", "reading" doesn't find "spreading".
+  const res = w.map(x => new RegExp('(?:^|[^a-z0-9])' + escapeRe(x)));
+  const has = t => res.every(r => r.test(t));
+  const textHit = search.texts.map(has);
+  const col = model.data.noun.startsWith('program') ? 1 : model.data.noun.startsWith('organization') ? 2 : -1;
+  const goals = new Map();
+  const domains = new Set();
+  const all = [];
+  const domainRows = new Map();
+  for (const d of model.domains) {
+    const dn = search.names.get(d.id);
+    const titleHit = has(dn.title);
+    if (titleHit || has(dn.terms)) domains.add(d.id);
+    const dRows = [];
+    for (const g of model.children.get(d.id) || []) {
+      const gn = search.names.get(g.id);
+      const rows = search.rows[g.id] || [];
+      const named = titleHit || has(gn.title) || has(gn.terms);
+      const matched = named ? rows : rows.filter(r => textHit[r[0]]);
+      if (!named && !matched.length) continue;
+      const count = named ? g.count : measure(matched, col);
+      goals.set(g.id, { named, rows: matched, count, partial: !named && count < g.count && g.count > 0 });
+      domains.add(d.id);
+      dRows.push(...matched);
+    }
+    domainRows.set(d.id, dRows);
+    all.push(...dRows);
+  }
+  const count = rows => ({ programs: measure(rows, 1), organizations: measure(rows, 2), outcomes: rows.length });
+  sb.hits = { words: w, textHit, goals, domains, domainRows, col, total: count(all), all };
+  updateNote(sb);
+}
+
+const escapeRe = x => x.replace(/[.*+?^$()|[\]{}\\]/g, '\\$&');
+
+function measure(rows, col) {
+  if (col < 0) return rows.length;
+  const seen = new Set();
+  for (const r of rows) if (r[col] >= 0) seen.add(r[col]);
+  return seen.size;
+}
+
+function updateNote(sb) {
+  const ui = sb.searchBar;
+  if (!ui) return;
+  const hits = sb.hits;
+  ui.bar.classList.toggle('has-query', !!sb.query);
+  if (!hits) {
+    ui.note.textContent = sb.query && words(sb.query).length === 0 ? 'Keep typing…' : '';
+    return;
+  }
+  const g = hits.goals.size;
+  ui.note.textContent = g
+    ? `${plural(g, 'goal', 'goals')} in ${plural(hits.domains.size, 'domain', 'domains')} match`
+    : 'No goal or outcome matches';
+}
+
+/** Up to `n` distinct statements among `rows` that contain the query, with the words marked. */
+function matchingSamples(sb, rows, n = 3) {
+  const out = [];
+  const seen = new Set();
+  for (const r of rows) {
+    if (!sb.hits.textHit[r[0]] || seen.has(r[0])) continue;
+    seen.add(r[0]);
+    out.push(sb.search.raw[r[0]]);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
+function marked(text, w) {
+  const li = el('li');
+  const pattern = new RegExp('\\b(' + w.map(escapeRe).join('|') + ')', 'gi');
+  const clipped = text.length > 220 ? text.slice(0, 217).trimEnd() + '…' : text;
+  li.append('“');
+  clipped.split(pattern).forEach((part, i) => li.append(i % 2 ? el('mark', '', part) : document.createTextNode(part)));
+  li.append('”');
+  return li;
 }
 
 function mount(root, sb, data) {
@@ -181,6 +354,8 @@ function mount(root, sb, data) {
   sb.model = model;
   sb.R = model.equal ? R_EQUAL : R_VALUE;
   sb.maxCount = Math.max(1, ...data.nodes.filter(n => n.level === 'goal').map(n => n.count));
+  sb.search = prepareSearch(model, data);
+  runSearch(sb);
 
   // The pick comes from Python on the first draw (a page revisit); after that the chart owns it.
   if (firstMount && data.selected) {
@@ -211,16 +386,17 @@ function mount(root, sb, data) {
   });
   const trackLayer = svgEl('g');
   const goalLayer = svgEl('g');
+  const hitLayer = svgEl('g', { class: 'sb-hits' });   // the matching share of each goal, while searching
   const domainLayer = svgEl('g');
   const labelLayer = svgEl('g');
   const hole = svgEl('circle', { cx: C, cy: C, r: sb.R.hole - 3, class: 'sb-hole' });
-  svg.append(trackLayer, goalLayer, domainLayer, hole, labelLayer);
+  svg.append(trackLayer, goalLayer, hitLayer, domainLayer, hole, labelLayer);
   const center = el('div', 'sb-center');
   figure.append(svg, center);
   const panel = el('div', 'sb-panel');
   root.append(figure, panel);
 
-  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map(), tracks: new Map() };
+  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map() };
   const animate = firstMount && !reducedMotion();
   if (animate) svg.classList.add('sb-enter');
 
@@ -245,6 +421,12 @@ function mount(root, sb, data) {
     i += 1;
     (n.level === 'domain' ? domainLayer : goalLayer).appendChild(path);
     sb.els.slices.set(n.id, path);
+    if (n.level === 'goal' && n.count > 0) {
+      const hit = svgEl('path', { class: 'sb-hit', stroke: '#fff', 'stroke-width': 1.25 });
+      hit.style.transformOrigin = `${C}px ${C}px`;
+      hitLayer.appendChild(hit);
+      sb.els.hits.set(n.id, hit);
+    }
     if (n.label) {
       const text = svgEl('text', {
         class: 'sb-label', 'text-anchor': 'middle', 'dominant-baseline': 'central',
@@ -346,13 +528,16 @@ function tween(sb, target) {
 }
 
 /** How far a goal's slice reaches: the full ring in the sunburst, its bar length on the wheel. */
-function outerRadius(sb, n) {
+function outerRadius(sb, n, count = n.count) {
   const R = sb.R;
-  if (!sb.model.equal) return R.goal;
   const base = R.domain + 3;
-  if (n.count === 0) return base + STUB;
+  if (!sb.model.equal) {
+    // While searching, the matching share of a sunburst slice fills it from the inside out.
+    return count === n.count ? R.goal : base + Math.max(count / n.count, 0.06) * (R.goal - base);
+  }
+  if (count === 0) return base + STUB;
   // Square root, so the bar's area (not its length) follows the count, and thin goals stay visible.
-  return base + STUB + Math.sqrt(n.count / sb.maxCount) * (R.goal - base - STUB);
+  return base + STUB + Math.sqrt(count / sb.maxCount) * (R.goal - base - STUB);
 }
 
 function draw(sb) {
@@ -370,6 +555,13 @@ function draw(sb) {
     const hidden = !d;
     path.style.display = hidden ? 'none' : '';
     path.setAttribute('tabindex', hidden ? -1 : 0);
+    const hitPath = els.hits.get(id);
+    if (hitPath) {
+      const hit = sb.hits && sb.hits.goals.get(id);
+      const show = !!(hit && hit.partial && d);
+      hitPath.style.display = show ? '' : 'none';
+      if (show) hitPath.setAttribute('d', arcPath(R.domain + 3, outerRadius(sb, n, Math.max(hit.count, 1)), a0, a1));
+    }
     const label = els.labels.get(id);
     if (label) {
       const span = a1 - a0;
@@ -394,17 +586,24 @@ function paint(sb) {
   const picked = sb.pick ? model.byId.get(sb.pick) : null;
   const lead = hovered || picked;
   const activeDomain = lead ? (lead.level === 'domain' ? lead.id : lead.parent) : null;
-  const state = { activeDomain, activeId: sb.hover, hovering: !!hovered, pick: sb.pick, equal: model.equal };
+  const state = { activeDomain, activeId: sb.hover, hovering: !!hovered, pick: sb.pick, equal: model.equal, hits: sb.hits };
   for (const [id, path] of els.slices) {
     const n = model.byId.get(id);
     const look = fills(n, state);
     path.setAttribute('fill', look.fill);
     path.setAttribute('fill-opacity', look.opacity);
     path.style.transform = look.lift ? `scale(${POP})` : '';
+    const hitPath = els.hits.get(id);
+    if (hitPath && look.overlay) {
+      hitPath.setAttribute('fill', look.overlay);
+      hitPath.setAttribute('fill-opacity', look.opacity);
+      hitPath.style.transform = path.style.transform;
+    }
     const label = els.labels.get(id);
+    const missed = sb.hits && !(n.level === 'domain' ? sb.hits.domains.has(id) : sb.hits.goals.has(id));
     if (label) {
-      label.setAttribute('fill', n.level === 'domain' ? '#fff' : (n.hue === null || n.hue === undefined
-        ? '#334155' : model.equal ? `hsl(${n.hue} 45% 18%)` : `hsl(${n.hue} 55% ${look.lift ? 97 : 26}%)`));
+      label.setAttribute('fill', n.level === 'domain' ? (missed ? '#64748b' : '#fff') : missed ? GREY.label : (n.hue === null || n.hue === undefined
+        ? '#334155' : model.equal ? `hsl(${n.hue} 45% 18%)` : `hsl(${n.hue} 55% ${look.lift && !look.overlay ? 97 : 26}%)`));
       label.style.opacity = look.opacity < 1 ? 0.55 : 1;
     }
   }
@@ -414,23 +613,31 @@ function paint(sb) {
 function readout(sb, hovered) {
   const { model, els } = sb;
   const data = model.data;
+  const hits = sb.hits;
   const zoomed = sb.zoom ? model.byId.get(sb.zoom) : null;
   const picked = sb.pick ? model.byId.get(sb.pick) : null;
   const focus = hovered || picked || zoomed || model.root;
-  const key = `${focus.id}|${sb.zoom}|${sb.pick}|${!!hovered}`;
+  const key = `${focus.id}|${sb.zoom}|${sb.pick}|${!!hovered}|${hits ? hits.words.join(' ') : ''}`;
   if (key === sb.focusKey) return;
   const focusChanged = !sb.focusKey || sb.focusKey.split('|')[0] !== focus.id;
   sb.focusKey = key;
+  const query = hits ? `“${sb.query.trim()}”` : '';
+  // While searching: the rows of this slice that match, and how many of the chart's measure they make.
+  const match = !hits ? null : focus.level === 'root' ? { rows: hits.all, count: hits.total[data.noun.startsWith('program') ? 'programs' : data.noun.startsWith('organization') ? 'organizations' : 'outcomes'], named: false }
+    : focus.level === 'domain' ? { rows: hits.domainRows.get(focus.id) || [], count: measure(hits.domainRows.get(focus.id) || [], hits.col), named: false, lit: hits.domains.has(focus.id) }
+    : (hits.goals.get(focus.id) || { rows: [], count: 0, named: false });
 
   // Centre
   const inner = el('div', 'sb-center-inner' + (focusChanged ? ' sb-fade' : ''));
-  if (focus.level === 'root') {
+  if (focus.level === 'root' && hits) {
+    inner.append(el('div', 'sb-big', fmt(match.count)), el('div', 'sb-meta', `${match.count === 1 ? data.noun_one : data.noun} match ${query}`));
+  } else if (focus.level === 'root') {
     inner.append(el('div', 'sb-big', fmt(focus.count)), el('div', 'sb-meta', `${data.noun} in ${data.n_domains} domains`));
   } else {
     inner.append(
       el('div', 'sb-eyebrow', focus.eyebrow),
       el('div', 'sb-title', focus.title),
-      el('div', 'sb-meta', plural(focus.count, data.noun_one, data.noun)),
+      el('div', 'sb-meta', hits ? matchLine(focus, match, data, true) : plural(focus.count, data.noun_one, data.noun)),
     );
     if (zoomed && !hovered) inner.append(el('div', 'sb-back', '‹ All domains'));
   }
@@ -445,28 +652,53 @@ function readout(sb, hovered) {
     sw.style.background = swatchColor(focus);
     eyebrow.append(sw);
   }
-  eyebrow.append(document.createTextNode(focus.level === 'root' ? 'The whole portfolio' : focus.eyebrow));
-  const title = el('div', 'sb-title', focus.level === 'root' ? 'All domains' : focus.title);
+  eyebrow.append(document.createTextNode(focus.level === 'root' ? (hits ? 'Search' : 'The whole portfolio') : focus.eyebrow));
+  const title = el('div', 'sb-title', focus.level === 'root' ? (hits ? query : 'All domains') : focus.title);
   const counts = el('ul', 'sb-counts');
-  for (const [n, one, many] of [[focus.programs, 'program', 'programs'], [focus.organizations, 'organization', 'organizations'],
-    [focus.outcomes, 'outcome statement', 'outcome statements']]) {
+  const shown = focus.level === 'root' && hits ? hits.total : focus;
+  for (const [n, one, many] of [[shown.programs, 'program', 'programs'], [shown.organizations, 'organization', 'organizations'],
+    [shown.outcomes, 'outcome statement', 'outcome statements']]) {
     const li = el('li');
     li.append(el('b', '', fmt(n)), document.createTextNode(n === 1 ? one : many));
     counts.append(li);
   }
   const children = [eyebrow, title, counts];
-  if (focus.level !== 'root') {
-    const share = model.root.count ? focus.count / model.root.count : 0;
+  if (focus.level === 'root' && hits) {
+    children.push(el('div', 'sb-share-note sb-match-note', hits.goals.size
+      ? `${plural(hits.goals.size, 'goal', 'goals')} in ${plural(hits.domains.size, 'domain', 'domains')} hold ${query}. Grey slices don't.`
+      : `Nothing in this view mentions ${query}. Try a shorter word.`));
+  } else if (focus.level !== 'root') {
+    const share = hits ? (focus.count ? match.count / focus.count : 0) : model.root.count ? focus.count / model.root.count : 0;
     const bar = el('div', 'sb-share');
     const fill = el('span');
-    fill.style.width = focus.count ? `${Math.max(share * 100, 1.5)}%` : '0';
+    fill.style.width = (hits ? match.count : focus.count) ? `${Math.max(share * 100, 1.5)}%` : '0';
     fill.style.background = swatchColor(focus);
     bar.append(fill);
-    children.push(bar, el('div', 'sb-share-note', focus.level === 'goal' && focus.count === 0
-      ? 'No program in this view names this goal yet.'
-      : `${Math.round(share * 100)}% of all ${data.noun}`));
+    children.push(bar, el('div', 'sb-share-note', hits ? matchLine(focus, match, data, false)
+      : focus.level === 'goal' && focus.count === 0
+        ? 'No program in this view names this goal yet.'
+        : `${Math.round(share * 100)}% of all ${data.noun}`));
   }
-  if (focus.samples && focus.samples.length) {
+  if (focus.level === 'root' && hits && hits.goals.size) {
+    // Which goals lit up, most first, so a goal found only through the codebook's words still shows why.
+    const top = [...hits.goals.entries()].sort((x, y) => y[1].count - x[1].count).slice(0, 4);
+    const list = el('ul', 'sb-goals');
+    for (const [id, hit] of top) {
+      const g = model.byId.get(id);
+      const li = el('li');
+      const sw = el('span', 'sb-swatch');
+      sw.style.background = swatchColor(g);
+      li.append(sw, el('span', 'sb-goal-name', `${g.label ? g.label + ' ' : ''}${g.title}`), el('span', 'sb-goal-n', fmt(hit.count)));
+      list.append(li);
+    }
+    children.push(el('div', 'sb-eyebrow sb-samples-head', hits.goals.size > top.length ? `Top goals of ${hits.goals.size}` : 'Goals that match'), list);
+  }
+  const found = hits ? matchingSamples(sb, match.rows, focus.level === 'root' ? 2 : 3) : [];
+  if (found.length) {
+    const list = el('ul', 'sb-samples');
+    for (const s of found) list.append(marked(s, hits.words));
+    children.push(el('div', 'sb-eyebrow sb-samples-head', 'Outcomes that match'), list);
+  } else if (focus.samples && focus.samples.length && !(focus.level === 'root' && hits)) {
     const list = el('ul', 'sb-samples');
     for (const s of focus.samples) list.append(el('li', '', `“${s}”`));
     children.push(el('div', 'sb-eyebrow sb-samples-head', 'Sample outcomes'), list);
@@ -476,6 +708,16 @@ function readout(sb, hovered) {
   panel.replaceChildren(box);
 }
 
+/** What the search found in one slice, for the centre (short) or the side panel. */
+function matchLine(node, match, data, short) {
+  if (match.named) return short ? 'Its name or description matches' : 'The codebook names or describes this goal with these words, so all of it counts.';
+  if (node.level === 'domain' && !match.count && match.lit) return short ? 'Its description matches' : "The codebook's description of this domain matches; none of its goals do.";
+  if (!match.count) return short ? 'No match' : 'Nothing here matches the search.';
+  return short
+    ? `${fmt(match.count)} of ${plural(node.count, data.noun_one, data.noun)} match`
+    : `${fmt(match.count)} of ${plural(node.count, data.noun_one, data.noun)} here have an outcome that matches.`;
+}
+
 function hint(sb, hovered) {
   if (hovered) {
     if (hovered.level === 'domain') return sb.zoom === hovered.id ? 'Click to go back to all domains.' : 'Click to open its goals.';
@@ -483,5 +725,6 @@ function hint(sb, hovered) {
     return hovered.count ? 'Click to list its outcomes in the table below.' : 'Nothing to list yet.';
   }
   if (sb.zoom) return 'Click the center to go back to all domains.';
+  if (sb.hits) return 'Point at a slice to see what matched. Clicking still opens it.';
   return 'Point at a slice to read it. Click a domain to open its goals.';
 }
