@@ -108,7 +108,8 @@ from outcomes_data import (
 APP_TITLE = "Outcomes Explorer"
 
 # Session-state keys for the filters, so "Clear filters" can reset them.
-FILTER_KEYS = ["f_domains", "f_pops", "f_orgs", "f_conf"]
+PLACE_KEYS = {"f_zip": schools.COL_ZIP, "f_council": schools.COL_COUNCIL, "f_network": schools.COL_NETWORK_NAME}
+FILTER_KEYS = ["f_domains", "f_pops", "f_orgs", "f_conf", *PLACE_KEYS, "f_schools"]
 ALL_DOMAINS = "All domains"
 MAX_PROGRAMS = 6
 DEFAULT_PROGRAMS = 4
@@ -1236,7 +1237,54 @@ def reset_filters() -> None:
 
 
 FILTER_NOUNS = {"f_domains": ("domain", "domains"), "f_pops": ("audience", "audiences"),
-                "f_orgs": ("organization", "organizations"), "f_conf": ("confidence level", "confidence levels")}
+                "f_orgs": ("organization", "organizations"), "f_conf": ("confidence level", "confidence levels"),
+                "f_zip": ("zip code", "zip codes"), "f_council": ("council district", "council districts"),
+                "f_network": ("learning network", "learning networks"), "f_schools": ("school", "schools")}
+
+
+def place_filters(df: pd.DataFrame) -> Optional[pd.Series]:
+    """Zip code, council district, learning network and school pickers, inside the Filters menu.
+
+    A place keeps the outcomes of programs that run at its schools, joined on
+    district partner and program IDs (the school tables must be loaded).
+    Returns a row mask for `df`, or None when no place is picked.
+    """
+    st.markdown("**Where programs run**")
+    tables, _ = school_tables()
+    relationships = tables.get(schools.RELATIONSHIPS)
+    if relationships is None:
+        st.caption("Add the program-to-school table and the schools table to filter by zip code, council "
+                   "district, learning network or school.")
+        school_uploader("school_upload_filters")
+        return None
+    school_list = tables.get(schools.SCHOOLS)
+    labels = {"f_zip": "Zip codes", "f_council": "City Council districts", "f_network": "Learning networks"}
+    places = {}
+    for key, column in PLACE_KEYS.items():
+        values = schools.place_values(school_list, relationships, column)
+        if not values:
+            continue
+        keep_valid(key, values)
+        places[column] = st.multiselect(
+            labels[key], values, key=key, placeholder="Anywhere",
+            format_func=(lambda v: f"District {v}") if key == "f_council" else str)
+    # The school list follows the other place choices.
+    options = schools.school_options(relationships, school_list)
+    nearby = schools.matching_schools(school_list, relationships, places)
+    options = options[options[schools.COL_ULCS].isin(nearby | set(st.session_state.get("f_schools", [])))]
+    names = dict(zip(options[schools.COL_ULCS], options[schools.COL_SCHOOL]))
+    keep_valid("f_schools", list(names))
+    picked = st.multiselect("Schools", list(names), key="f_schools", placeholder="All schools",
+                            format_func=lambda code: names.get(code, f"School {code}"))
+    if not any(places.values()) and not picked:
+        return None
+    codes = schools.matching_schools(school_list, relationships, places, picked)
+    with_ids = schools.with_program_ids(df)
+    unplaced = with_ids[schools.COL_PROGRAM_ID].isna()
+    if unplaced.any():
+        st.caption(f"{int(unplaced.sum()):,} outcome statements have no district program ID, so they can't be "
+                   "placed at a school and drop out while a place is picked.")
+    return schools.at_schools(with_ids, relationships, codes)
 
 
 def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
@@ -1293,11 +1341,15 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
             keep_valid("f_conf", levels)
             chosen_conf = st.multiselect("Coder confidence", levels, key="f_conf", placeholder="Any confidence",
                                          format_func=str.title)
+        # The school page picks one school itself, so the place filters live on the other pages.
+        at_places = place_filters(df) if page_key != "schools" else None
         if active:
             st.button("Clear filters", on_click=reset_filters, type="tertiary")
 
     filtered = filter_outcomes(df, domains=chosen_domains, populations=chosen_pops,
                                organizations=chosen_orgs, confidences=chosen_conf)
+    if at_places is not None:
+        filtered = filtered[at_places.reindex(filtered.index, fill_value=False)]
     n_orgs = count_organizations(filtered[COL_ORG_VIEW])
     active = [k for k in FILTER_KEYS if st.session_state.get(k)]
     if active:

@@ -116,3 +116,43 @@ def test_school_dots_add_grey_rows_for_uncoded_partners():
     assert list(fig.layout.yaxis.categoryarray)[-1] == "Partner 30"
     assert fig.data[-1].text == ("Not yet coded",)
     assert any("<b>Y4</b>" in text for text in fig.data[1].text)
+
+
+def school_table():
+    return sc.tidy_schools(pd.DataFrame({
+        "ULCS": [1010, 2020, 3030],
+        "Publication Name": ["Adams", "Baker", "Carver"],
+        "Learning Network": ["Learning Network 10", "Learning Network 2", "Learning Network 2"],
+        "Learning Network Short": ["LN 10", "LN 2", "LN 2"],
+        "Zip Code": [19104, 19143, 19143],
+        "City Council District": [3, 2, 2],
+    }))
+
+
+def test_schools_table_reads_place_columns():
+    table = school_table().set_index("ulcs")
+    assert table.loc["1010", "zip"] == "19104"
+    assert table.loc["2020", "council_district"] == "2"
+    assert table.loc["2020", "network_name"] == "Learning Network 2"
+    # A table without the place columns still loads, with them left empty.
+    bare = sc.tidy_schools(pd.DataFrame({"ULCS": [1], "Publication Name": ["X"]}))
+    assert bare["zip"].isna().all() and bare["council_district"].isna().all()
+
+
+def test_place_values_list_only_schools_with_programs_in_natural_order():
+    rel = relationships()   # programs run at 1010 and 2020, none at 3030
+    assert sc.place_values(school_table(), rel, "network_name") == ["Learning Network 2", "Learning Network 10"]
+    assert sc.place_values(school_table(), rel, "zip") == ["19104", "19143"]
+    assert sc.place_values(None, rel, "zip") == []
+
+
+def test_place_filters_keep_programs_at_matching_schools():
+    df, rel, table = outcomes(), relationships(), school_table()
+    assert sc.matching_schools(table, rel, {"zip": ["19143"]}) == {"2020"}
+    assert sc.matching_schools(table, rel, {"zip": ["19143"], "council_district": ["3"]}) == set()
+    assert sc.matching_schools(table, rel, {"zip": []}, ["1010"]) == {"1010"}
+    # School 2020 hosts only BalletX program 1; the program without IDs is never placed.
+    mask = sc.at_schools(df, rel, {"2020"})
+    assert df.loc[mask, "program"].unique().tolist() == ["Dance"]
+    assert not mask.iloc[3]
+    assert sc.at_schools(df, rel, {"1010"}).sum() == 3
