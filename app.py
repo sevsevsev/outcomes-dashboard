@@ -91,6 +91,7 @@ from outcomes_data import (
     intent_note,
     load_codebook_categories,
     load_codebook_for,
+    load_codebook_short_names,
     load_codebook_terms,
     organizations_for_subcategory,
     peer_heatmap_data,
@@ -161,6 +162,11 @@ def cached_sunburst_nodes(df: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(show_spinner=False, max_entries=24)
 def cached_wheel_nodes(df: pd.DataFrame) -> pd.DataFrame:
     return sunburst_nodes(df, cached_codebook(df), include_empty_goals=True, categories=load_codebook_categories())
+
+
+@st.cache_data(show_spinner=False)
+def cached_short_names() -> dict:
+    return load_codebook_short_names()
 
 
 @st.cache_data(show_spinner=False, max_entries=24)
@@ -661,7 +667,8 @@ def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value") -> Opti
     nodes = cached_wheel_nodes(df) if layout == "equal" else cached_sunburst_nodes(df)
     key = f"v1sb_{layout}_{st.session_state.get('v1_nonce', 0)}"
     last_key = f"{key}_last"
-    data = charts.codebook_sunburst_data(nodes, measure, selected=st.session_state.get(last_key), layout=layout)
+    data = charts.codebook_sunburst_data(nodes, measure, selected=st.session_state.get(last_key), layout=layout,
+                                         short_names=cached_short_names())
     data["search"] = cached_search_index(df, layout)
     pick = codebook_sunburst(data, key=key)
     ids = set(nodes["id"])

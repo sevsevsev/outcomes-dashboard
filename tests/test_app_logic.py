@@ -370,6 +370,27 @@ def test_wheel_nodes_group_goals_into_codebook_categories(df):
     assert "category" not in set(app.sunburst_nodes(frame)["level"])
 
 
+def test_chart_nodes_carry_plain_names_longest_first_and_code_last(df):
+    frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
+    nodes = app.sunburst_nodes(frame, categories={"3.1.4": "A. Self"})
+    data = charts.codebook_sunburst_data(nodes, app.MEASURE_PROGRAMS, layout="equal",
+                                         short_names={"3.1.4": "Confidence"})
+    by_title = {n["title"]: n for n in data["nodes"]}
+    goal = next(n for n in data["nodes"] if n["level"] == "goal" and n["goal"] == CONF)
+    assert goal["names"] == [goal["title"], "Confidence", "3.1.4"]
+    assert by_title["Self"]["names"] == ["Self", "A"]
+    domain = next(n for n in data["nodes"] if n["level"] == "domain" and n["id"] == SEL)
+    assert domain["names"][0] == domain["title"] and domain["names"][-1] == domain["label"]
+    assert next(n for n in data["nodes"] if n["level"] == "root")["names"] == []
+
+
+def test_codebook_short_names_come_from_the_3x_codebook():
+    short = app.load_codebook_short_names()
+    assert short["Y3.2"] == "Supportive adults"
+    assert short["Y1.1"] == "Literacy"
+    assert "Y1" not in short
+
+
 def test_codebook_categories_cover_every_3x_goal():
     cats = app.load_codebook_categories()
     codes = {app.split_code(g)[0] for g in app.load_codebook(app.CODEBOOK_V3_PATH)[app.COL_SUBCAT]}

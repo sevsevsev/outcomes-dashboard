@@ -246,7 +246,8 @@ def is_coded_domain(domain: str) -> bool:
 
 
 def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
-                           selected: Optional[dict] = None, layout: str = "value") -> dict:
+                           selected: Optional[dict] = None, layout: str = "value",
+                           short_names: Optional[dict] = None) -> dict:
     """What the browser-side sunburst (sunburst_component.py) draws, from `sunburst_nodes`.
 
     `layout` "value" sizes each slice by its count (the sunburst). "equal"
@@ -259,7 +260,12 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
     of distinct programs (or organizations) in the domain. `sig` changes only
     when what is drawn changes, so reruns caused by a click leave the chart
     (and its zoom) alone.
+
+    Each node's `names` lists its plain names, longest first, then its code
+    (domain: full name, nickname, code; goal: full name, `short_names` entry,
+    code), so the chart writes the longest one that fits.
     """
+    short_names = short_names or {}
     size_col = MEASURE_COLUMNS[measure]
     noun = NOUNS.get(measure, "outcome statements")
     goal_sizes = nodes[size_col].astype(float).where(nodes["level"] == "goal", 0.0)
@@ -283,8 +289,17 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
             label = row.code if has_code else ""
         else:
             eyebrow, label = "", ""
+        if row.level == "domain":
+            names = [row.title, DOMAIN_NICKNAMES.get(row.code, ""), row.code] if coded else [row.title]
+        elif row.level == "category":
+            names = [row.title, row.code]
+        elif row.level == "goal":
+            names = [row.title, short_names.get(row.code, ""), row.code if "." in row.code else ""]
+        else:
+            names = []
         out.append({
             "id": row.id, "parent": row.parent, "level": row.level,
+            "names": list(dict.fromkeys(n for n in names if n)),
             "goal": row.goal if isinstance(row.goal, str) else None,
             "category": row.category or None,
             "eyebrow": eyebrow, "title": row.title, "label": label,

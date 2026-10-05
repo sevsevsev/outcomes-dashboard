@@ -791,6 +791,16 @@ def load_codebook_terms(path: Union[str, Path] = CODEBOOK_TERMS_V3_PATH) -> dict
     return dict(zip(terms["code"], terms["terms"]))
 
 
+def load_codebook_short_names(path: Union[str, Path] = CODEBOOK_TERMS_V3_PATH) -> dict[str, str]:
+    """Goal code ("Y3.2") -> its short name ("Supportive adults"), for tight chart labels; {} if missing."""
+    try:
+        terms = pd.read_csv(path, dtype=str, keep_default_na=False)
+    except FileNotFoundError:
+        return {}
+    terms = terms[terms["short"] != ""]
+    return dict(zip(terms["code"], terms["short"]))
+
+
 def load_codebook_categories(path: Union[str, Path] = CODEBOOK_TERMS_V3_PATH) -> dict[str, str]:
     """Goal code ("Y3.2") -> its codebook category ("B. Close relationships"); {} if missing."""
     try:

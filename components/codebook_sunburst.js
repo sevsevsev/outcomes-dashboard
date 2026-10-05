@@ -40,13 +40,15 @@ const STUB = 14;             // depth of a zero goal's dashed stub, and the shor
 const POP = 1.04;            // how far the active goal lifts out of the ring
 const ANIM_MS = 520;         // zoom in / out
 const LEAVE_MS = 70;         // grace period so moving between slices doesn't flash the resting readout
-const MIN_LABEL_DEG = { domain: 9, goal: 8, category: 4.5, categoryName: 30 };
+const MIN_LABEL_DEG = { category: 4.5 };   // narrowest category that gets goal dots or its letter
 const FAN = false;           // fan a pointed-at category's goals out over the wheel (off: the side list shows them)
 const DOT = { r: 2.5, gap: 5.8, at: 28, row: 6.5 };   // the goal dots at a category bar's base
 const FAN_STEP = 9;          // degrees per goal when a category fans its goals out
 const FAN_MAX = 84;          // widest a fan gets
 const MIN_QUERY = 2;         // characters before the search starts greying slices
 const GREY = { domain: '#cbd5e1', goal: '#e2e8f0', label: '#94a3b8' };
+const MAX_LINES = 3;         // a label wraps onto at most this many lines
+const LABEL_PX = { domain: 11, domainValue: 12, bar: 11, goal: 12.5, small: 9.5 };   // font sizes for the plain-name labels
 let lastQuery = '';          // the search outlives a fresh chart (a cleared selection, a page revisit)
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -476,7 +478,7 @@ function mount(root, sb, data) {
   const panel = el('div', 'sb-panel');
   root.append(figure, panel);
 
-  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map(), catNames: new Map(), dots: new Map(), fan };
+  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map(), catNames: new Map(), labelArcs: new Map(), dots: new Map(), fan };
   const uid = `sb${Math.random().toString(36).slice(2, 8)}`;
   const animate = firstMount && !reducedMotion();
   if (animate) svg.classList.add('sb-enter');
@@ -508,14 +510,15 @@ function mount(root, sb, data) {
       hitLayer.appendChild(hit);
       sb.els.hits.set(n.id, hit);
     }
-    if (n.label) {
-      const text = svgEl('text', {
-        class: 'sb-label', 'text-anchor': 'middle', 'dominant-baseline': 'central',
-        'font-size': n.level === 'domain' ? 17 : n.level === 'category' ? 12 : 14, 'font-weight': 600,
-      });
-      text.textContent = n.label;
+    if (n.names && n.names.length) {
+      // Filled in by draw() with the longest of the node's names that fits (see fitName).
+      const text = svgEl('text', { class: 'sb-label', 'dominant-baseline': 'central', 'font-weight': 600 });
       labelLayer.appendChild(text);
       sb.els.labels.set(n.id, text);
+      // The arcs a name can curve along, one per line.
+      const arcs = [...Array(MAX_LINES).keys()].map(k => svgEl('path', { id: `${uid}-l${i}-${k}`, fill: 'none' }));
+      defs.append(...arcs);
+      sb.els.labelArcs.set(n.id, arcs);
     }
     if (n.level === 'category' && model.equal) {
       // One dot per goal at the bar's base: filled when a program names it, hollow for a gap.
@@ -680,15 +683,20 @@ function draw(sb) {
     const label = els.labels.get(id);
     const named = n.level === 'category' && categoryName(sb, n, a0, a1, d);
     if (label) {
-      const span = a1 - a0;
-      const show = !!d && (n.level === 'domain' ? !sb.zoom && span >= MIN_LABEL_DEG.domain
-        : n.level === 'category' ? !named && span >= MIN_LABEL_DEG.category
-          : !!sb.zoom && span >= MIN_LABEL_DEG.goal);
-      const [x, y] = n.level === 'domain' ? point((R.hole + R.domain) / 2, (a0 + a1) / 2)
-        : n.level === 'category' ? point(resting ? R.domain + 13 : (R.domain + 2 + R.cat) / 2, (a0 + a1) / 2)
-          : point(model.equal ? R.goal - 16 : (barBase(sb) + R.goal) / 2 - 1, (a0 + a1) / 2);
-      label.setAttribute('x', f(x));
-      label.setAttribute('y', f(y));
+      let show = false;
+      if (d && n.level === 'domain') {
+        show = !sb.zoom && bandLabel(label, els.labelArcs.get(id), n.names, a0, a1, R.hole, R.domain,
+          model.equal ? LABEL_PX.domain : LABEL_PX.domainValue, 4);
+      } else if (d && n.level === 'category' && resting) {
+        // Along the bar, past its goal dots.
+        const top = R.domain + DOT.at + (dotRows(sb, n, a0, a1) - 1) * DOT.row + DOT.r + 5;
+        show = radialLabel(label, n.names, a0, a1, top, R.goal - 4, LABEL_PX.bar);
+      } else if (d && n.level === 'category') {
+        // In an open domain the name runs along the thin ring (categoryName); failing that, its letter.
+        show = !named && a1 - a0 >= MIN_LABEL_DEG.category && pointLabel(label, n.label, point((R.domain + 2 + R.cat) / 2, (a0 + a1) / 2), 12);
+      } else if (d) {
+        show = !!sb.zoom && bandLabel(label, els.labelArcs.get(id), n.names, a0, a1, barBase(sb) + 5, R.goal - 4, LABEL_PX.goal);
+      }
       label.dataset.show = show ? '1' : '';
     }
   }
@@ -697,12 +705,16 @@ function draw(sb) {
   paint(sb);
 }
 
+const dotsPerRow = (sb, a0, a1) => Math.max(1, Math.floor((((sb.R.domain + DOT.at) * (a1 - a0) * Math.PI) / 180 - 4) / DOT.gap));
+/** How many rows of goal dots a category needs at its current width. */
+const dotRows = (sb, n, a0, a1) => Math.ceil(((sb.model.goalsOf.get(n.id) || []).length || 1) / dotsPerRow(sb, a0, a1));
+
 /** Lay a category's goal dots along its arc, in as many short rows as its width needs. */
 function placeDots(sb, n, dots, resting) {
   const [a0, a1] = sb.angles.get(n.id) || [0, 0];
   const circles = [...dots.children];
   const r0 = sb.R.domain + DOT.at;
-  const perRow = Math.max(1, Math.floor(((r0 * (a1 - a0) * Math.PI) / 180 - 4) / DOT.gap));
+  const perRow = dotsPerRow(sb, a0, a1);
   const show = resting && a1 - a0 >= MIN_LABEL_DEG.category && circles.length > 0;
   dots.style.display = show ? '' : 'none';
   if (!show) return;
@@ -767,14 +779,138 @@ function fanOut(sb, openCat) {
     const hit = sb.hits && sb.hits.goals.get(g.id);
     if (hitPath && hit && hit.partial) hitPath.setAttribute('d', arcPath(base, outerRadius(sb, g, Math.max(hit.count, 1)), a0, a0 + step));
     const label = els.labels.get(g.id);
-    if (label) {
-      const [x, y] = point(sb.R.goal - 16, a0 + step / 2);
-      label.setAttribute('x', f(x));
-      label.setAttribute('y', f(y));
-      label.dataset.show = step >= 7 ? '1' : '';
-    }
+    if (label) label.dataset.show = radialLabel(label, g.names, a0, a0 + step, base + 5, sb.R.goal - 4, LABEL_PX.bar) ? '1' : '';
   });
   return [f0, f0 + span];
+}
+
+// ---------------------------------------------------------------- labels
+// Each slice shows the longest of its plain names that fits (full name, then the
+// codebook's short name or the domain's nickname), on up to three lines, and its
+// code only when no name fits. Widths are measured once per string on a canvas,
+// so fitting stays cheap while slices tween.
+
+const measurer = document.createElement('canvas').getContext('2d');
+const widths = new Map();
+document.fonts?.ready.then(() => widths.clear());   // measured before Inter loaded: measure again
+function textWidth(s, size) {
+  const key = `${size}|${s}`;
+  let w = widths.get(key);
+  if (w === undefined) {
+    measurer.font = `600 ${size}px Inter, "Source Sans", -apple-system, "Segoe UI", sans-serif`;
+    w = measurer.measureText(s).width;
+    widths.set(key, w);
+  }
+  return w;
+}
+
+/** The first of `names` that fits, at the largest of `sizes` it fits at, on as few lines as it can:
+ *  `room(px, n)` is how wide each of n lines may be (0: n lines don't fit). The last name (the
+ *  code) is tried only with `keepCode`. Returns { lines, size } or null. */
+function fitName(names, sizes, room, keepCode) {
+  // The small font is the last resort: a short name at a readable size beats the full one in small print.
+  const tiers = [sizes.filter(px => px > LABEL_PX.small), sizes.filter(px => px <= LABEL_PX.small)];
+  for (const [t, tier] of tiers.entries()) {
+    // The code waits for the last tier, so any plain name in any size beats it.
+    for (const name of (keepCode && t === tiers.length - 1) || names.length < 2 ? names : names.slice(0, -1)) {
+      const words = name.split(' ');
+      for (const size of tier) {
+        for (let n = 1; n <= Math.min(MAX_LINES, words.length); n += 1) {
+          const w = room(size, n);
+          const lines = w > 0 && splitLines(words, n, size);
+          if (lines && Math.max(...lines.map(l => textWidth(l, size))) <= w) return { lines, size };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/** Words broken into n lines so the widest line is as narrow as it can be. */
+function splitLines(words, n, size) {
+  if (n === 1) return [words.join(' ')];
+  let best = null;
+  for (let k = 1; k <= words.length - n + 1; k += 1) {
+    const rest = splitLines(words.slice(k), n - 1, size);
+    const lines = [words.slice(0, k).join(' '), ...rest];
+    const w = Math.max(...lines.map(l => textWidth(l, size)));
+    if (!best || w < best.w) best = { lines, w };
+  }
+  return best.lines;
+}
+
+/** Write `lines` into a label, as stacked tspans or (given arcs) along those arcs. */
+function setLines(text, lines, size, arcs) {
+  const key = `${size}|${arcs ? 'arc' : ''}|${lines.join('\n')}`;
+  if (text.dataset.key === key) return;
+  text.dataset.key = key;
+  text.setAttribute('font-size', size);
+  text.replaceChildren(...lines.map((line, k) => {
+    const part = arcs
+      ? svgEl('textPath', { href: `#${arcs[k].id}`, startOffset: '50%', 'text-anchor': 'middle' })
+      : svgEl('tspan', { x: 0, dy: k === 0 ? `${-(lines.length - 1) * 0.575}em` : '1.15em' });
+    part.textContent = line;
+    return part;
+  }));
+}
+
+/** A short label centred on a point (an open domain's category letter). */
+function pointLabel(text, s, [x, y], size) {
+  text.setAttribute('text-anchor', 'middle');
+  text.setAttribute('transform', `translate(${f(x)} ${f(y)})`);
+  setLines(text, [s], size);
+  return true;
+}
+
+/** A name running outward along a bar, from radius rIn to rOut; whether one fits. */
+function radialLabel(text, names, a0, a1, rIn, rOut, size, keepCode = true) {
+  const room = (rIn * (a1 - a0) * Math.PI) / 180 - 3;     // across the bar, at its narrow end
+  const sizes = [...new Set([size, LABEL_PX.bar, LABEL_PX.small])].filter(px => px <= size);
+  const fit = rOut > rIn && fitName(names, sizes, (px, n) => (n * px * 1.15 <= room ? rOut - rIn : 0), keepCode);
+  if (!fit) return false;
+  const { lines } = fit;
+  size = fit.size;
+  // Left of 12 o'clock the text turns round, so it never reads upside down.
+  const a = ((((a0 + a1) / 2) % 360) + 360) % 360;
+  const left = a > 180;
+  const [x, y] = point(rIn, a);
+  text.setAttribute('text-anchor', left ? 'end' : 'start');
+  text.setAttribute('transform', `translate(${f(x)} ${f(y)}) rotate(${f(left ? a + 90 : a - 90)})`);
+  setLines(text, lines, size);
+  return true;
+}
+
+/** A name along a ring band or across it, whichever has the longer run; the code only when no name fits either way. */
+function bandLabel(text, arcs, names, a0, a1, r0, r1, size, inset = 0) {
+  const alongFirst = (((r0 + r1) / 2) * (a1 - a0) * Math.PI) / 180 > r1 - r0;
+  const along = plainOnly => arcLabel(text, arcs, names, a0, a1, r0, r1, size, plainOnly);
+  const across = plainOnly => radialLabel(text, names, a0, a1, r0 + inset, r1 - inset, size, !plainOnly);
+  return alongFirst ? along(true) || across(true) || along(false) : across(true) || along(true) || across(false);
+}
+
+/** A name curving along a ring between radii r0 and r1, one arc per line; whether one fits. */
+function arcLabel(text, arcs, names, a0, a1, r0, r1, size, plainOnly = false) {
+  const mid = (r0 + r1) / 2;
+  const length = r => (r * (a1 - a0) * Math.PI) / 180 - 6;
+  const sizes = [...new Set([size, LABEL_PX.bar, LABEL_PX.small])].filter(px => px <= size);
+  // n lines stack 1.2em apart about the band's middle; the innermost (shortest) one sets the width.
+  const fit = fitName(names, sizes, (px, n) => (n * px * 1.2 <= r1 - r0 - 4 ? length(mid - ((n - 1) / 2) * px * 1.2) : 0), !plainOnly);
+  if (!fit) return false;
+  const { lines } = fit;
+  size = fit.size;
+  // Clockwise along the top half, counter-clockwise along the bottom, so the name never reads upside down.
+  const m = ((((a0 + a1) / 2) % 360) + 360) % 360;
+  const flip = m > 90 && m < 270;
+  const radii = lines.map((_, k) => mid + ((lines.length - 1) / 2 - k) * size * 1.2 * (flip ? -1 : 1));
+  radii.forEach((r, k) => {
+    const [s, e] = flip ? [a1, a0] : [a0, a1];
+    const [x0, y0] = point(r, s);
+    const [x1, y1] = point(r, e);
+    arcs[k].setAttribute('d', `M${f(x0)} ${f(y0)}A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} ${flip ? 0 : 1} ${f(x1)} ${f(y1)}`);
+  });
+  text.removeAttribute('transform');
+  setLines(text, lines, size, arcs);
+  return true;
 }
 
 function categoryName(sb, n, a0, a1, d) {
@@ -782,9 +918,11 @@ function categoryName(sb, n, a0, a1, d) {
   if (!item) return false;
   const r = (sb.R.domain + 2 + sb.R.cat) / 2;
   const room = (r * (a1 - a0) * Math.PI) / 180 - 12;
-  const fits = !!sb.zoom && !!d && a1 - a0 >= MIN_LABEL_DEG.categoryName && n.title.length * 6.6 <= room;
-  item.name.style.display = fits ? '' : 'none';
-  if (!fits) return false;
+  // A narrow category drops to the small font before giving way to its letter.
+  const size = !!sb.zoom && !!d ? [12, LABEL_PX.bar, LABEL_PX.small].find(px => textWidth(n.title, px) <= room) : undefined;
+  item.name.style.display = size ? '' : 'none';
+  if (!size) return false;
+  item.name.setAttribute('font-size', size);
   // Clockwise along the top half, counter-clockwise along the bottom, so the name never reads upside down.
   const mid = ((a0 + a1) / 2) % 360;
   const flip = mid > 90 && mid < 270;
