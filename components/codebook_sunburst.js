@@ -47,6 +47,10 @@ const FAN_STEP = 9;          // degrees per goal when a category fans its goals 
 const FAN_MAX = 84;          // widest a fan gets
 const MIN_QUERY = 2;         // characters before the search starts greying slices
 const GREY = { domain: '#cbd5e1', goal: '#e2e8f0', label: '#94a3b8' };
+// How labels stay readable over bars: 'halo' draws dark text with a soft white halo round
+// each letter; 'split' switches ink where a name crosses its slice's edge (white or dark over
+// the slice, dark off it).
+const LABEL_STYLE = 'halo';
 const MAX_LINES = 3;         // a label wraps onto at most this many lines
 const LABEL_PX = { domain: 11, domainValue: 12, bar: 11, goal: 12.5, small: 9.5 };   // font sizes for the plain-name labels
 let lastQuery = '';          // the search outlives a fresh chart (a cleared selection, a page revisit)
@@ -1018,11 +1022,13 @@ function paint(sb) {
     const missed = sb.hits && !(n.level === 'goal' ? sb.hits.goals : n.level === 'category' ? sb.hits.cats : sb.hits.domains).has(id);
     // Over the slice: white or the hue's darkest shade, whichever reads better on its fill (as faded).
     // Off it: the dark shade, on the pale track or the page.
-    const onSlice = missed ? (n.level === 'domain' ? '#64748b' : GREY.label) : inkOn(blend(look.fill, look.opacity), n.hue);
     const offSlice = missed ? GREY.label : darkInk(n.hue);
+    const onSlice = missed ? (n.level === 'domain' ? '#64748b' : GREY.label)
+      : LABEL_STYLE === 'halo' && n.level !== 'domain' ? offSlice : inkOn(blend(look.fill, look.opacity), n.hue);
     if (ink) {
       ink.on.setAttribute('fill', onSlice);
       ink.off.setAttribute('fill', offSlice);
+      ink.pair.classList.toggle('sb-halo', LABEL_STYLE === 'halo' && n.level !== 'domain');
       ink.pair.style.opacity = look.opacity < 1 ? 0.55 : 1;
       // The clip follows the slice when it lifts out.
       const lift = look.lift ? `translate(${C} ${C}) scale(${POP}) translate(${-C} ${-C})` : '';
