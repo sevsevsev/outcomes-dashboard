@@ -120,3 +120,4 @@
 .sb-mini span { display: block; height: 100%; border-radius: 3px; }
 .sb-subs .sb-goal-n { min-width: 22px; text-align: right; }
 .sb-fan { pointer-events: none; }
+.sb-dots { pointer-events: none; }

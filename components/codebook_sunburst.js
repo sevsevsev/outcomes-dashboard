@@ -18,9 +18,10 @@
 // dashed stub, so gaps stay visible instead of shrinking to a hairline.
 // When the nodes include the codebook's categories (level "category"), the
 // wheel rests on domains and categories: each category is one equal slice
-// whose bar shows how many programs name any of its goals. Pointing at a
-// category reveals its goals (the subcategories) as bars inside its slice and
-// lists them beside the chart. Clicking a category opens its domain, where a
+// whose bar shows how many programs name any of its goals, and a row of dots
+// at its base shows its goals: filled for a goal some program names, hollow
+// for a gap. Pointing at a category lists its goals (the subcategories)
+// beside the chart. Clicking a category opens its domain, where a
 // thin category ring carries the category names and the goals are the bars,
 // and narrows the table to that category's goals.
 //
@@ -40,6 +41,8 @@ const POP = 1.04;            // how far the active goal lifts out of the ring
 const ANIM_MS = 520;         // zoom in / out
 const LEAVE_MS = 70;         // grace period so moving between slices doesn't flash the resting readout
 const MIN_LABEL_DEG = { domain: 9, goal: 8, category: 4.5, categoryName: 30 };
+const FAN = false;           // fan a pointed-at category's goals out over the wheel (off: the side list shows them)
+const DOT = { r: 2.5, gap: 5.8, at: 28, row: 6.5 };   // the goal dots at a category bar's base
 const FAN_STEP = 9;          // degrees per goal when a category fans its goals out
 const FAN_MAX = 84;          // widest a fan gets
 const MIN_QUERY = 2;         // characters before the search starts greying slices
@@ -132,7 +135,7 @@ const catBars = sb => sb.model.equal && sb.model.cats.length > 0 && !sb.zoom;
 /** Where a bar starts: just outside the domain ring, or outside the category ring in an open domain. */
 const barBase = sb => (sb.model.cats.length && sb.zoom && sb.R.cat ? sb.R.cat : sb.R.domain) + 3;
 /** Is this goal folded into its category bar right now (resting on categories, its category not pointed at)? */
-const folded = (sb, n, openCat) => n.level === 'goal' && catBars(sb) && !!n.category && n.category !== openCat;
+const folded = (sb, n, openCat) => n.level === 'goal' && catBars(sb) && !!n.category && (!FAN || n.category !== openCat);
 
 // ---------------------------------------------------------------- colour
 
@@ -167,8 +170,9 @@ function baseFills(node, state) {
     if (state.catBars) {
       // Resting on categories, a category is a bar like a goal's; pointed at, it pales so its goals show through.
       return {
-        fill: node.count === 0 ? '#fff' : grey ? '#cbd5e1' : `hsl(${node.hue} 58% ${activeDomain === node.parent ? 52 : 60}%)`,
-        opacity: state.activeCat === node.id ? 0.18 : dim ? 0.3 : 1,
+        fill: node.count === 0 ? '#fff' : grey ? (on ? '#7c8492' : '#cbd5e1')
+          : on ? `hsl(${node.hue} 62% 40%)` : `hsl(${node.hue} 58% ${activeDomain === node.parent ? 52 : 60}%)`,
+        opacity: FAN && state.activeCat === node.id ? 0.18 : dim ? 0.3 : 1,
       };
     }
     return {
@@ -472,7 +476,7 @@ function mount(root, sb, data) {
   const panel = el('div', 'sb-panel');
   root.append(figure, panel);
 
-  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map(), catNames: new Map(), fan };
+  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map(), catNames: new Map(), dots: new Map(), fan };
   const uid = `sb${Math.random().toString(36).slice(2, 8)}`;
   const animate = firstMount && !reducedMotion();
   if (animate) svg.classList.add('sb-enter');
@@ -512,6 +516,13 @@ function mount(root, sb, data) {
       text.textContent = n.label;
       labelLayer.appendChild(text);
       sb.els.labels.set(n.id, text);
+    }
+    if (n.level === 'category' && model.equal) {
+      // One dot per goal at the bar's base: filled when a program names it, hollow for a gap.
+      const dots = svgEl('g', { class: 'sb-dots' });
+      for (const g of model.goalsOf.get(n.id) || []) dots.appendChild(svgEl('circle', { r: DOT.r, 'data-on': g.count > 0 ? '1' : '' }));
+      labelLayer.appendChild(dots);
+      sb.els.dots.set(n.id, dots);
     }
     if (n.level === 'category') {
       // The open domain's categories carry their names along the ring.
@@ -681,8 +692,31 @@ function draw(sb) {
       label.dataset.show = show ? '1' : '';
     }
   }
+  for (const [id, dots] of els.dots) placeDots(sb, model.byId.get(id), dots, resting);
   els.hole.classList.toggle('can-go-up', !!sb.zoom);
   paint(sb);
+}
+
+/** Lay a category's goal dots along its arc, in as many short rows as its width needs. */
+function placeDots(sb, n, dots, resting) {
+  const [a0, a1] = sb.angles.get(n.id) || [0, 0];
+  const circles = [...dots.children];
+  const r0 = sb.R.domain + DOT.at;
+  const perRow = Math.max(1, Math.floor(((r0 * (a1 - a0) * Math.PI) / 180 - 4) / DOT.gap));
+  const show = resting && a1 - a0 >= MIN_LABEL_DEG.category && circles.length > 0;
+  dots.style.display = show ? '' : 'none';
+  if (!show) return;
+  const rows = Math.ceil(circles.length / perRow);
+  circles.forEach((c, k) => {
+    const row = Math.floor(k / perRow);
+    const inRow = row === rows - 1 ? circles.length - row * perRow : perRow;
+    const r = r0 + row * DOT.row;
+    const step = (DOT.gap / r) * (180 / Math.PI);
+    const a = (a0 + a1) / 2 + (k - row * perRow - (inRow - 1) / 2) * step;
+    const [x, y] = point(r, a);
+    c.setAttribute('cx', f(x));
+    c.setAttribute('cy', f(y));
+  });
 }
 
 /** What is drawn right now: folded goals stay hidden until their category is pointed at. */
@@ -705,7 +739,7 @@ function reveal(sb, openCat) {
     path.style.pointerEvents = n.level === 'goal' && catBars(sb) && n.category ? 'none' : '';
     const hitPath = els.hits.get(id);
     if (hitPath) {
-      const covered = n.level === 'category' && openCat === id;
+      const covered = FAN && n.level === 'category' && openCat === id;
       hitPath.style.display = hitPath.dataset.usable && !hidden && !covered ? '' : 'none';
     }
     const label = els.labels.get(id);
@@ -716,7 +750,7 @@ function reveal(sb, openCat) {
 /** In an open domain, write a category's name along its arc if it fits; returns whether it does. */
 function fanOut(sb, openCat) {
   const { model, els } = sb;
-  const goals = openCat && catBars(sb) ? model.goalsOf.get(openCat) || [] : [];
+  const goals = FAN && openCat && catBars(sb) ? model.goalsOf.get(openCat) || [] : [];
   els.fan.style.display = goals.length ? '' : 'none';
   if (!goals.length) return null;
   // The fan is centred on the category, at least as wide as it, so each goal gets a readable bar.
@@ -789,6 +823,17 @@ function paint(sb) {
     const ink = n.level === 'domain' ? (missed ? '#64748b' : '#fff') : missed ? GREY.label : (n.hue === null || n.hue === undefined
       ? '#334155' : n.level === 'category' ? `hsl(${n.hue} 45% ${state.pick === id || activeCat === id ? 97 : 20}%)`
         : model.equal ? `hsl(${n.hue} 45% 18%)` : `hsl(${n.hue} 55% ${look.lift && !look.overlay ? 97 : 26}%)`);
+    const dots = els.dots.get(id);
+    if (dots) {
+      const lit = state.pick === id || activeCat === id;   // on the darker picked or pointed-at bar, the dots turn white
+      const dark = lit ? '#fff' : n.hue === null || n.hue === undefined ? '#475569' : `hsl(${n.hue} 45% 24%)`;
+      for (const c of dots.children) {
+        c.setAttribute('fill', c.dataset.on ? (missed ? GREY.label : dark) : lit ? 'none' : '#fff');
+        c.setAttribute('stroke', missed ? GREY.label : dark);
+        c.setAttribute('stroke-width', 1);
+      }
+      dots.style.opacity = look.opacity < 1 ? 0.55 : 1;
+    }
     for (const text of [label, els.catNames.get(id)?.name]) {
       if (!text) continue;
       text.setAttribute('fill', ink);
