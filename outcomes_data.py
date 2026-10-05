@@ -666,6 +666,7 @@ def count_programs(df: pd.DataFrame) -> int:
 
 SUNBURST_ROOT = "all"
 SUNBURST_SEP = "\x1f"   # joins domain and goal in a node id; never appears in a label
+CATEGORY_SEP = "\x1e"   # joins domain and category in a category node's id
 
 
 def split_code(label: str) -> tuple[str, str]:
@@ -681,7 +682,7 @@ def split_code(label: str) -> tuple[str, str]:
 
 
 def sunburst_nodes(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = None,
-                   include_empty_goals: bool = False) -> pd.DataFrame:
+                   include_empty_goals: bool = False, categories: Optional[dict] = None) -> pd.DataFrame:
     """The nodes of the domain -> goal sunburst: one root, one row per domain, one per goal.
 
     Columns: id, parent, level ("root", "domain" or "goal"), domain, goal,
@@ -698,10 +699,20 @@ def sunburst_nodes(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = None,
     equal-slice wheel can show the gaps. Codebook domains with no outcomes
     at all are added the same way.
 
+    With `categories` (goal code -> "B. Close relationships", from
+    `load_codebook_categories`), each domain also gets one node per codebook
+    category (level "category", parent the domain, id domain + CATEGORY_SEP
+    + category, code the letter), placed before the domain's goals, and each
+    goal's `category` column names its category node ("" when it has none,
+    like a domain-only goal or a 1.x code).
+
     Everything is counted with one groupby per level, because this runs on
     every rerun of the sunburst view.
     """
-    programs = df[[COL_DOMAIN, COL_SUBCAT, COL_ORG_VIEW, COL_PROGRAM]].drop_duplicates()
+    category_of = categories or {}
+    if categories:
+        df = df.assign(_category=df[COL_SUBCAT].map(lambda g: category_of.get(split_code(g)[0])))
+    programs = df[[COL_DOMAIN, COL_SUBCAT, COL_ORG_VIEW, COL_PROGRAM] + (["_category"] if categories else [])].drop_duplicates()
     named = df[df[COL_ORG_VIEW] != UNKNOWN_ORG]
 
     def level_counts(keys: list[str]) -> pd.DataFrame:
@@ -726,10 +737,14 @@ def sunburst_nodes(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = None,
     else:
         hue_index = {d: i for i, d in enumerate(order)}
 
-    def node(node_id, parent, level, domain, goal, label, stats) -> dict:
+    by_category = level_counts([COL_DOMAIN, "_category"]) if categories else None
+
+    def node(node_id, parent, level, domain, goal, label, stats, category="") -> dict:
         code, title = split_code(label) if label else ("", "All domains")
+        if level == "category":
+            code, _, title = label.partition(". ")
         return {"id": node_id, "parent": parent, "level": level, "domain": domain, "goal": goal,
-                "code": code, "title": title, "domain_index": hue_index.get(domain, -1),
+                "category": category, "code": code, "title": title, "domain_index": hue_index.get(domain, -1),
                 "outcomes": int(stats["outcomes"]), "programs": int(stats["programs"]),
                 "organizations": int(stats["organizations"]), "sample_list": stats["sample_list"]}
 
@@ -745,9 +760,19 @@ def sunburst_nodes(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = None,
     for domain in order:
         nodes.append(node(domain, SUNBURST_ROOT, "domain", domain, None, domain,
                           by_domain.loc[domain] if domain in by_domain.index else empty))
-        for goal in sorted_subcategories(goals_by_domain.get(domain, [])):
+        goals = sorted_subcategories(goals_by_domain.get(domain, []))
+        cat_ids = {}
+        for goal in goals:
+            category = category_of.get(split_code(goal)[0])
+            if category and category not in cat_ids:
+                cat_ids[category] = domain + CATEGORY_SEP + category
+                key = (domain, category)
+                nodes.append(node(cat_ids[category], domain, "category", domain, None, category,
+                                  by_category.loc[key] if key in by_category.index else empty))
+        for goal in goals:
             nodes.append(node(domain + SUNBURST_SEP + goal, domain, "goal", domain, goal, goal,
-                              by_goal.loc[(domain, goal)] if (domain, goal) in by_goal.index else empty))
+                              by_goal.loc[(domain, goal)] if (domain, goal) in by_goal.index else empty,
+                              category=cat_ids.get(category_of.get(split_code(goal)[0]), "")))
     frame = pd.DataFrame(nodes)
     frame["samples"] = frame["sample_list"].map(
         lambda texts: "<br>".join("• " + _wrap_for_hover(t) for t in texts) or "<i>(no outcome text)</i>")
@@ -760,10 +785,20 @@ def load_codebook_terms(path: Union[str, Path] = CODEBOOK_TERMS_V3_PATH) -> dict
     Built by scripts/build_codebook_terms.py from the coder's codebook.
     """
     try:
-        terms = pd.read_csv(path, dtype=str).dropna()
+        terms = pd.read_csv(path, dtype=str, keep_default_na=False)
     except FileNotFoundError:
         return {}
     return dict(zip(terms["code"], terms["terms"]))
+
+
+def load_codebook_categories(path: Union[str, Path] = CODEBOOK_TERMS_V3_PATH) -> dict[str, str]:
+    """Goal code ("Y3.2") -> its codebook category ("B. Close relationships"); {} if missing."""
+    try:
+        terms = pd.read_csv(path, dtype=str, keep_default_na=False)
+    except FileNotFoundError:
+        return {}
+    terms = terms[terms["category"] != ""]
+    return dict(zip(terms["code"], terms["category"]))
 
 
 def chart_search_index(df: pd.DataFrame, nodes: pd.DataFrame, terms: Optional[dict] = None) -> dict:

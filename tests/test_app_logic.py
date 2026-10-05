@@ -352,11 +352,37 @@ def test_chart_search_index_lists_each_goals_statements_with_program_and_org(df)
     json.dumps(index)  # it goes to the browser as JSON
 
 
+def test_wheel_nodes_group_goals_into_codebook_categories(df):
+    frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
+    categories = {"3.1.4": "A. Self", "3.4.2": "B. Others"}
+    nodes = app.sunburst_nodes(frame, categories=categories).set_index("id")
+    cat_a = nodes.loc[SEL + app.CATEGORY_SEP + "A. Self"]
+    assert (cat_a["level"], cat_a["parent"], cat_a["code"], cat_a["title"]) == ("category", SEL, "A", "Self")
+    # Exact counts at the category: CONF has two outcomes from two programs.
+    assert (cat_a["outcomes"], cat_a["programs"]) == (2, 2)
+    assert nodes.loc[SEL + app.SUNBURST_SEP + CONF, "category"] == SEL + app.CATEGORY_SEP + "A. Self"
+    assert nodes.loc[JOY + app.SUNBURST_SEP + CREATE, "category"] == ""
+    data = charts.codebook_sunburst_data(nodes.reset_index(), app.MEASURE_PROGRAMS, layout="equal")
+    cat = next(n for n in data["nodes"] if n["level"] == "category" and n["title"] == "Others")
+    assert cat["value"] == 2 and cat["label"] == "B" and cat["eyebrow"].endswith("Category B")
+    assert all(n["category"] is None for n in data["nodes"] if n["level"] == "goal" and n["parent"] == JOY)
+    # Without categories, nothing changes.
+    assert "category" not in set(app.sunburst_nodes(frame)["level"])
+
+
+def test_codebook_categories_cover_every_3x_goal():
+    cats = app.load_codebook_categories()
+    codes = {app.split_code(g)[0] for g in app.load_codebook(app.CODEBOOK_V3_PATH)[app.COL_SUBCAT]}
+    assert codes == set(cats)
+    assert cats["Y3.2"] == "B. Close relationships"
+    assert len(set(cats.values())) <= 39
+
+
 def test_codebook_terms_cover_every_3x_goal():
     terms = app.load_codebook_terms()
     codes = {app.split_code(g)[0] for g in app.load_codebook(app.CODEBOOK_V3_PATH)[app.COL_SUBCAT]}
     assert codes <= set(terms)
-    assert "mentor" in terms["Y3.2"]
+    assert "mentor" in terms["Y3.2"] and "Academic" in terms["Y1"]
 
 
 def test_codebook_sunburst_data_sizes_domains_by_their_goals_and_reads_exact_counts(df):

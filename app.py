@@ -47,6 +47,7 @@ import charts
 import schools
 from sunburst_component import codebook_sunburst
 from outcomes_data import (
+    CATEGORY_SEP,
     COL_ATOMIC,
     COL_CONF,
     COL_DOMAIN,
@@ -88,6 +89,7 @@ from outcomes_data import (
     filter_outcomes,
     goal_summary,
     intent_note,
+    load_codebook_categories,
     load_codebook_for,
     load_codebook_terms,
     organizations_for_subcategory,
@@ -158,7 +160,7 @@ def cached_sunburst_nodes(df: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False, max_entries=24)
 def cached_wheel_nodes(df: pd.DataFrame) -> pd.DataFrame:
-    return sunburst_nodes(df, cached_codebook(df), include_empty_goals=True)
+    return sunburst_nodes(df, cached_codebook(df), include_empty_goals=True, categories=load_codebook_categories())
 
 
 @st.cache_data(show_spinner=False, max_entries=24)
@@ -667,12 +669,21 @@ def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value") -> Opti
         pick = None
     if pick and pick.get("goal") and pick["domain"] + SUNBURST_SEP + pick["goal"] not in ids:
         pick = {"domain": pick["domain"], "goal": None}
+    if pick and pick.get("category") and pick["domain"] + CATEGORY_SEP + pick["category"] not in ids:
+        pick = {"domain": pick["domain"], "goal": None}
     st.session_state[last_key] = pick
 
     domain = pick["domain"] if pick else None
     goal = pick.get("goal") if pick else None
-    rows = df if domain is None else filter_outcomes(df, domains=[domain], subcategories=[goal] if goal else None)
-    outcomes_panel(rows, describe(domain_short(domain) if domain else None, goal), key="v1_sb",
+    category = pick.get("category") if pick and not goal else None
+    if category:
+        # A category on the wheel's middle ring narrows the table to its goals.
+        cat_id = domain + CATEGORY_SEP + category
+        goals = nodes.loc[nodes["category"] == cat_id, "goal"].tolist()
+        rows = filter_outcomes(df, domains=[domain], subcategories=goals)
+    else:
+        rows = df if domain is None else filter_outcomes(df, domains=[domain], subcategories=[goal] if goal else None)
+    outcomes_panel(rows, describe(domain_short(domain) if domain else None, goal or category), key="v1_sb",
                    nonce_key="v1_nonce" if pick else None)
     return domain
 
