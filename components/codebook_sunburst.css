@@ -14,8 +14,38 @@
   color: var(--ink);
 }
 
-.sb { display: flex; gap: 40px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.sb { display: flex; gap: 28px; align-items: center; justify-content: center; flex-wrap: wrap; }
 .sb-figure { position: relative; flex: 0 1 600px; min-width: 300px; max-width: 600px; }
+.sb-domains ~ .sb-figure { flex-basis: 520px; }   /* room for the domain list on the left */
+
+/* The domain list left of the category wheel: one row per domain, a pinned row opens into its categories.
+   Fixed height, so opening a row never moves the wheel. */
+.sb-domains { flex: 0 1 220px; min-width: 200px; max-height: 600px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.sb-dom { border-radius: 8px; transition: opacity .2s ease, background .2s ease; }
+.sb-dom.is-dim { opacity: .45; }
+.sb-dom.is-lit, .sb-dom.is-open { background: var(--wash); opacity: 1; }
+.sb-dom-head {
+  all: unset; box-sizing: border-box; width: 100%; display: flex; gap: 10px; align-items: flex-start;
+  padding: 6px 10px; border-radius: 8px; cursor: pointer;
+}
+.sb-dom-head:focus-visible { outline: 2px solid var(--ink-2); outline-offset: -2px; }
+.sb-dom-head .sb-swatch { margin-top: 4px; }
+.sb-dom-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; line-height: 1.3; color: var(--ink); }
+.sb-dom-meta { font-size: 12px; line-height: 1.3; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sb-dom-top {
+  display: flex; justify-content: space-between; padding: 0 10px 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+}
+.sb-dom-cats { display: none; margin: 0 0 6px; padding: 0 10px 0 30px; list-style: none; }
+.sb-dom.is-open .sb-dom-cats { display: block; }
+.sb-dom-cat {
+  all: unset; box-sizing: border-box; width: 100%; display: flex; justify-content: space-between; gap: 8px;
+  padding: 3px 6px; border-radius: 6px; font-size: 12.5px; line-height: 1.35; color: var(--ink-2); cursor: pointer;
+}
+.sb-dom-cat:hover, .sb-dom-cat.is-active { background: #eef2f6; }
+.sb-dom-cat:focus-visible { outline: 2px solid var(--ink-2); outline-offset: -2px; }
+.sb-dom-cat-n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.sb-dom-cat.is-gap .sb-dom-cat-n { color: var(--faint); font-style: italic; }
 .sb-svg { display: block; width: 100%; height: auto; overflow: visible; }
 
 .sb-slice {
@@ -123,3 +153,5 @@
 .sb-subs .sb-goal-n { min-width: 22px; text-align: right; }
 .sb-fan { pointer-events: none; }
 .sb-dots { pointer-events: none; }
+
+.sb-domains ~ .sb-panel { flex-basis: 280px; min-width: 240px; }

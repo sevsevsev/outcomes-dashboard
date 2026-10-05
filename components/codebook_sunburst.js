@@ -520,9 +520,12 @@ function mount(root, sb, data) {
   const center = el('div', 'sb-center');
   figure.append(svg, center);
   const panel = el('div', 'sb-panel');
-  root.append(figure, panel);
+  // Resting on categories, a list of the domains sits left of the wheel (see domainList).
+  const list = model.equal && model.cats.length ? domainList(sb, model) : null;
+  if (sb.focus && !model.byId.has(sb.focus)) sb.focus = null;
+  root.append(...(list ? [list.nav] : []), figure, panel);
 
-  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map(), catNames: new Map(), labelArcs: new Map(), inks: new Map(), dots: new Map(), fan };
+  sb.els = { svg, hole, center, panel, list, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map(), catNames: new Map(), labelArcs: new Map(), inks: new Map(), dots: new Map(), fan };
   const uid = `sb${Math.random().toString(36).slice(2, 8)}`;
   const animate = firstMount && !reducedMotion();
   if (animate) svg.classList.add('sb-enter');
@@ -601,7 +604,7 @@ function mount(root, sb, data) {
   }
   if (animate) setTimeout(() => svg.classList.remove('sb-enter'), 1600);
 
-  hole.addEventListener('click', () => { if (sb.zoom) choose(sb, null, null); });
+  hole.addEventListener('click', () => { if (sb.zoom) choose(sb, null, null); else setFocus(sb, null); });
   svg.addEventListener('pointerleave', () => setHover(sb, null));
 
   sb.angles = firstMount || !sb.angles.size ? targetAngles(model, sb.zoom) : sb.angles;
@@ -623,6 +626,104 @@ function wire(path, node, sb) {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); clickNode(sb, node); }
     if (e.key === 'Escape' && sb.zoom) { e.preventDefault(); choose(sb, null, null); }
   });
+}
+
+// ---------------------------------------------------------------- domain list
+// Resting on categories, the wheel shows no category names. A list of the domains
+// beside it names them instead: pointing at a domain (in the list or on the wheel)
+// shows its categories' names on the wheel, and clicking or tapping a row pins that
+// domain, opening the row into its categories, until another row, the centre or Esc
+// lets go. Nothing on the wheel moves. With a domain open, the rows switch domains.
+
+/** The domain whose category names show: the one pointed at, else the pinned one. */
+function focusDomain(sb) {
+  const n = sb.hover ? sb.model.byId.get(sb.hover) : null;
+  if (n) return n.level === 'domain' ? n.id : n.parent;
+  return sb.focus || null;
+}
+
+function setFocus(sb, id) {
+  if (sb.focus === id) return;
+  sb.focus = id;
+  paint(sb);
+}
+
+function domainList(sb, model) {
+  const data = model.data;
+  const nav = el('nav', 'sb-domains');
+  nav.setAttribute('aria-label', 'Domains');
+  const top = el('div', 'sb-dom-top');
+  top.append(el('span', '', 'Domains'), el('span', '', 'Goals named'));
+  nav.append(top);
+  const rows = new Map();
+  for (const d of model.domains) {
+    const row = el('div', 'sb-dom');
+    const head = el('button', 'sb-dom-head');
+    head.type = 'button';
+    const sw = el('span', 'sb-swatch');
+    sw.style.background = swatchColor(d);
+    const goals = (model.children.get(d.id) || []).filter(g => (g.label || '').includes('.'));
+    const named = goals.filter(g => g.count > 0).length;
+    head.title = `${d.title}: ${plural(d.count, data.noun_one, data.noun)}; ${named} of ${goals.length} goals named by a program`;
+    head.append(sw, el('span', 'sb-dom-name', d.title), el('span', 'sb-dom-meta', `${named}/${goals.length}`));
+    const cats = el('ul', 'sb-dom-cats');
+    for (const c of model.cats.filter(c => c.parent === d.id)) {
+      const li = el('li');
+      const btn = el('button', 'sb-dom-cat' + (c.count === 0 ? ' is-gap' : ''));
+      btn.type = 'button';
+      btn.append(el('span', 'sb-dom-cat-name', c.title), el('span', 'sb-dom-cat-n', c.count === 0 ? 'none' : fmt(c.count)));
+      btn.addEventListener('pointerenter', () => setHover(sb, c.id));
+      btn.addEventListener('pointerleave', () => setHover(sb, null));
+      btn.addEventListener('click', () => clickNode(sb, c));
+      li.append(btn);
+      cats.append(li);
+    }
+    row.append(head, cats);
+    head.addEventListener('pointerenter', () => setHover(sb, d.id));
+    head.addEventListener('pointerleave', () => setHover(sb, null));
+    head.addEventListener('focus', () => setHover(sb, d.id, true));
+    head.addEventListener('blur', () => setHover(sb, null, true));
+    head.addEventListener('click', () => {
+      if (sb.zoom) clickNode(sb, d);                 // a domain is open: switch to this one (or back out)
+      else setFocus(sb, sb.focus === d.id ? null : d.id);
+    });
+    head.addEventListener('keydown', e => {
+      const heads = [...nav.querySelectorAll('.sb-dom-head')];
+      const k = heads.indexOf(head);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        heads[(k + (e.key === 'ArrowDown' ? 1 : heads.length - 1)) % heads.length].focus();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        if (sb.zoom) choose(sb, null, null);
+        else setFocus(sb, null);
+      }
+    });
+    nav.append(row);
+    rows.set(d.id, { row, head });
+  }
+  return { nav, rows };
+}
+
+function paintList(sb, state) {
+  const list = sb.els.list;
+  if (!list) return;
+  const open = sb.zoom || (catBars(sb) ? sb.focus : null);
+  const lit = sb.zoom || focusDomain(sb);
+  for (const [id, { row, head }] of list.rows) {
+    const missed = sb.hits && !sb.hits.domains.has(id);
+    row.classList.toggle('is-open', open === id);
+    row.classList.toggle('is-lit', lit === id);
+    row.classList.toggle('is-dim', !!missed || (!!lit && lit !== id));
+    head.setAttribute('aria-expanded', open === id ? 'true' : 'false');
+    head.setAttribute('aria-current', sb.zoom === id ? 'true' : 'false');
+  }
+  for (const btn of list.nav.querySelectorAll('.sb-dom-cat')) btn.classList.remove('is-active');
+  if (state.activeCat) {
+    const k = [...sb.model.cats].filter(c => c.parent === state.activeDomain).findIndex(c => c.id === state.activeCat);
+    const row = list.rows.get(state.activeDomain);
+    if (row && k >= 0) row.row.querySelectorAll('.sb-dom-cat')[k]?.classList.add('is-active');
+  }
 }
 
 function setHover(sb, id, now) {
@@ -817,7 +918,9 @@ function reveal(sb, openCat) {
       hitPath.style.display = hitPath.dataset.usable && !hidden && !covered ? '' : 'none';
     }
     const label = els.labels.get(id);
-    if (label) els.inks.get(id).pair.style.display = label.dataset.show && !hidden && !underFan(n) ? '' : 'none';
+    // Resting on categories, a category's name shows only while its domain is in focus.
+    const quiet = n.level === 'category' && catBars(sb) && n.parent !== focusDomain(sb);
+    if (label) els.inks.get(id).pair.style.display = label.dataset.show && !hidden && !underFan(n) && !quiet ? '' : 'none';
   }
 }
 
@@ -997,7 +1100,9 @@ function categoryName(sb, n, a0, a1, d) {
 
 function paint(sb) {
   const { model, els } = sb;
-  const hovered = sb.hover ? model.byId.get(sb.hover) : null;
+  // A domain pinned from the list stands in for the pointer while nothing else is pointed at.
+  const hoverId = sb.hover || (catBars(sb) ? sb.focus : null);
+  const hovered = hoverId ? model.byId.get(hoverId) : null;
   const picked = sb.pick ? model.byId.get(sb.pick) : null;
   const lead = hovered || picked;
   const activeDomain = lead ? (lead.level === 'domain' ? lead.id : lead.parent) : null;
@@ -1054,6 +1159,7 @@ function paint(sb) {
       catName.style.opacity = look.opacity < 1 ? 0.55 : 1;
     }
   }
+  paintList(sb, state);
   readout(sb, hovered);
 }
 
@@ -1196,6 +1302,6 @@ function hint(sb, hovered) {
   }
   if (sb.zoom) return 'Click the center to go back to all domains.';
   if (sb.hits) return 'Point at a slice to see what matched. Clicking still opens it.';
-  return sb.model.cats.length ? 'Point at a category to see its subcategories. Click one to list its outcomes.'
+  return sb.model.cats.length ? 'Point at a domain, here or in the list, to name its categories. Click a category to list its outcomes.'
     : 'Point at a slice to read it. Click a domain to open its goals.';
 }
