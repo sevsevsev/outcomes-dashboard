@@ -47,6 +47,10 @@ const FAN_STEP = 9;          // degrees per goal when a category fans its goals 
 const FAN_MAX = 84;          // widest a fan gets
 const MIN_QUERY = 2;         // characters before the search starts greying slices
 const GREY = { domain: '#cbd5e1', goal: '#e2e8f0', label: '#94a3b8' };
+// How labels stay readable over bars: 'halo' draws dark text with a soft white halo round
+// each letter; 'split' switches ink where a name crosses its slice's edge (white or dark over
+// the slice, dark off it).
+const LABEL_STYLE = 'halo';
 const MAX_LINES = 3;         // a label wraps onto at most this many lines
 const LABEL_PX = { domain: 11, domainValue: 12, bar: 11, goal: 12.5, small: 9.5 };   // font sizes for the plain-name labels
 let lastQuery = '';          // the search outlives a fresh chart (a cleared selection, a page revisit)
@@ -208,6 +212,46 @@ function baseFills(node, state) {
     opacity: hovering && !inDomain ? 0.3 : 1,
     lift: on && (activeId === node.id || !hovering),
   };
+}
+
+/** The dark label ink for a hue (slate when there's no hue). */
+const darkInk = hue => (hue === null || hue === undefined ? '#334155' : `hsl(${hue} 45% 18%)`);
+
+/** [r, g, b] (0-255) of an 'hsl(h s% l%)' or '#rrggbb' colour. */
+function rgbOf(color) {
+  const m = /hsl\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%/.exec(color);
+  if (!m) {
+    let hex = color.replace('#', '');
+    if (hex.length === 3) hex = [...hex].map(c => c + c).join('');
+    return [0, 2, 4].map(k => parseInt(hex.slice(k, k + 2), 16));
+  }
+  const [h, s, l] = [Number(m[1]), Number(m[2]) / 100, Number(m[3]) / 100];
+  const a = s * Math.min(l, 1 - l);
+  const ch = k => {
+    const t = (k + h / 30) % 12;
+    return 255 * (l - a * Math.max(-1, Math.min(t - 3, 9 - t, 1)));
+  };
+  return [ch(0), ch(8), ch(4)];
+}
+
+/** A fill as it shows on white at the given opacity, as '#rrggbb'. */
+const blend = (color, opacity) => `#${rgbOf(color).map(v => Math.round(255 - (255 - v) * opacity).toString(16).padStart(2, '0')).join('')}`;
+
+function luminance(color) {
+  const [r, g, b] = rgbOf(color).map(v => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** White or the hue's dark ink, whichever contrasts more with the background. */
+function inkOn(background, hue) {
+  const bg = luminance(background);
+  const dark = darkInk(hue);
+  const onWhite = 1.05 / (bg + 0.05);
+  const onDark = (bg + 0.05) / (luminance(dark) + 0.05);
+  return onWhite >= onDark ? '#fff' : dark;
 }
 
 const swatchColor = node =>
@@ -478,7 +522,7 @@ function mount(root, sb, data) {
   const panel = el('div', 'sb-panel');
   root.append(figure, panel);
 
-  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map(), catNames: new Map(), labelArcs: new Map(), dots: new Map(), fan };
+  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map(), catNames: new Map(), labelArcs: new Map(), inks: new Map(), dots: new Map(), fan };
   const uid = `sb${Math.random().toString(36).slice(2, 8)}`;
   const animate = firstMount && !reducedMotion();
   if (animate) svg.classList.add('sb-enter');
@@ -512,9 +556,24 @@ function mount(root, sb, data) {
     }
     if (n.names && n.names.length) {
       // Filled in by draw() with the longest of the node's names that fits (see fitName).
-      const text = svgEl('text', { class: 'sb-label', 'dominant-baseline': 'central', 'font-weight': 600 });
-      labelLayer.appendChild(text);
+      // The text is drawn twice: in one ink over its slice, in another off it, each copy
+      // clipped to its side of the slice's edge, so a name stays readable where it runs
+      // off a bar onto the pale track.
+      const text = svgEl('text', { id: `${uid}-t${i}`, 'dominant-baseline': 'central', 'font-weight': 600 });
+      const clipIn = svgEl('clipPath', { id: `${uid}-ci${i}` });
+      const clipOut = svgEl('clipPath', { id: `${uid}-co${i}` });
+      const inPath = svgEl('path');
+      const outPath = svgEl('path', { 'clip-rule': 'evenodd' });
+      clipIn.appendChild(inPath);
+      clipOut.appendChild(outPath);
+      defs.append(text, clipIn, clipOut);
+      const off = svgEl('use', { href: `#${text.id}`, 'clip-path': `url(#${clipOut.id})` });
+      const on = svgEl('use', { href: `#${text.id}`, 'clip-path': `url(#${clipIn.id})` });
+      const pair = svgEl('g', { class: 'sb-label' });
+      pair.append(off, on);
+      labelLayer.appendChild(pair);
       sb.els.labels.set(n.id, text);
+      sb.els.inks.set(n.id, { pair, off, on, inPath, outPath });
       // The arcs a name can curve along, one per line.
       const arcs = [...Array(MAX_LINES).keys()].map(k => svgEl('path', { id: `${uid}-l${i}-${k}`, fill: 'none' }));
       defs.append(...arcs);
@@ -698,6 +757,9 @@ function draw(sb) {
         show = !!sb.zoom && bandLabel(label, els.labelArcs.get(id), n.names, a0, a1, barBase(sb) + 5, R.goal - 4, LABEL_PX.goal);
       }
       label.dataset.show = show ? '1' : '';
+      const ink = els.inks.get(id);
+      ink.inPath.setAttribute('d', d);
+      ink.outPath.setAttribute('d', `M-10 -10H${SIZE + 10}V${SIZE + 10}H-10Z${d}`);
     }
   }
   for (const [id, dots] of els.dots) placeDots(sb, model.byId.get(id), dots, resting);
@@ -755,7 +817,7 @@ function reveal(sb, openCat) {
       hitPath.style.display = hitPath.dataset.usable && !hidden && !covered ? '' : 'none';
     }
     const label = els.labels.get(id);
-    if (label) label.style.display = label.dataset.show && !hidden && !underFan(n) ? '' : 'none';
+    if (label) els.inks.get(id).pair.style.display = label.dataset.show && !hidden && !underFan(n) ? '' : 'none';
   }
 }
 
@@ -956,11 +1018,25 @@ function paint(sb) {
       hitPath.setAttribute('fill-opacity', look.opacity);
       hitPath.style.transform = path.style.transform;
     }
-    const label = els.labels.get(id);
+    const ink = els.inks.get(id);
     const missed = sb.hits && !(n.level === 'goal' ? sb.hits.goals : n.level === 'category' ? sb.hits.cats : sb.hits.domains).has(id);
-    const ink = n.level === 'domain' ? (missed ? '#64748b' : '#fff') : missed ? GREY.label : (n.hue === null || n.hue === undefined
-      ? '#334155' : n.level === 'category' ? `hsl(${n.hue} 45% ${state.pick === id || activeCat === id ? 97 : 20}%)`
-        : model.equal ? `hsl(${n.hue} 45% 18%)` : `hsl(${n.hue} 55% ${look.lift && !look.overlay ? 97 : 26}%)`);
+    // Over the slice: white or the hue's darkest shade, whichever reads better on its fill (as faded).
+    // Off it: the dark shade, on the pale track or the page.
+    const offSlice = missed ? GREY.label : darkInk(n.hue);
+    const onSlice = missed ? (n.level === 'domain' ? '#64748b' : GREY.label)
+      : LABEL_STYLE === 'halo' && n.level !== 'domain' ? offSlice : inkOn(blend(look.fill, look.opacity), n.hue);
+    if (ink) {
+      ink.on.setAttribute('fill', onSlice);
+      ink.off.setAttribute('fill', offSlice);
+      ink.pair.classList.toggle('sb-halo', LABEL_STYLE === 'halo' && n.level !== 'domain');
+      ink.pair.style.opacity = look.opacity < 1 ? 0.55 : 1;
+      // The clip follows the slice when it lifts out.
+      const lift = look.lift ? `translate(${C} ${C}) scale(${POP}) translate(${-C} ${-C})` : '';
+      for (const clip of [ink.inPath, ink.outPath]) {
+        if (lift) clip.setAttribute('transform', lift);
+        else clip.removeAttribute('transform');
+      }
+    }
     const dots = els.dots.get(id);
     if (dots) {
       const lit = state.pick === id || activeCat === id;   // on the darker picked or pointed-at bar, the dots turn white
@@ -972,10 +1048,10 @@ function paint(sb) {
       }
       dots.style.opacity = look.opacity < 1 ? 0.55 : 1;
     }
-    for (const text of [label, els.catNames.get(id)?.name]) {
-      if (!text) continue;
-      text.setAttribute('fill', ink);
-      text.style.opacity = look.opacity < 1 ? 0.55 : 1;
+    const catName = els.catNames.get(id)?.name;
+    if (catName) {
+      catName.setAttribute('fill', onSlice);
+      catName.style.opacity = look.opacity < 1 ? 0.55 : 1;
     }
   }
   readout(sb, hovered);
