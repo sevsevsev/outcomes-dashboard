@@ -264,6 +264,7 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
     noun = NOUNS.get(measure, "outcome statements")
     goal_sizes = nodes[size_col].astype(float).where(nodes["level"] == "goal", 0.0)
     domain_sizes = goal_sizes.groupby(nodes["parent"]).sum()
+    category_sizes = goal_sizes.groupby(nodes["category"]).sum()
     out = []
     for row, size in zip(nodes.itertuples(index=False), goal_sizes):
         coded = row.level == "root" or is_coded_domain(row.domain)
@@ -271,6 +272,9 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
             eyebrow = f"Domain {row.code}" if row.code else "Not coded"
             label = row.code if coded else "–"
             size = float(domain_sizes.get(row.id, 0.0))
+        elif row.level == "category":
+            eyebrow, label = f"{domain_code(row.domain)} · Category {row.code}", row.code
+            size = float(category_sizes.get(row.id, 0.0))
         elif row.level == "goal":
             # A domain-only row's "goal" carries the domain's number and no code of its own.
             has_code = "." in row.code
@@ -282,6 +286,7 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
         out.append({
             "id": row.id, "parent": row.parent, "level": row.level,
             "goal": row.goal if isinstance(row.goal, str) else None,
+            "category": row.category or None,
             "eyebrow": eyebrow, "title": row.title, "label": label,
             "hue": DOMAIN_HUES[int(row.domain_index) % len(DOMAIN_HUES)] if coded and row.domain_index >= 0 else None,
             "value": size, "count": int(getattr(row, size_col)),

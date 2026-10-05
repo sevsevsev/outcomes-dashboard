@@ -114,3 +114,10 @@
 .sb-goals li { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--ink-2); }
 .sb-goal-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sb-goal-n { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sb-goal-miss { opacity: .45; }
+.sb-cat-name { pointer-events: none; user-select: none; letter-spacing: .01em; }
+.sb-mini { flex: none; width: 64px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.sb-mini span { display: block; height: 100%; border-radius: 3px; }
+.sb-subs .sb-goal-n { min-width: 22px; text-align: right; }
+.sb-fan { pointer-events: none; }
+.sb-dots { pointer-events: none; }

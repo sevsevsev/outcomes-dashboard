@@ -16,6 +16,14 @@
 // goal gets the same angle, and its count sets how far its bar reaches out
 // from the domain ring. A goal no program names keeps its place as a short
 // dashed stub, so gaps stay visible instead of shrinking to a hairline.
+// When the nodes include the codebook's categories (level "category"), the
+// wheel rests on domains and categories: each category is one equal slice
+// whose bar shows how many programs name any of its goals, and a row of dots
+// at its base shows its goals: filled for a goal some program names, hollow
+// for a gap. Pointing at a category lists its goals (the subcategories)
+// beside the chart. Clicking a category opens its domain, where a
+// thin category ring carries the category names and the goals are the bars,
+// and narrows the table to that category's goals.
 //
 // The search box above the chart greys out every slice that doesn't contain
 // what was typed, while the reader types, with no round trip to Python. A
@@ -27,12 +35,16 @@
 const SIZE = 600;
 const C = SIZE / 2;
 const R_VALUE = { hole: 138, domain: 202, goal: 284 };
-const R_EQUAL = { hole: 104, domain: 152, goal: 290 };   // a smaller centre leaves the bars room to grow
+const R_EQUAL = { hole: 104, domain: 150, cat: 178, goal: 290 };   // a smaller centre leaves the bars room to grow
 const STUB = 14;             // depth of a zero goal's dashed stub, and the shortest bar
 const POP = 1.04;            // how far the active goal lifts out of the ring
 const ANIM_MS = 520;         // zoom in / out
 const LEAVE_MS = 70;         // grace period so moving between slices doesn't flash the resting readout
-const MIN_LABEL_DEG = { domain: 9, goal: 8 };
+const MIN_LABEL_DEG = { domain: 9, goal: 8, category: 4.5, categoryName: 30 };
+const FAN = false;           // fan a pointed-at category's goals out over the wheel (off: the side list shows them)
+const DOT = { r: 2.5, gap: 5.8, at: 28, row: 6.5 };   // the goal dots at a category bar's base
+const FAN_STEP = 9;          // degrees per goal when a category fans its goals out
+const FAN_MAX = 84;          // widest a fan gets
 const MIN_QUERY = 2;         // characters before the search starts greying slices
 const GREY = { domain: '#cbd5e1', goal: '#e2e8f0', label: '#94a3b8' };
 let lastQuery = '';          // the search outlives a fresh chart (a cleared selection, a page revisit)
@@ -71,8 +83,12 @@ function arcPath(r0, r1, start, end) {
 function targetAngles(model, zoom) {
   const out = new Map();
   // The wheel weighs every goal the same, so a domain's arc follows how many goals it has.
+  // Resting on categories, each category weighs the same instead, shared among its goals.
+  const catSlices = model.equal && model.cats.length && !zoom;
+  const goalWeight = g => (catSlices && g.category ? 1 / (model.goalsOf.get(g.category) || [g]).length : 1);
   const weight = n => (!model.equal ? n.value
-    : n.level === 'domain' ? Math.max((model.children.get(n.id) || []).length, 1) : 1);
+    : n.level === 'domain' ? Math.max((model.children.get(n.id) || []).reduce((t, g) => t + goalWeight(g), 0), 1)
+      : goalWeight(n));
   const placeGoals = (domain, a0, a1) => {
     const goals = model.children.get(domain.id) || [];
     const total = goals.reduce((n, g) => n + weight(g), 0) || 1;
@@ -106,8 +122,20 @@ function targetAngles(model, zoom) {
       }
     }
   }
+  // A category spans its goals (they sit next to each other, in codebook order).
+  for (const c of model.cats) {
+    const spans = (model.goalsOf.get(c.id) || []).map(g => out.get(g.id)).filter(Boolean);
+    if (spans.length) out.set(c.id, [Math.min(...spans.map(a => a[0])), Math.max(...spans.map(a => a[1]))]);
+  }
   return out;
 }
+
+/** True while the wheel rests on categories (it has them, and no domain is open). */
+const catBars = sb => sb.model.equal && sb.model.cats.length > 0 && !sb.zoom;
+/** Where a bar starts: just outside the domain ring, or outside the category ring in an open domain. */
+const barBase = sb => (sb.model.cats.length && sb.zoom && sb.R.cat ? sb.R.cat : sb.R.domain) + 3;
+/** Is this goal folded into its category bar right now (resting on categories, its category not pointed at)? */
+const folded = (sb, n, openCat) => n.level === 'goal' && catBars(sb) && !!n.category && (!FAN || n.category !== openCat);
 
 // ---------------------------------------------------------------- colour
 
@@ -116,11 +144,11 @@ function fills(node, state) {
   const look = baseFills(node, state);
   const hits = state.hits;
   if (!hits) return look;
-  if (node.level === 'domain') {
-    if (!hits.domains.has(node.id)) look.fill = GREY.domain;
+  if (node.level === 'domain' || (node.level === 'category' && !state.catBars)) {
+    if (!(node.level === 'domain' ? hits.domains : hits.cats).has(node.id)) look.fill = GREY.domain;
     return look;
   }
-  const hit = hits.goals.get(node.id);
+  const hit = node.level === 'category' ? hits.cats.get(node.id) : hits.goals.get(node.id);
   if (!hit) {
     if (!(state.equal && node.count === 0)) look.fill = GREY.goal;
   } else if (hit.partial) {
@@ -135,6 +163,23 @@ function fills(node, state) {
 
 function baseFills(node, state) {
   const { activeDomain, activeId, hovering } = state;
+  if (node.level === 'category') {
+    const grey = node.hue === null || node.hue === undefined;
+    const on = state.activeCat === node.id || state.pick === node.id;
+    const dim = hovering && (state.activeCat ? state.activeCat !== node.id : activeDomain !== node.parent);
+    if (state.catBars) {
+      // Resting on categories, a category is a bar like a goal's; pointed at, it pales so its goals show through.
+      return {
+        fill: node.count === 0 ? '#fff' : grey ? (on ? '#7c8492' : '#cbd5e1')
+          : on ? `hsl(${node.hue} 62% 40%)` : `hsl(${node.hue} 58% ${activeDomain === node.parent ? 52 : 60}%)`,
+        opacity: FAN && state.activeCat === node.id ? 0.18 : dim ? 0.3 : 1,
+      };
+    }
+    return {
+      fill: grey ? (on ? '#7c8492' : '#b6bcc6') : `hsl(${node.hue} ${on ? 55 : 45}% ${on ? 48 : 72}%)`,
+      opacity: dim ? 0.35 : 1,
+    };
+  }
   const h = node.hue;
   const grey = h === null || h === undefined;
   if (node.level === 'domain') {
@@ -145,7 +190,7 @@ function baseFills(node, state) {
     };
   }
   const on = activeId === node.id || state.pick === node.id;
-  const inDomain = activeDomain === node.parent;
+  const inDomain = activeDomain === node.parent && (!state.activeCat || node.category === state.activeCat);
   if (state.equal) {
     return {
       fill: node.count === 0 ? '#fff' : grey ? (on ? '#7c8492' : '#cbd5e1')
@@ -286,8 +331,30 @@ function runSearch(sb) {
     domainRows.set(d.id, dRows);
     all.push(...dRows);
   }
+  // A category holds what its goals hold, or all of itself when its own name matches.
+  const cats = new Map();
+  for (const c of model.cats) {
+    const titleHit = has(search.names.get(c.id).title) || has(search.names.get(c.parent).title);
+    const members = model.goalsOf.get(c.id) || [];
+    const rows = titleHit ? members.flatMap(g => search.rows[g.id] || [])
+      : members.flatMap(g => (goals.get(g.id) || { rows: [] }).rows);
+    if (!titleHit && !members.some(g => goals.has(g.id))) continue;
+    const count = titleHit ? c.count : Math.min(measure(rows, col), c.count);
+    cats.set(c.id, { named: titleHit, rows, count, partial: !titleHit && count < c.count && c.count > 0 });
+    domains.add(c.parent);
+    if (titleHit) {
+      // Its goals light up with it, and count toward the totals.
+      for (const g of members) {
+        if (goals.has(g.id)) continue;
+        const gRows = search.rows[g.id] || [];
+        goals.set(g.id, { named: true, rows: gRows, count: g.count, partial: false });
+        all.push(...gRows);
+        domainRows.get(c.parent).push(...gRows);
+      }
+    }
+  }
   const count = rows => ({ programs: measure(rows, 1), organizations: measure(rows, 2), outcomes: rows.length });
-  sb.hits = { words: w, textHit, goals, domains, domainRows, col, total: count(all), all };
+  sb.hits = { words: w, textHit, goals, cats, domains, domainRows, col, total: count(all), all };
   updateNote(sb);
 }
 
@@ -339,12 +406,17 @@ function marked(text, w) {
 }
 
 function mount(root, sb, data) {
-  const model = { byId: new Map(), domains: [], children: new Map(), root: null, data, equal: data.layout === 'equal' };
+  const model = { byId: new Map(), domains: [], cats: [], goalsOf: new Map(), children: new Map(), root: null, data, equal: data.layout === 'equal' };
   for (const n of data.nodes) {
     model.byId.set(n.id, n);
     if (n.level === 'root') model.root = n;
     else if (n.level === 'domain') model.domains.push(n);
+    else if (n.level === 'category') model.cats.push(n);
     else {
+      if (n.category) {
+        if (!model.goalsOf.has(n.category)) model.goalsOf.set(n.category, []);
+        model.goalsOf.get(n.category).push(n);
+      }
       if (!model.children.has(n.parent)) model.children.set(n.parent, []);
       model.children.get(n.parent).push(n);
     }
@@ -354,6 +426,8 @@ function mount(root, sb, data) {
   sb.model = model;
   sb.R = model.equal ? R_EQUAL : R_VALUE;
   sb.maxCount = Math.max(1, ...data.nodes.filter(n => n.level === 'goal').map(n => n.count));
+  // Resting on categories, bars are categories (and any goal outside one), on one scale of their own.
+  sb.maxUnit = Math.max(1, ...data.nodes.filter(n => n.level === 'category' || (n.level === 'goal' && !n.category)).map(n => n.count));
   sb.search = prepareSearch(model, data);
   runSearch(sb);
 
@@ -362,9 +436,10 @@ function mount(root, sb, data) {
     const d = data.selected.domain;
     const g = data.selected.goal;
     const goalId = g ? `${d}${data.sep}${g}` : null;
+    const catId = data.selected.category ? `${d}\x1e${data.selected.category}` : null;
     if (model.byId.has(d)) {
       sb.zoom = d;
-      sb.pick = goalId && model.byId.has(goalId) ? goalId : d;
+      sb.pick = goalId && model.byId.has(goalId) ? goalId : catId && model.byId.has(catId) ? catId : d;
     }
   }
   // New counts (another measure or filter) keep the open domain if it is still there.
@@ -387,30 +462,36 @@ function mount(root, sb, data) {
   const trackLayer = svgEl('g');
   const goalLayer = svgEl('g');
   const hitLayer = svgEl('g', { class: 'sb-hits' });   // the matching share of each goal, while searching
+  const catLayer = svgEl('g');
+  // Resting on categories, a pointed-at category fans its goals out over its neighbours, on this backdrop.
+  const fan = svgEl('path', { class: 'sb-fan', fill: '#f8fafc', stroke: '#e2e8f0', 'stroke-width': 1 });
+  goalLayer.appendChild(fan);
+  const defs = svgEl('defs');                          // arcs the open domain's category names run along
   const domainLayer = svgEl('g');
   const labelLayer = svgEl('g');
   const hole = svgEl('circle', { cx: C, cy: C, r: sb.R.hole - 3, class: 'sb-hole' });
-  svg.append(trackLayer, goalLayer, hitLayer, domainLayer, hole, labelLayer);
+  svg.append(defs, trackLayer, catLayer, goalLayer, hitLayer, domainLayer, hole, labelLayer);
   const center = el('div', 'sb-center');
   figure.append(svg, center);
   const panel = el('div', 'sb-panel');
   root.append(figure, panel);
 
-  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map() };
+  sb.els = { svg, hole, center, panel, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map(), catNames: new Map(), dots: new Map(), fan };
+  const uid = `sb${Math.random().toString(36).slice(2, 8)}`;
   const animate = firstMount && !reducedMotion();
   if (animate) svg.classList.add('sb-enter');
 
   let i = 0;
   for (const n of data.nodes) {
     if (n.level === 'root') continue;
-    const gap = model.equal && n.level === 'goal' && n.count === 0;
+    const gap = model.equal && (n.level === 'goal' || n.level === 'category') && n.count === 0;
     const path = svgEl('path', {
       class: 'sb-slice', stroke: gap ? '#94a3b8' : '#fff', 'fill-rule': 'evenodd',
       'stroke-width': n.level === 'domain' ? 2 : 1.25,
       tabindex: 0, role: 'button', 'aria-label': `${n.eyebrow}: ${n.title}, ${plural(n.count, data.noun_one, data.noun)}`,
     });
     if (gap) path.setAttribute('stroke-dasharray', '3 2');
-    if (model.equal && n.level === 'goal') {
+    if (model.equal && (n.level === 'goal' || n.level === 'category')) {
       // The pale track behind each bar shows how far the bar could reach.
       const track = svgEl('path', { class: 'sb-track', fill: '#f1f5f9', stroke: '#fff', 'stroke-width': 1.25 });
       trackLayer.appendChild(track);
@@ -419,9 +500,9 @@ function mount(root, sb, data) {
     path.style.transformOrigin = `${C}px ${C}px`;
     if (animate) path.style.animationDelay = n.level === 'domain' ? `${i * 40}ms` : `${120 + i * 6}ms`;
     i += 1;
-    (n.level === 'domain' ? domainLayer : goalLayer).appendChild(path);
+    (n.level === 'domain' ? domainLayer : n.level === 'category' ? catLayer : goalLayer).appendChild(path);
     sb.els.slices.set(n.id, path);
-    if (n.level === 'goal' && n.count > 0) {
+    if ((n.level === 'goal' || (model.equal && n.level === 'category')) && n.count > 0) {
       const hit = svgEl('path', { class: 'sb-hit', stroke: '#fff', 'stroke-width': 1.25 });
       hit.style.transformOrigin = `${C}px ${C}px`;
       hitLayer.appendChild(hit);
@@ -430,11 +511,29 @@ function mount(root, sb, data) {
     if (n.label) {
       const text = svgEl('text', {
         class: 'sb-label', 'text-anchor': 'middle', 'dominant-baseline': 'central',
-        'font-size': n.level === 'domain' ? 17 : 14, 'font-weight': 600,
+        'font-size': n.level === 'domain' ? 17 : n.level === 'category' ? 12 : 14, 'font-weight': 600,
       });
       text.textContent = n.label;
       labelLayer.appendChild(text);
       sb.els.labels.set(n.id, text);
+    }
+    if (n.level === 'category' && model.equal) {
+      // One dot per goal at the bar's base: filled when a program names it, hollow for a gap.
+      const dots = svgEl('g', { class: 'sb-dots' });
+      for (const g of model.goalsOf.get(n.id) || []) dots.appendChild(svgEl('circle', { r: DOT.r, 'data-on': g.count > 0 ? '1' : '' }));
+      labelLayer.appendChild(dots);
+      sb.els.dots.set(n.id, dots);
+    }
+    if (n.level === 'category') {
+      // The open domain's categories carry their names along the ring.
+      const arc = svgEl('path', { id: `${uid}-${i}`, fill: 'none' });
+      defs.appendChild(arc);
+      const name = svgEl('text', { class: 'sb-label sb-cat-name', 'font-size': 12, 'font-weight': 600, 'dominant-baseline': 'central' });
+      const tp = svgEl('textPath', { href: `#${uid}-${i}`, startOffset: '50%', 'text-anchor': 'middle' });
+      tp.textContent = n.title;
+      name.appendChild(tp);
+      labelLayer.appendChild(name);
+      sb.els.catNames.set(n.id, { arc, name });
     }
     wire(path, n, sb);
   }
@@ -476,7 +575,9 @@ function setHover(sb, id, now) {
 }
 
 function clickNode(sb, node) {
-  if (node.level === 'domain') {
+  if (node.level === 'category') {
+    choose(sb, node.parent, sb.pick === node.id && sb.zoom === node.parent ? node.parent : node.id);
+  } else if (node.level === 'domain') {
     if (sb.zoom === node.id) choose(sb, null, null);
     else choose(sb, node.id, node.id);
   } else if (sb.zoom !== node.parent) {
@@ -489,6 +590,7 @@ function clickNode(sb, node) {
 function selectionOf(model, pickId) {
   const n = pickId ? model.byId.get(pickId) : null;
   if (!n) return null;
+  if (n.level === 'category') return { domain: n.parent, goal: null, category: n.label + '. ' + n.title };
   return n.level === 'domain' ? { domain: n.id, goal: null } : { domain: n.parent, goal: n.goal };
 }
 
@@ -530,54 +632,167 @@ function tween(sb, target) {
 /** How far a goal's slice reaches: the full ring in the sunburst, its bar length on the wheel. */
 function outerRadius(sb, n, count = n.count) {
   const R = sb.R;
-  const base = R.domain + 3;
+  const base = barBase(sb);
   if (!sb.model.equal) {
     // While searching, the matching share of a sunburst slice fills it from the inside out.
     return count === n.count ? R.goal : base + Math.max(count / n.count, 0.06) * (R.goal - base);
   }
   if (count === 0) return base + STUB;
   // Square root, so the bar's area (not its length) follows the count, and thin goals stay visible.
-  return base + STUB + Math.sqrt(count / sb.maxCount) * (R.goal - base - STUB);
+  // Resting on categories, revealed goals share the categories' scale, so they read against them.
+  const max = catBars(sb) ? sb.maxUnit : sb.maxCount;
+  return base + STUB + Math.sqrt(count / max) * (R.goal - base - STUB);
 }
 
 function draw(sb) {
   const { model, els } = sb;
   const R = sb.R;
+  const resting = catBars(sb);
   for (const [id, track] of els.tracks) {
+    const n = model.byId.get(id);
     const [a0, a1] = sb.angles.get(id) || [0, 0];
-    track.setAttribute('d', arcPath(R.domain + 3, R.goal, a0, a1));
+    // Resting on categories, the tracks belong to the category bars (and goals outside a category).
+    const shown = n.level === 'category' ? resting : !(resting && n.category);
+    track.style.display = shown ? '' : 'none';
+    if (shown) track.setAttribute('d', arcPath(barBase(sb), R.goal, a0, a1));
   }
   for (const [id, path] of els.slices) {
     const n = model.byId.get(id);
     const [a0, a1] = sb.angles.get(id) || [0, 0];
-    const d = n.level === 'domain' ? arcPath(R.hole, R.domain, a0, a1) : arcPath(R.domain + 3, outerRadius(sb, n), a0, a1);
+    const d = n.level === 'domain' ? arcPath(R.hole, R.domain, a0, a1)
+      : n.level === 'category' ? (resting ? arcPath(barBase(sb), outerRadius(sb, n), a0, a1) : arcPath(R.domain + 2, R.cat, a0, a1))
+        : arcPath(barBase(sb), outerRadius(sb, n), a0, a1);
     path.setAttribute('d', d);
-    const hidden = !d;
-    path.style.display = hidden ? 'none' : '';
-    path.setAttribute('tabindex', hidden ? -1 : 0);
+    path.dataset.empty = d ? '' : '1';
+    if (n.level === 'category' && model.equal) {
+      // An empty category is a dashed stub while it is a bar, a plain band on the open domain's ring.
+      path.setAttribute('stroke', resting && n.count === 0 ? '#94a3b8' : '#fff');
+      if (resting && n.count === 0) path.setAttribute('stroke-dasharray', '3 2');
+      else path.removeAttribute('stroke-dasharray');
+    }
     const hitPath = els.hits.get(id);
     if (hitPath) {
-      const hit = sb.hits && sb.hits.goals.get(id);
-      const show = !!(hit && hit.partial && d);
-      hitPath.style.display = show ? '' : 'none';
-      if (show) hitPath.setAttribute('d', arcPath(R.domain + 3, outerRadius(sb, n, Math.max(hit.count, 1)), a0, a1));
+      const hit = sb.hits && (n.level === 'category' ? sb.hits.cats.get(id) : sb.hits.goals.get(id));
+      const usable = !!(hit && hit.partial && d) && (n.level !== 'category' || resting);
+      hitPath.dataset.usable = usable ? '1' : '';
+      if (usable) hitPath.setAttribute('d', arcPath(barBase(sb), outerRadius(sb, n, Math.max(hit.count, 1)), a0, a1));
     }
     const label = els.labels.get(id);
+    const named = n.level === 'category' && categoryName(sb, n, a0, a1, d);
     if (label) {
       const span = a1 - a0;
-      const show = n.level === 'domain'
-        ? !sb.zoom && span >= MIN_LABEL_DEG.domain
-        : !!sb.zoom && span >= MIN_LABEL_DEG.goal;
-      const [x, y] = n.level === 'domain'
-        ? point((R.hole + R.domain) / 2, (a0 + a1) / 2)
-        : point(model.equal ? R.goal - 16 : (R.domain + R.goal) / 2 + 2, (a0 + a1) / 2);
+      const show = !!d && (n.level === 'domain' ? !sb.zoom && span >= MIN_LABEL_DEG.domain
+        : n.level === 'category' ? !named && span >= MIN_LABEL_DEG.category
+          : !!sb.zoom && span >= MIN_LABEL_DEG.goal);
+      const [x, y] = n.level === 'domain' ? point((R.hole + R.domain) / 2, (a0 + a1) / 2)
+        : n.level === 'category' ? point(resting ? R.domain + 13 : (R.domain + 2 + R.cat) / 2, (a0 + a1) / 2)
+          : point(model.equal ? R.goal - 16 : (barBase(sb) + R.goal) / 2 - 1, (a0 + a1) / 2);
       label.setAttribute('x', f(x));
       label.setAttribute('y', f(y));
-      label.style.display = show ? '' : 'none';
+      label.dataset.show = show ? '1' : '';
     }
   }
+  for (const [id, dots] of els.dots) placeDots(sb, model.byId.get(id), dots, resting);
   els.hole.classList.toggle('can-go-up', !!sb.zoom);
   paint(sb);
+}
+
+/** Lay a category's goal dots along its arc, in as many short rows as its width needs. */
+function placeDots(sb, n, dots, resting) {
+  const [a0, a1] = sb.angles.get(n.id) || [0, 0];
+  const circles = [...dots.children];
+  const r0 = sb.R.domain + DOT.at;
+  const perRow = Math.max(1, Math.floor(((r0 * (a1 - a0) * Math.PI) / 180 - 4) / DOT.gap));
+  const show = resting && a1 - a0 >= MIN_LABEL_DEG.category && circles.length > 0;
+  dots.style.display = show ? '' : 'none';
+  if (!show) return;
+  const rows = Math.ceil(circles.length / perRow);
+  circles.forEach((c, k) => {
+    const row = Math.floor(k / perRow);
+    const inRow = row === rows - 1 ? circles.length - row * perRow : perRow;
+    const r = r0 + row * DOT.row;
+    const step = (DOT.gap / r) * (180 / Math.PI);
+    const a = (a0 + a1) / 2 + (k - row * perRow - (inRow - 1) / 2) * step;
+    const [x, y] = point(r, a);
+    c.setAttribute('cx', f(x));
+    c.setAttribute('cy', f(y));
+  });
+}
+
+/** What is drawn right now: folded goals stay hidden until their category is pointed at. */
+function reveal(sb, openCat) {
+  const { model, els } = sb;
+  const fanned = fanOut(sb, openCat);
+  // Category letters under an open fan would sit on its goals' bars.
+  const underFan = n => {
+    if (!fanned || n.level !== 'category') return false;
+    const [a0, a1] = sb.angles.get(n.id) || [0, 0];
+    const mid = (a0 + a1) / 2;
+    return [mid, mid - 360, mid + 360].some(m => m > fanned[0] && m < fanned[1]);
+  };
+  for (const [id, path] of els.slices) {
+    const n = model.byId.get(id);
+    const hidden = path.dataset.empty === '1' || folded(sb, n, openCat);
+    path.style.display = hidden ? 'none' : '';
+    path.setAttribute('tabindex', hidden ? -1 : 0);
+    // Revealed goals sit over their category's bar; the pointer stays with the category underneath.
+    path.style.pointerEvents = n.level === 'goal' && catBars(sb) && n.category ? 'none' : '';
+    const hitPath = els.hits.get(id);
+    if (hitPath) {
+      const covered = FAN && n.level === 'category' && openCat === id;
+      hitPath.style.display = hitPath.dataset.usable && !hidden && !covered ? '' : 'none';
+    }
+    const label = els.labels.get(id);
+    if (label) label.style.display = label.dataset.show && !hidden && !underFan(n) ? '' : 'none';
+  }
+}
+
+/** In an open domain, write a category's name along its arc if it fits; returns whether it does. */
+function fanOut(sb, openCat) {
+  const { model, els } = sb;
+  const goals = FAN && openCat && catBars(sb) ? model.goalsOf.get(openCat) || [] : [];
+  els.fan.style.display = goals.length ? '' : 'none';
+  if (!goals.length) return null;
+  // The fan is centred on the category, at least as wide as it, so each goal gets a readable bar.
+  const [c0, c1] = sb.angles.get(openCat) || [0, 0];
+  const span = Math.max(c1 - c0, Math.min(goals.length * FAN_STEP, FAN_MAX));
+  const f0 = (c0 + c1) / 2 - span / 2;
+  const step = span / goals.length;
+  const base = barBase(sb);
+  els.fan.setAttribute('d', arcPath(base - 1, sb.R.goal + 2, f0, f0 + span));
+  goals.forEach((g, k) => {
+    const a0 = f0 + k * step;
+    els.slices.get(g.id).setAttribute('d', arcPath(base, outerRadius(sb, g), a0, a0 + step));
+    const hitPath = els.hits.get(g.id);
+    const hit = sb.hits && sb.hits.goals.get(g.id);
+    if (hitPath && hit && hit.partial) hitPath.setAttribute('d', arcPath(base, outerRadius(sb, g, Math.max(hit.count, 1)), a0, a0 + step));
+    const label = els.labels.get(g.id);
+    if (label) {
+      const [x, y] = point(sb.R.goal - 16, a0 + step / 2);
+      label.setAttribute('x', f(x));
+      label.setAttribute('y', f(y));
+      label.dataset.show = step >= 7 ? '1' : '';
+    }
+  });
+  return [f0, f0 + span];
+}
+
+function categoryName(sb, n, a0, a1, d) {
+  const item = sb.els.catNames.get(n.id);
+  if (!item) return false;
+  const r = (sb.R.domain + 2 + sb.R.cat) / 2;
+  const room = (r * (a1 - a0) * Math.PI) / 180 - 12;
+  const fits = !!sb.zoom && !!d && a1 - a0 >= MIN_LABEL_DEG.categoryName && n.title.length * 6.6 <= room;
+  item.name.style.display = fits ? '' : 'none';
+  if (!fits) return false;
+  // Clockwise along the top half, counter-clockwise along the bottom, so the name never reads upside down.
+  const mid = ((a0 + a1) / 2) % 360;
+  const flip = mid > 90 && mid < 270;
+  const [s0, e0] = flip ? [a1, a0] : [a0, a1];
+  const [x0, y0] = point(r, s0);
+  const [x1, y1] = point(r, e0);
+  item.arc.setAttribute('d', `M${f(x0)} ${f(y0)}A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} ${flip ? 0 : 1} ${f(x1)} ${f(y1)}`);
+  return true;
 }
 
 function paint(sb) {
@@ -586,7 +801,11 @@ function paint(sb) {
   const picked = sb.pick ? model.byId.get(sb.pick) : null;
   const lead = hovered || picked;
   const activeDomain = lead ? (lead.level === 'domain' ? lead.id : lead.parent) : null;
-  const state = { activeDomain, activeId: sb.hover, hovering: !!hovered, pick: sb.pick, equal: model.equal, hits: sb.hits };
+  const activeCat = lead && lead.level === 'category' ? lead.id : null;
+  const state = { activeDomain, activeCat, activeId: sb.hover, hovering: !!hovered, pick: sb.pick, equal: model.equal, hits: sb.hits,
+    catBars: catBars(sb) };
+  // Resting on categories, only a pointed-at category opens to show its goals.
+  reveal(sb, hovered && hovered.level === 'category' ? hovered.id : null);
   for (const [id, path] of els.slices) {
     const n = model.byId.get(id);
     const look = fills(n, state);
@@ -600,11 +819,25 @@ function paint(sb) {
       hitPath.style.transform = path.style.transform;
     }
     const label = els.labels.get(id);
-    const missed = sb.hits && !(n.level === 'domain' ? sb.hits.domains.has(id) : sb.hits.goals.has(id));
-    if (label) {
-      label.setAttribute('fill', n.level === 'domain' ? (missed ? '#64748b' : '#fff') : missed ? GREY.label : (n.hue === null || n.hue === undefined
-        ? '#334155' : model.equal ? `hsl(${n.hue} 45% 18%)` : `hsl(${n.hue} 55% ${look.lift && !look.overlay ? 97 : 26}%)`));
-      label.style.opacity = look.opacity < 1 ? 0.55 : 1;
+    const missed = sb.hits && !(n.level === 'goal' ? sb.hits.goals : n.level === 'category' ? sb.hits.cats : sb.hits.domains).has(id);
+    const ink = n.level === 'domain' ? (missed ? '#64748b' : '#fff') : missed ? GREY.label : (n.hue === null || n.hue === undefined
+      ? '#334155' : n.level === 'category' ? `hsl(${n.hue} 45% ${state.pick === id || activeCat === id ? 97 : 20}%)`
+        : model.equal ? `hsl(${n.hue} 45% 18%)` : `hsl(${n.hue} 55% ${look.lift && !look.overlay ? 97 : 26}%)`);
+    const dots = els.dots.get(id);
+    if (dots) {
+      const lit = state.pick === id || activeCat === id;   // on the darker picked or pointed-at bar, the dots turn white
+      const dark = lit ? '#fff' : n.hue === null || n.hue === undefined ? '#475569' : `hsl(${n.hue} 45% 24%)`;
+      for (const c of dots.children) {
+        c.setAttribute('fill', c.dataset.on ? (missed ? GREY.label : dark) : lit ? 'none' : '#fff');
+        c.setAttribute('stroke', missed ? GREY.label : dark);
+        c.setAttribute('stroke-width', 1);
+      }
+      dots.style.opacity = look.opacity < 1 ? 0.55 : 1;
+    }
+    for (const text of [label, els.catNames.get(id)?.name]) {
+      if (!text) continue;
+      text.setAttribute('fill', ink);
+      text.style.opacity = look.opacity < 1 ? 0.55 : 1;
     }
   }
   readout(sb, hovered);
@@ -625,6 +858,7 @@ function readout(sb, hovered) {
   // While searching: the rows of this slice that match, and how many of the chart's measure they make.
   const match = !hits ? null : focus.level === 'root' ? { rows: hits.all, count: hits.total[data.noun.startsWith('program') ? 'programs' : data.noun.startsWith('organization') ? 'organizations' : 'outcomes'], named: false }
     : focus.level === 'domain' ? { rows: hits.domainRows.get(focus.id) || [], count: measure(hits.domainRows.get(focus.id) || [], hits.col), named: false, lit: hits.domains.has(focus.id) }
+    : focus.level === 'category' ? (hits.cats.get(focus.id) || { rows: [], count: 0, named: false })
     : (hits.goals.get(focus.id) || { rows: [], count: 0, named: false });
 
   // Centre
@@ -693,12 +927,31 @@ function readout(sb, hovered) {
     }
     children.push(el('div', 'sb-eyebrow sb-samples-head', hits.goals.size > top.length ? `Top goals of ${hits.goals.size}` : 'Goals that match'), list);
   }
-  const found = hits ? matchingSamples(sb, match.rows, focus.level === 'root' ? 2 : 3) : [];
+  if (focus.level === 'category') {
+    // The subcategories: every goal in the category with its count, as the wheel shows them on hover.
+    const list = el('ul', 'sb-goals sb-subs');
+    const members = model.goalsOf.get(focus.id) || [];
+    const top = Math.max(1, ...members.map(g => g.count));
+    for (const g of members) {
+      const n = hits ? (hits.goals.get(g.id) || { count: 0 }).count : g.count;
+      const li = el('li', hits && !hits.goals.has(g.id) ? 'sb-goal-miss' : '');
+      const bar = el('span', 'sb-mini');
+      const fill = el('span');
+      // Square root, as on the wheel, so a goal's bar here matches its bar there.
+      fill.style.width = n ? `${Math.max(Math.sqrt(n / top) * 100, 4)}%` : '0';
+      fill.style.background = swatchColor(g);
+      bar.append(fill);
+      li.append(el('span', 'sb-goal-name', `${g.label ? g.label + ' ' : ''}${g.title}`), bar, el('span', 'sb-goal-n', fmt(n)));
+      list.append(li);
+    }
+    children.push(el('div', 'sb-eyebrow sb-samples-head', hits ? `Subcategories (${data.noun} that match)` : `Subcategories (${data.noun})`), list);
+  }
+  const found = hits ? matchingSamples(sb, match.rows, focus.level === 'root' || focus.level === 'category' ? 2 : 3) : [];
   if (found.length) {
     const list = el('ul', 'sb-samples');
     for (const s of found) list.append(marked(s, hits.words));
     children.push(el('div', 'sb-eyebrow sb-samples-head', 'Outcomes that match'), list);
-  } else if (focus.samples && focus.samples.length && !(focus.level === 'root' && hits)) {
+  } else if (focus.samples && focus.samples.length && !(focus.level === 'root' && hits) && focus.level !== 'category') {
     const list = el('ul', 'sb-samples');
     for (const s of focus.samples) list.append(el('li', '', `“${s}”`));
     children.push(el('div', 'sb-eyebrow sb-samples-head', 'Sample outcomes'), list);
@@ -710,7 +963,8 @@ function readout(sb, hovered) {
 
 /** What the search found in one slice, for the centre (short) or the side panel. */
 function matchLine(node, match, data, short) {
-  if (match.named) return short ? 'Its name or description matches' : 'The codebook names or describes this goal with these words, so all of it counts.';
+  if (match.named) return short ? 'Its name or description matches'
+    : `The codebook names or describes this ${node.level === 'category' ? 'category' : 'goal'} with these words, so all of it counts.`;
   if (node.level === 'domain' && !match.count && match.lit) return short ? 'Its description matches' : "The codebook's description of this domain matches; none of its goals do.";
   if (!match.count) return short ? 'No match' : 'Nothing here matches the search.';
   return short
@@ -720,11 +974,14 @@ function matchLine(node, match, data, short) {
 
 function hint(sb, hovered) {
   if (hovered) {
-    if (hovered.level === 'domain') return sb.zoom === hovered.id ? 'Click to go back to all domains.' : 'Click to open its goals.';
+    if (hovered.level === 'domain') return sb.zoom === hovered.id ? 'Click to go back to all domains.'
+      : sb.model.cats.length ? 'Point at a category to see its subcategories. Click to open the domain.' : 'Click to open its goals.';
+    if (hovered.level === 'category') return sb.pick === hovered.id ? 'Click again to show the whole domain.' : 'Click to list its outcomes in the table below.';
     if (sb.pick === hovered.id) return 'Click again to show the whole domain.';
     return hovered.count ? 'Click to list its outcomes in the table below.' : 'Nothing to list yet.';
   }
   if (sb.zoom) return 'Click the center to go back to all domains.';
   if (sb.hits) return 'Point at a slice to see what matched. Clicking still opens it.';
-  return 'Point at a slice to read it. Click a domain to open its goals.';
+  return sb.model.cats.length ? 'Point at a category to see its subcategories. Click one to list its outcomes.'
+    : 'Point at a slice to read it. Click a domain to open its goals.';
 }
