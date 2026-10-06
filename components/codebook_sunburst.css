@@ -15,12 +15,12 @@
 }
 
 .sb { display: flex; gap: 28px; align-items: center; justify-content: center; flex-wrap: wrap; }
-.sb-figure { position: relative; flex: 0 1 600px; min-width: 300px; max-width: 600px; }
+.sb-figure { position: relative; flex: 0 1 690px; min-width: 300px; max-width: 690px; }
 .sb-domains ~ .sb-figure { flex-basis: 520px; }   /* room for the domain list on the left */
 
 /* The domain list left of the category wheel: one row per domain, a pinned row opens into its categories.
    Fixed height, so opening a row never moves the wheel. */
-.sb-domains { flex: 0 1 220px; min-width: 200px; max-height: 600px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.sb-domains { flex: 0 1 220px; min-width: 200px; max-height: 690px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .sb-dom { border-radius: 8px; transition: opacity .2s ease, background .2s ease; }
 .sb-dom.is-dim { opacity: .45; }
 .sb-dom.is-lit, .sb-dom.is-open { background: var(--wash); opacity: 1; }
@@ -155,7 +155,18 @@
 .sb-fan { pointer-events: none; }
 .sb-dots { pointer-events: none; }
 
-.sb-domains ~ .sb-panel { flex-basis: 280px; min-width: 240px; }
+.sb-domains ~ .sb-panel { flex-basis: 250px; min-width: 220px; height: 540px; }
+/* Beside the wheel the side panel is set tighter, so the wheel can take the room. */
+.sb-domains ~ .sb-panel .sb-title { font-size: 17px; }
+.sb-domains ~ .sb-panel .sb-counts { gap: 16px; margin-top: 10px; }
+.sb-domains ~ .sb-panel .sb-counts li { font-size: 12px; }
+.sb-domains ~ .sb-panel .sb-counts b { font-size: 19px; }
+.sb-domains ~ .sb-panel .sb-def { font-size: 12.5px; line-height: 1.45; }
+.sb-domains ~ .sb-panel .sb-def-more { font-size: 12px; }
+.sb-domains ~ .sb-panel .sb-samples-head { margin-top: 16px; }
+.sb-domains ~ .sb-panel .sb-samples li { font-size: 12px; padding: 6px 10px; }
+.sb-domains ~ .sb-panel .sb-goals li { font-size: 12px; line-height: 1.35; }
+.sb-domains ~ .sb-panel .sb-mini { width: 48px; }
 .sb-sub-head { margin: 12px 0 0; font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .sb-subs li.is-zero .sb-goal-name { color: var(--faint); }
 .sb-dom-goals { margin: 0 0 4px; padding: 0 0 0 12px; list-style: none; }
