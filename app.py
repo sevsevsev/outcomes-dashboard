@@ -562,13 +562,12 @@ def plain_domain(domain: str) -> str:
 
 
 def page_system_map(df: pd.DataFrame) -> None:
-    page_header("What these programs aim for")
+    # No page title: the wheel leads the page (Severin, 2026-10-06), and the findings follow it.
     if df.empty:
         st.warning("No outcomes match the current filters. Clear some of them to see results.")
         return
 
     coverage = cached_coverage(df)
-    findings(cached_findings(df, coverage))
 
     with section("Explore the portfolio", "Click a bar or slice to narrow the charts beside and below it, and the "
                  "outcomes table.", key="explore"):
@@ -599,6 +598,8 @@ def page_system_map(df: pd.DataFrame) -> None:
             chosen_domain = None
             hierarchy_view(df, measure, view)
 
+    with section("What stands out", key="findings"):
+        findings(cached_findings(df, coverage))
     thin_goals(coverage, chosen_domain)
     download_button(df, "Download all outcomes on this page (CSV)", "system_map_outcomes.csv", key="v1_dl_all")
 
