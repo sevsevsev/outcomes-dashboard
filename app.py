@@ -116,6 +116,9 @@ APP_TITLE = "Outcomes Explorer"
 # Session-state keys for the filters, so "Clear filters" can reset them.
 PLACE_KEYS = {"f_zip": schools.COL_ZIP, "f_council": schools.COL_COUNCIL, "f_network": schools.COL_NETWORK_NAME}
 FILTER_KEYS = ["f_domains", "f_pops", "f_orgs", "f_conf", *PLACE_KEYS, "f_schools"]
+# Filters a page leaves out: peers compares organizations, the school page lists every partner at one
+# school, and the review page has its own confidence control. The values are kept for the other pages.
+UNUSED_FILTERS = {"peers": {"f_orgs"}, "schools": {"f_orgs", *PLACE_KEYS, "f_schools"}, "review": {"f_conf"}}
 ALL_DOMAINS = "All domains"
 MAX_PROGRAMS = 6
 DEFAULT_PROGRAMS = 4
@@ -254,7 +257,8 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 
 .status {{ color: {MUTED}; font-size: 0.875rem !important; margin: 0; }}
 .status b {{ color: {INK}; font-weight: 600; font-variant-numeric: tabular-nums; }}
-.intent {{ color: {MUTED}; font-size: 0.875rem !important; margin: 0.1rem 0 0 0; }}
+.status .kept {{ color: {FAINT}; }}
+.intent {{ color: {MUTED}; font-size: 0.875rem !important; margin: 0.6rem 0 0 0; }}
 .intent b {{ color: {INK}; font-weight: 600; }}
 .crumb {{ font-size: 0.9375rem !important; margin: 0; color: {MUTED}; }}
 .crumb b {{ color: {INK}; font-weight: 600; font-variant-numeric: tabular-nums; }}
@@ -326,6 +330,20 @@ button[kind="tertiary"]:hover p {{ color: {INK}; }}
 [data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] {{ background: #fff;
   box-shadow: 0 1px 2px rgba(15, 23, 42, .08), 0 0 0 1px rgba(15, 23, 42, .04); }}
 [data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] p {{ color: {INK}; }}
+
+/* The filter bar stays under the top bar while the page scrolls (stMain is the scroller, the header is
+   4rem). Streamlit wraps the keyed container in an stLayoutWrapper of exactly its own height, so the
+   wrapper is what sticks. The bar is one line of fixed height, so sticking never moves a chart. */
+[data-testid="stLayoutWrapper"]:has(> .st-key-filterbar) {{ position: sticky; top: 4rem; z-index: 99;
+  background: #fff; margin: -0.75rem 0 0 0; padding: 0.75rem 0 0.6rem 0; box-shadow: 0 1px 0 {HAIRLINE}; }}
+.st-key-filterbar .status {{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+/* Streamlit pulls markdown up by 1rem; in the bar that sets the status line below the buttons' centre. */
+.st-key-filterbar [data-testid="stMarkdownContainer"] {{ margin-bottom: 0; }}
+/* Jumps to an element land below the header and the bar. */
+[data-testid="stMain"] {{ scroll-padding-top: 8.5rem; }}
+/* Phones: the columns stack, so the bar would take a third of the screen; there it scrolls away. */
+@media (max-width: 640px) {{ [data-testid="stLayoutWrapper"]:has(> .st-key-filterbar) {{ position: static; }}
+  .st-key-filterbar .status {{ white-space: normal; }} }}
 
 /* New content fades in instead of popping, as the explorer's pages do. */
 @keyframes od-fade {{ from {{ opacity: 0; transform: translateY(2px); }} to {{ opacity: 1; transform: none; }} }}
@@ -1323,8 +1341,15 @@ def place_filters(df: pd.DataFrame) -> Optional[pd.Series]:
 
 def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
     """One row above every page: what is showing, a Filters menu and a Data menu. Returns the filtered frame."""
-    status, filters_col, data_col = st.columns([6, 1.5, 1.2], vertical_alignment="center")
-    active = [k for k in FILTER_KEYS if st.session_state.get(k)]
+    # Streamlit drops a widget's value on any run that doesn't draw it. Writing the values back keeps
+    # a filter that this page leaves out (UNUSED_FILTERS) for the next page.
+    for key in FILTER_KEYS:
+        if key in st.session_state:
+            st.session_state[key] = st.session_state[key]
+    unused = UNUSED_FILTERS.get(page_key, set())
+    bar = st.container(key="filterbar")
+    status, clear_col, filters_col, data_col = bar.columns([6, 0.9, 1.5, 1.2], vertical_alignment="center")
+    active = [k for k in FILTER_KEYS if st.session_state.get(k) and k not in unused]
 
     # The Data menu runs first because the organization grouping changes the filter options.
     with data_col.popover("Data", width="stretch"):
@@ -1379,21 +1404,29 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
         at_places = place_filters(df) if page_key != "schools" else None
         if active:
             st.button("Clear filters", on_click=reset_filters, type="tertiary")
+    if active:
+        clear_col.button("Clear", on_click=reset_filters, type="tertiary", key="clear_filters_bar",
+                         help="Clear every filter")
 
     filtered = filter_outcomes(df, domains=chosen_domains, populations=chosen_pops,
                                organizations=chosen_orgs, confidences=chosen_conf)
     if at_places is not None:
         filtered = filtered[at_places.reindex(filtered.index, fill_value=False)]
     n_orgs = count_organizations(filtered[COL_ORG_VIEW])
-    active = [k for k in FILTER_KEYS if st.session_state.get(k)]
+    active = [k for k in FILTER_KEYS if st.session_state.get(k) and k not in unused]
     if active:
         what = " and ".join(
             f"{len(st.session_state[k])} {FILTER_NOUNS[k][len(st.session_state[k]) != 1]}" for k in active)
         text = (f"Filtered to {what}: <b>{len(filtered):,}</b> of {len(df):,} outcome statements from "
-                f"<b>{n_orgs}</b> organizations")
+                f"<b>{n_orgs}</b> {'organization' if n_orgs == 1 else 'organizations'}")
     else:
         text = f"All <b>{len(df):,}</b> outcome statements from <b>{n_orgs}</b> organizations"
-    status.markdown(f"<p class='status'>{text}</p><p class='intent'>{intent_note(df[COL_SOURCE_TYPE].unique())}</p>", unsafe_allow_html=True)
+    kept = [FILTER_NOUNS[k][0] for k in FILTER_KEYS if k in unused and st.session_state.get(k)]
+    if kept:
+        text += f" <span class='kept'>({' and '.join(dict.fromkeys(kept))} filter kept for other pages)</span>"
+    status.markdown(f"<p class='status'>{text}</p>", unsafe_allow_html=True)
+    # The "intended, not measured" line sits under the bar and scrolls away with the page.
+    st.markdown(f"<p class='intent'>{intent_note(df[COL_SOURCE_TYPE].unique())}</p>", unsafe_allow_html=True)
     return filtered
 
 
