@@ -57,7 +57,7 @@
 .sb-track { pointer-events: none; }
 .sb-label { pointer-events: none; user-select: none; transition: opacity .35s ease; font-variant-numeric: tabular-nums; }
 /* A soft white halo round each letter keeps dark names readable over any bar. */
-.sb-halo { stroke: rgba(255, 255, 255, .85); stroke-width: 3px; stroke-linejoin: round; paint-order: stroke fill; }
+.sb-halo { stroke: rgba(255, 255, 255, .85); stroke-width: 2.4px; stroke-linejoin: round; paint-order: stroke fill; }
 
 @keyframes sb-in { from { opacity: 0; transform: scale(.92) rotate(-8deg); } to { opacity: 1; transform: none; } }
 .sb-enter .sb-slice { animation: sb-in .7s cubic-bezier(.2, .7, .2, 1) backwards; }

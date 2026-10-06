@@ -56,7 +56,7 @@ const LABEL_STYLE = 'halo';
 const ZOOM_COLOR = 'pale';
 const zoomColor = () => globalThis.SB_ZOOM_COLOR || ZOOM_COLOR;
 const MAX_LINES = 3;         // a label wraps onto at most this many lines
-const LABEL_PX = { domain: 11, domainValue: 12, bar: 11, goal: 12.5, small: 9.5 };   // font sizes for the plain-name labels
+const LABEL_PX = { domain: 13, domainValue: 13.5, bar: 13, goal: 15, small: 11 };   // font sizes for the plain-name labels
 let lastQuery = '';          // the search outlives a fresh chart (a cleared selection, a page revisit)
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -793,6 +793,7 @@ function choose(sb, zoom, pick) {
   const zoomChanged = zoom !== sb.zoom || cat !== viewCat(sb);
   sb.zoom = zoom;
   sb.pick = pick;
+  if (zoom) sb.focus = null;   // opening a domain lets go of a domain pinned from the list
   sb.send('selection', selectionOf(sb.model, pick));
   if (zoomChanged) tween(sb, targetAngles(sb.model, zoom, cat));
   else paint(sb);
@@ -1121,7 +1122,7 @@ function categoryName(sb, n, a0, a1, d) {
   const r = (sb.R.domain + 2 + sb.R.cat) / 2;
   const room = (r * (a1 - a0) * Math.PI) / 180 - 12;
   // A narrow category drops to the small font before giving way to its letter.
-  const size = !!sb.zoom && !!d && !catBars(sb) ? [12, LABEL_PX.bar, LABEL_PX.small].find(px => textWidth(n.title, px) <= room) : undefined;
+  const size = !!sb.zoom && !!d && !catBars(sb) ? [14, LABEL_PX.bar, LABEL_PX.small].find(px => textWidth(n.title, px) <= room) : undefined;
   item.name.style.display = size ? '' : 'none';
   if (!size) return false;
   item.name.setAttribute('font-size', size);
@@ -1138,7 +1139,7 @@ function categoryName(sb, n, a0, a1, d) {
 function paint(sb) {
   const { model, els } = sb;
   // A domain pinned from the list stands in for the pointer while nothing else is pointed at.
-  const hoverId = sb.hover || (catBars(sb) ? sb.focus : null);
+  const hoverId = sb.hover || (catBars(sb) && !sb.zoom ? sb.focus : null);
   const hovered = hoverId ? model.byId.get(hoverId) : null;
   const picked = sb.pick ? model.byId.get(sb.pick) : null;
   const lead = hovered || picked;
