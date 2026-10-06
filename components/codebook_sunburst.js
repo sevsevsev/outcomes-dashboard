@@ -32,10 +32,14 @@
 // do; then its colour fills only the share of it that matches. `data.search`
 // carries the statements and codebook words (outcomes_data.chart_search_index).
 
-const SIZE = 600;
+// The chart is drawn 15% larger than its first 600-unit design while label sizes stay put,
+// so names have more room in each slice (SCALE stretches the radii, not the text).
+const SCALE = 1.15;
+const SIZE = Math.round(600 * SCALE);
 const C = SIZE / 2;
-const R_VALUE = { hole: 138, domain: 202, goal: 284 };
-const R_EQUAL = { hole: 98, domain: 150, cat: 178, goal: 290 };   // a smaller centre leaves the bars room to grow
+const scaled = r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, Math.round(v * SCALE)]));
+const R_VALUE = scaled({ hole: 138, domain: 202, goal: 284 });
+const R_EQUAL = scaled({ hole: 98, domain: 150, cat: 178, goal: 290 });   // a smaller centre leaves the bars room to grow
 const STUB = 14;             // depth of a zero goal's dashed stub, and the shortest bar
 const POP = 1.04;            // how far the active goal lifts out of the ring
 const ANIM_MS = 520;         // zoom in / out
