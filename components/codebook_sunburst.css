@@ -155,3 +155,5 @@
 .sb-dots { pointer-events: none; }
 
 .sb-domains ~ .sb-panel { flex-basis: 280px; min-width: 240px; }
+.sb-sub-head { margin: 12px 0 0; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.sb-subs li.is-zero .sb-goal-name { color: var(--faint); }
