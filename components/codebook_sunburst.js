@@ -35,7 +35,7 @@
 const SIZE = 600;
 const C = SIZE / 2;
 const R_VALUE = { hole: 138, domain: 202, goal: 284 };
-const R_EQUAL = { hole: 104, domain: 150, cat: 178, goal: 290 };   // a smaller centre leaves the bars room to grow
+const R_EQUAL = { hole: 98, domain: 150, cat: 178, goal: 290 };   // a smaller centre leaves the bars room to grow
 const STUB = 14;             // depth of a zero goal's dashed stub, and the shortest bar
 const POP = 1.04;            // how far the active goal lifts out of the ring
 const ANIM_MS = 520;         // zoom in / out
@@ -56,7 +56,7 @@ const LABEL_STYLE = 'halo';
 const ZOOM_COLOR = 'pale';
 const zoomColor = () => globalThis.SB_ZOOM_COLOR || ZOOM_COLOR;
 const MAX_LINES = 3;         // a label wraps onto at most this many lines
-const LABEL_PX = { domain: 13, domainValue: 13.5, bar: 13, goal: 15, small: 11 };   // font sizes for the plain-name labels
+const LABEL_PX = { domain: 13, domainValue: 13.5, bar: 13, goal: 15, small: 11, tiny: 10 };   // font sizes for the plain-name labels
 let lastQuery = '';          // the search outlives a fresh chart (a cleared selection, a page revisit)
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -306,6 +306,7 @@ export default function (component) {
     parentElement.appendChild(root);
   }
   const sb = root.__sb || (root.__sb = { sig: null, hover: null, zoom: null, pick: null, angles: new Map(), first: true, query: lastQuery });
+  live.add(sb);
   sb.send = setStateValue;
   if (!sb.searchBar) sb.searchBar = searchBar(parentElement, root, sb);
   if (sb.sig !== data.sig) mount(root, sb, data);
@@ -890,8 +891,10 @@ function draw(sb) {
     if (label) {
       let show = false;
       if (d && n.level === 'domain') {
-        show = !sb.zoom && bandLabel(label, els.labelArcs.get(id), n.names, a0, a1, R.hole, R.domain,
-          model.equal ? LABEL_PX.domain : LABEL_PX.domainValue, 4);
+        // A domain always gets a name, never its code: its nickname drops to the smallest size before giving up.
+        const arcs = els.labelArcs.get(id);
+        show = !sb.zoom && (bandLabel(label, arcs, n.names, a0, a1, R.hole, R.domain, model.equal ? LABEL_PX.domain : LABEL_PX.domainValue, 3, false)
+          || bandLabel(label, arcs, n.names, a0, a1, R.hole, R.domain, LABEL_PX.tiny, 2, false));
       } else if (d && n.level === 'category' && resting) {
         // Along the bar, past its goal dots.
         const top = R.domain + DOT.at + (dotRows(sb, n, a0, a1) - 1) * DOT.row + DOT.r + 5;
@@ -1004,7 +1007,12 @@ function fanOut(sb, openCat) {
 
 const measurer = document.createElement('canvas').getContext('2d');
 const widths = new Map();
-document.fonts?.ready.then(() => widths.clear());   // measured before Inter loaded: measure again
+// Labels fitted before Inter loaded were measured in a narrower fallback font: measure and fit them again.
+const live = new Set();
+document.fonts?.ready.then(() => {
+  widths.clear();
+  for (const sb of live) if (sb.model && sb.els) draw(sb);
+});
 function textWidth(s, size) {
   const key = `${size}|${s}`;
   let w = widths.get(key);
@@ -1092,12 +1100,12 @@ function radialLabel(text, names, a0, a1, rIn, rOut, size, keepCode = true) {
   return true;
 }
 
-/** A name along a ring band or across it, whichever has the longer run; the code only when no name fits either way. */
-function bandLabel(text, arcs, names, a0, a1, r0, r1, size, inset = 0) {
+/** A name along a ring band or across it, whichever has the longer run; the code only when no name fits either way (and `allowCode`). */
+function bandLabel(text, arcs, names, a0, a1, r0, r1, size, inset = 0, allowCode = true) {
   const alongFirst = (((r0 + r1) / 2) * (a1 - a0) * Math.PI) / 180 > r1 - r0;
   const along = plainOnly => arcLabel(text, arcs, names, a0, a1, r0, r1, size, plainOnly);
   const across = plainOnly => radialLabel(text, names, a0, a1, r0 + inset, r1 - inset, size, !plainOnly);
-  return alongFirst ? along(true) || across(true) || along(false) : across(true) || along(true) || across(false);
+  return alongFirst ? along(true) || across(true) || (allowCode && along(false)) : across(true) || along(true) || (allowCode && across(false));
 }
 
 /** A name curving along a ring between radii r0 and r1, one arc per line; whether one fits. */
@@ -1265,7 +1273,7 @@ function readout(sb, hovered) {
     li.append(el('b', '', fmt(n)), document.createTextNode(n === 1 ? one : many));
     counts.append(li);
   }
-  const children = [eyebrow, title, ...(hovered ? [] : definitionOf(sb, focus)), counts];
+  const children = [eyebrow, title, ...definitionOf(sb, focus, !!hovered), counts];
   if (focus.level === 'root' && hits) {
     children.push(el('div', 'sb-share-note sb-match-note', hits.goals.size
       ? `${plural(hits.goals.size, 'goal', 'goals')} in ${plural(hits.domains.size, 'domain', 'domains')} hold ${query}. Grey slices don't.`
@@ -1343,7 +1351,8 @@ function readout(sb, hovered) {
 }
 
 /** The codebook's words for what is open or picked (not what is only pointed at, so the panel holds still). */
-function definitionOf(sb, node) {
+/** The codebook's text for a node; `brief` (while pointing at it) leaves out the coding details, which need a click to reach. */
+function definitionOf(sb, node, brief = false) {
   const { model } = sb;
   const defs = model.data.definitions || {};
   if (!model.byCode) model.byCode = new Map([...model.byId.values()].filter(n => n.level === 'domain' || n.level === 'goal').map(n => [n.label, n]));
@@ -1359,6 +1368,7 @@ function definitionOf(sb, node) {
   const g = node.level === 'goal' ? (defs.goals || {})[node.label] : null;
   if (!g || !g.definition) return [];
   const out = [el('p', 'sb-def', g.definition)];
+  if (brief) return out;
   const more = el('details', 'sb-def-more');
   more.open = !!sb.defOpen;
   more.addEventListener('toggle', () => { sb.defOpen = more.open; });
