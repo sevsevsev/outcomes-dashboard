@@ -698,7 +698,22 @@ function domainList(sb, model) {
       btn.addEventListener('pointerenter', () => setHover(sb, c.id));
       btn.addEventListener('pointerleave', () => setHover(sb, null));
       btn.addEventListener('click', () => clickNode(sb, c));
-      li.append(btn);
+      btn.dataset.id = c.id;
+      // Its goals, by name, gaps included; picking one opens the category with that goal picked.
+      const goals = el('ul', 'sb-dom-goals');
+      for (const g of model.goalsOf.get(c.id) || []) {
+        const gli = el('li');
+        const gb = el('button', 'sb-dom-goal' + (g.count === 0 ? ' is-gap' : ''));
+        gb.type = 'button';
+        gb.dataset.id = g.id;
+        gb.append(el('span', 'sb-dom-cat-name', g.title), el('span', 'sb-dom-cat-n', g.count === 0 ? 'none' : fmt(g.count)));
+        gb.addEventListener('pointerenter', () => setHover(sb, g.id));
+        gb.addEventListener('pointerleave', () => setHover(sb, null));
+        gb.addEventListener('click', () => clickNode(sb, g));
+        gli.append(gb);
+        goals.append(gli);
+      }
+      li.append(btn, goals);
       cats.append(li);
     }
     row.append(head, cats);
@@ -741,12 +756,8 @@ function paintList(sb, state) {
     head.setAttribute('aria-expanded', open === id ? 'true' : 'false');
     head.setAttribute('aria-current', sb.zoom === id ? 'true' : 'false');
   }
-  for (const btn of list.nav.querySelectorAll('.sb-dom-cat')) btn.classList.remove('is-active');
-  if (state.activeCat) {
-    const k = [...sb.model.cats].filter(c => c.parent === state.activeDomain).findIndex(c => c.id === state.activeCat);
-    const row = list.rows.get(state.activeDomain);
-    if (row && k >= 0) row.row.querySelectorAll('.sb-dom-cat')[k]?.classList.add('is-active');
-  }
+  const active = new Set([state.activeCat, state.activeId, sb.pick].filter(Boolean));
+  for (const btn of list.nav.querySelectorAll('.sb-dom-cat, .sb-dom-goal')) btn.classList.toggle('is-active', active.has(btn.dataset.id));
 }
 
 function setHover(sb, id, now) {

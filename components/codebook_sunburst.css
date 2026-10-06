@@ -38,6 +38,7 @@
 }
 .sb-dom-cats { display: none; margin: 0 0 6px; padding: 0 10px 0 30px; list-style: none; }
 .sb-dom.is-open .sb-dom-cats { display: block; }
+.sb-dom.is-open .sb-dom-cat { font-weight: 600; }
 .sb-dom-cat {
   all: unset; box-sizing: border-box; width: 100%; display: flex; justify-content: space-between; gap: 8px;
   padding: 3px 6px; border-radius: 6px; font-size: 12.5px; line-height: 1.35; color: var(--ink-2); cursor: pointer;
@@ -157,3 +158,12 @@
 .sb-domains ~ .sb-panel { flex-basis: 280px; min-width: 240px; }
 .sb-sub-head { margin: 12px 0 0; font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .sb-subs li.is-zero .sb-goal-name { color: var(--faint); }
+.sb-dom-goals { margin: 0 0 4px; padding: 0 0 0 12px; list-style: none; }
+.sb-dom-goal {
+  all: unset; box-sizing: border-box; width: 100%; display: flex; justify-content: space-between; gap: 8px;
+  padding: 2px 6px; border-radius: 6px; font-size: 12px; line-height: 1.35; color: var(--muted); cursor: pointer;
+}
+.sb-dom-goal:hover, .sb-dom-goal.is-active { background: #eef2f6; color: var(--ink-2); }
+.sb-dom-goal:focus-visible { outline: 2px solid var(--ink-2); outline-offset: -2px; }
+.sb-dom-goal.is-gap .sb-dom-cat-name { color: var(--faint); }
+.sb-dom-goal.is-gap .sb-dom-cat-n { color: var(--faint); font-style: italic; }
