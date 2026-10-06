@@ -16,6 +16,7 @@ Sections:
 from __future__ import annotations
 
 import html
+import json
 import os
 import re
 import textwrap
@@ -54,6 +55,7 @@ CODEBOOK_PATH = APP_DIR / "reference" / "codebook_subcategories.csv"
 # matches the loaded file's codes.
 CODEBOOK_V3_PATH = APP_DIR / "reference" / "codebook_subcategories_v3.csv"
 CODEBOOK_TERMS_V3_PATH = APP_DIR / "reference" / "codebook_terms_v3.csv"   # codebook words for the chart search
+CODEBOOK_DEFINITIONS_V3_PATH = APP_DIR / "reference" / "codebook_definitions_v3.json"   # what the wheel's panel says a code means
 
 # Column names used throughout the app. Keeping them in one place means a
 # renamed column in a future export only needs changing here.
@@ -799,6 +801,19 @@ def load_codebook_short_names(path: Union[str, Path] = CODEBOOK_TERMS_V3_PATH) -
         return {}
     terms = terms[terms["short"] != ""]
     return dict(zip(terms["code"], terms["short"]))
+
+
+def load_codebook_definitions(path: Union[str, Path] = CODEBOOK_DEFINITIONS_V3_PATH) -> dict:
+    """The codebook's definitions for the wheel's side panel; {} if missing.
+
+    {"version": "3.1.2", "domains": {"Y3": {"description"}}, "goals": {"Y3.2": {"definition",
+    "include", "exclude", "see_also": [codes]}}}, built by scripts/build_codebook_terms.py
+    from the coder's codebook. Categories have no description in the codebook.
+    """
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
 
 
 def load_codebook_categories(path: Union[str, Path] = CODEBOOK_TERMS_V3_PATH) -> dict[str, str]:

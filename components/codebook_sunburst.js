@@ -56,7 +56,7 @@ const LABEL_STYLE = 'halo';
 const ZOOM_COLOR = 'pale';
 const zoomColor = () => globalThis.SB_ZOOM_COLOR || ZOOM_COLOR;
 const MAX_LINES = 3;         // a label wraps onto at most this many lines
-const LABEL_PX = { domain: 11, domainValue: 12, bar: 11, goal: 12.5, small: 9.5 };   // font sizes for the plain-name labels
+const LABEL_PX = { domain: 13, domainValue: 13.5, bar: 13, goal: 15, small: 11 };   // font sizes for the plain-name labels
 let lastQuery = '';          // the search outlives a fresh chart (a cleared selection, a page revisit)
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -698,7 +698,22 @@ function domainList(sb, model) {
       btn.addEventListener('pointerenter', () => setHover(sb, c.id));
       btn.addEventListener('pointerleave', () => setHover(sb, null));
       btn.addEventListener('click', () => clickNode(sb, c));
-      li.append(btn);
+      btn.dataset.id = c.id;
+      // Its goals, by name, gaps included; picking one opens the category with that goal picked.
+      const goals = el('ul', 'sb-dom-goals');
+      for (const g of model.goalsOf.get(c.id) || []) {
+        const gli = el('li');
+        const gb = el('button', 'sb-dom-goal' + (g.count === 0 ? ' is-gap' : ''));
+        gb.type = 'button';
+        gb.dataset.id = g.id;
+        gb.append(el('span', 'sb-dom-cat-name', g.title), el('span', 'sb-dom-cat-n', g.count === 0 ? 'none' : fmt(g.count)));
+        gb.addEventListener('pointerenter', () => setHover(sb, g.id));
+        gb.addEventListener('pointerleave', () => setHover(sb, null));
+        gb.addEventListener('click', () => clickNode(sb, g));
+        gli.append(gb);
+        goals.append(gli);
+      }
+      li.append(btn, goals);
       cats.append(li);
     }
     row.append(head, cats);
@@ -741,12 +756,8 @@ function paintList(sb, state) {
     head.setAttribute('aria-expanded', open === id ? 'true' : 'false');
     head.setAttribute('aria-current', sb.zoom === id ? 'true' : 'false');
   }
-  for (const btn of list.nav.querySelectorAll('.sb-dom-cat')) btn.classList.remove('is-active');
-  if (state.activeCat) {
-    const k = [...sb.model.cats].filter(c => c.parent === state.activeDomain).findIndex(c => c.id === state.activeCat);
-    const row = list.rows.get(state.activeDomain);
-    if (row && k >= 0) row.row.querySelectorAll('.sb-dom-cat')[k]?.classList.add('is-active');
-  }
+  const active = new Set([state.activeCat, state.activeId, sb.pick].filter(Boolean));
+  for (const btn of list.nav.querySelectorAll('.sb-dom-cat, .sb-dom-goal')) btn.classList.toggle('is-active', active.has(btn.dataset.id));
 }
 
 function setHover(sb, id, now) {
@@ -793,6 +804,7 @@ function choose(sb, zoom, pick) {
   const zoomChanged = zoom !== sb.zoom || cat !== viewCat(sb);
   sb.zoom = zoom;
   sb.pick = pick;
+  if (zoom) sb.focus = null;   // opening a domain lets go of a domain pinned from the list
   sb.send('selection', selectionOf(sb.model, pick));
   if (zoomChanged) tween(sb, targetAngles(sb.model, zoom, cat));
   else paint(sb);
@@ -1121,7 +1133,7 @@ function categoryName(sb, n, a0, a1, d) {
   const r = (sb.R.domain + 2 + sb.R.cat) / 2;
   const room = (r * (a1 - a0) * Math.PI) / 180 - 12;
   // A narrow category drops to the small font before giving way to its letter.
-  const size = !!sb.zoom && !!d && !catBars(sb) ? [12, LABEL_PX.bar, LABEL_PX.small].find(px => textWidth(n.title, px) <= room) : undefined;
+  const size = !!sb.zoom && !!d && !catBars(sb) ? [14, LABEL_PX.bar, LABEL_PX.small].find(px => textWidth(n.title, px) <= room) : undefined;
   item.name.style.display = size ? '' : 'none';
   if (!size) return false;
   item.name.setAttribute('font-size', size);
@@ -1138,7 +1150,7 @@ function categoryName(sb, n, a0, a1, d) {
 function paint(sb) {
   const { model, els } = sb;
   // A domain pinned from the list stands in for the pointer while nothing else is pointed at.
-  const hoverId = sb.hover || (catBars(sb) ? sb.focus : null);
+  const hoverId = sb.hover || (catBars(sb) && !sb.zoom ? sb.focus : null);
   const hovered = hoverId ? model.byId.get(hoverId) : null;
   const picked = sb.pick ? model.byId.get(sb.pick) : null;
   const lead = hovered || picked;
@@ -1253,7 +1265,7 @@ function readout(sb, hovered) {
     li.append(el('b', '', fmt(n)), document.createTextNode(n === 1 ? one : many));
     counts.append(li);
   }
-  const children = [eyebrow, title, counts];
+  const children = [eyebrow, title, ...(hovered ? [] : definitionOf(sb, focus)), counts];
   if (focus.level === 'root' && hits) {
     children.push(el('div', 'sb-share-note sb-match-note', hits.goals.size
       ? `${plural(hits.goals.size, 'goal', 'goals')} in ${plural(hits.domains.size, 'domain', 'domains')} hold ${query}. Grey slices don't.`
@@ -1328,6 +1340,47 @@ function readout(sb, hovered) {
   children.push(el('div', 'sb-hint', hint(sb, hovered)));
   box.append(...children);
   panel.replaceChildren(box);
+}
+
+/** The codebook's words for what is open or picked (not what is only pointed at, so the panel holds still). */
+function definitionOf(sb, node) {
+  const { model } = sb;
+  const defs = model.data.definitions || {};
+  if (!model.byCode) model.byCode = new Map([...model.byId.values()].filter(n => n.level === 'domain' || n.level === 'goal').map(n => [n.label, n]));
+  if (node.level === 'domain') {
+    const d = (defs.domains || {})[node.label];
+    return d && d.description ? [el('p', 'sb-def', d.description)] : [];
+  }
+  if (node.level === 'category') {
+    // The codebook gives categories no description of their own; its goals, listed below, say what it holds.
+    const domain = model.byId.get(node.parent);
+    return domain ? [el('p', 'sb-def sb-def-quiet', `A category in ${domain.title}.`)] : [];
+  }
+  const g = node.level === 'goal' ? (defs.goals || {})[node.label] : null;
+  if (!g || !g.definition) return [];
+  const out = [el('p', 'sb-def', g.definition)];
+  const more = el('details', 'sb-def-more');
+  more.open = !!sb.defOpen;
+  more.addEventListener('toggle', () => { sb.defOpen = more.open; });
+  more.append(el('summary', '', 'How statements were coded'));
+  const lines = el('dl');
+  if (g.include) lines.append(el('dt', '', 'Counts'), el('dd', '', g.include));
+  if (g.exclude) lines.append(el('dt', '', "Doesn't count"), el('dd', '', g.exclude));
+  const see = (g.see_also || []).map(code => model.byCode.get(code)).filter(Boolean);
+  if (see.length) {
+    const dd = el('dd', 'sb-def-see');
+    see.forEach((n, i) => {
+      const b = el('button', 'sb-def-link', n.title);
+      b.type = 'button';
+      b.addEventListener('click', () => clickNode(sb, n));
+      dd.append(...(i ? [document.createTextNode(', ')] : []), b);
+    });
+    lines.append(el('dt', '', 'See also'), dd);
+  }
+  more.append(lines);
+  if (defs.version) more.append(el('div', 'sb-def-version', `From codebook ${defs.version}`));
+  out.push(more);
+  return out;
 }
 
 /** What the search found in one slice, for the centre (short) or the side panel. */
