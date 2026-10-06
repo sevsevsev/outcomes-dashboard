@@ -660,6 +660,11 @@ def test_codebook_definitions_cover_every_v3_code():
             assert all(other in codes for other in defs["goals"][code]["see_also"]), code
         else:
             assert defs["domains"][code]["description"], code
+    # Every coding category ("Y3.B") has its description too (codebook 3.1.3).
+    from outcomes_data import load_codebook_categories
+    for code, category in load_codebook_categories().items():
+        key = code.split(".")[0] + "." + category.split(".")[0]
+        assert defs["categories"][key]["description"], key
     # Codes are swapped for plain names in the text people read.
     import re
     for g in defs["goals"].values():

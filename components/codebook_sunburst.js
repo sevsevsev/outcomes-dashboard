@@ -1361,8 +1361,10 @@ function definitionOf(sb, node, brief = false) {
     return d && d.description ? [el('p', 'sb-def', d.description)] : [];
   }
   if (node.level === 'category') {
-    // The codebook gives categories no description of their own; its goals, listed below, say what it holds.
     const domain = model.byId.get(node.parent);
+    const c = domain && (defs.categories || {})[`${domain.label}.${node.label}`];
+    if (c && c.description) return [el('p', 'sb-def', c.description)];
+    // Codebooks before 3.1.3 give categories no description; its goals, listed below, say what it holds.
     return domain ? [el('p', 'sb-def sb-def-quiet', `A category in ${domain.title}.`)] : [];
   }
   const g = node.level === 'goal' ? (defs.goals || {})[node.label] : null;
