@@ -806,9 +806,9 @@ def load_codebook_short_names(path: Union[str, Path] = CODEBOOK_TERMS_V3_PATH) -
 def load_codebook_definitions(path: Union[str, Path] = CODEBOOK_DEFINITIONS_V3_PATH) -> dict:
     """The codebook's definitions for the wheel's side panel; {} if missing.
 
-    {"version": "3.1.2", "domains": {"Y3": {"description"}}, "goals": {"Y3.2": {"definition",
-    "include", "exclude", "see_also": [codes]}}}, built by scripts/build_codebook_terms.py
-    from the coder's codebook. Categories have no description in the codebook.
+    {"version": "3.1.3", "domains": {"Y3": {"description"}}, "categories": {"Y3.B": {"description"}},
+    "goals": {"Y3.2": {"definition", "include", "exclude", "see_also": [codes]}}}, built by
+    scripts/build_codebook_terms.py from the coder's codebook (category descriptions since 3.1.3).
     """
     try:
         return json.loads(Path(path).read_text(encoding="utf-8"))

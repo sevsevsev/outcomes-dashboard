@@ -90,10 +90,12 @@ def definitions(domains: list[dict], version: str) -> dict:
             return names[first] if not last or last not in names else f"{names[first]} to {names[last]}"
         return CODE.sub(name, text or "").strip()
 
-    out = {"version": version, "domains": {}, "goals": {}}
+    out = {"version": version, "domains": {}, "categories": {}, "goals": {}}
     for d in domains:
         out["domains"][d["id"]] = {"description": plain(d.get("description", ""))}
         for cat in d["categories"]:
+            if cat.get("description"):
+                out["categories"][f"{d['id']}.{cat['letter']}"] = {"description": plain(cat["description"])}
             for c in cat["codes"]:
                 see = []
                 for m in CODE.finditer(c.get("useInstead", "")):

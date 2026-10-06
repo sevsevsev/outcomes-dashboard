@@ -1,5 +1,5 @@
 {
- "version": "3.1.2",
+ "version": "3.1.3",
  "domains": {
   "Y1": {
    "description": "What young people learn and how they progress through school: demonstrated learning by subject, the behaviors and beliefs that shape learning, and school and postsecondary status. All academic outcomes live here, in three categories."
@@ -39,6 +39,125 @@
   },
   "A3": {
    "description": "Change beyond one program: policy and institutions, cross-sector partnerships, and community conditions."
+  }
+ },
+ "categories": {
+  "Y1.A": {
+   "description": "Demonstrated learning in a subject: reading and writing, English and home languages, math, science and computing, other academic subjects, the arts, critical thinking and inquiry, and early learning before kindergarten."
+  },
+  "Y1.B": {
+   "description": "The behaviors and beliefs that shape how a young person learns: taking part in schoolwork, persisting with hard tasks, using study strategies, and believing in oneself as a learner."
+  },
+  "Y1.C": {
+   "description": "A young person's status and progress through school and beyond: attendance, discipline, grades and credits, advanced courses, graduation, and college or training after high school."
+  },
+  "Y2.A": {
+   "description": "How young people feel about learning and activities: enjoying them, becoming curious, developing a lasting interest of their own, and seeing why learning matters for their goals."
+  },
+  "Y2.B": {
+   "description": "Young people expressing themselves by making, performing or responding to creative work, and choosing to take part in enriching activities in or outside the program."
+  },
+  "Y3.A": {
+   "description": "Feeling accepted, valued and safe in a program, school or community."
+  },
+  "Y3.B": {
+   "description": "A young person's close relationships: with caring adults outside the family, with friends and peers, and with their own family."
+  },
+  "Y3.C": {
+   "description": "A wider network of adults, peers, professionals and employers that a young person can draw on for educational or career opportunities."
+  },
+  "Y4.A": {
+   "description": "Recognizing and naming one's own emotions. This is the part of CASEL's self-awareness competency coded here; beliefs about oneself are in Identity, Confidence & Agency."
+  },
+  "Y4.B": {
+   "description": "Managing emotions, stress and impulses, and setting and working toward personal goals."
+  },
+  "Y4.C": {
+   "description": "Understanding others' feelings and perspectives, reading social settings, and respecting people of different backgrounds."
+  },
+  "Y4.D": {
+   "description": "Communicating, working in teams, building relationships and resolving conflict, and seeking or offering help."
+  },
+  "Y4.E": {
+   "description": "Weighing options and solving problems, making ethical and prosocial choices, and avoiding risks and negative peer pressure."
+  },
+  "Y5.A": {
+   "description": "Who a young person understands themselves to be: exploring their identity, taking pride in their cultural and social identities, and seeing themselves as part of a field such as STEM or the arts."
+  },
+  "Y5.B": {
+   "description": "A young person's general belief in their own ability and worth: confidence, self-efficacy and self-esteem."
+  },
+  "Y5.C": {
+   "description": "A sense of purpose, hope and aspiration for the future, and acting as the agent in one's own life by making choices and advocating for one's needs."
+  },
+  "Y6.A": {
+   "description": "General character traits and guiding values such as integrity, honesty and responsibility."
+  },
+  "Y6.B": {
+   "description": "Understanding how government and civic institutions work, and analyzing power, inequity and injustice."
+  },
+  "Y6.C": {
+   "description": "Taking part in civic and community life: civic voice and leadership, community service and projects, and caring for the environment."
+  },
+  "Y6.D": {
+   "description": "Behaving safely, legally and ethically online."
+  },
+  "Y7.A": {
+   "description": "Learning about careers and pathways, and knowing and completing the steps into college or work."
+  },
+  "Y7.B": {
+   "description": "Skills and credentials for the workplace: professionalism, technical and industry skills, certifications, internships and apprenticeships."
+  },
+  "Y7.C": {
+   "description": "Results in work and adult independence: getting and keeping a job, managing money, and the daily living skills needed to live on one's own."
+  },
+  "Y8.A": {
+   "description": "A young person's physical health: daily health habits, motor and sport skills, health knowledge, sexual and reproductive health, and access to health care."
+  },
+  "Y8.B": {
+   "description": "A young person's mental health: fewer symptoms and distress, flourishing and life satisfaction, healing from trauma, and access to mental health services."
+  },
+  "Y8.C": {
+   "description": "A young person's safety and risk: feeling safe, substance use, violence and bullying, and involvement with the justice system."
+  },
+  "F1.A": {
+   "description": "How caregivers raise children and support their learning: parenting knowledge and practices, learning routines at home, and family health practices."
+  },
+  "F1.B": {
+   "description": "The caregiver's own well-being, resilience and supportive connections with other parents and the community."
+  },
+  "F1.C": {
+   "description": "Caregivers and other adult participants building their own education, skills and employment, and learning to navigate systems and know their rights."
+  },
+  "F1.D": {
+   "description": "The family's relationship with the program or school: trust and communication, and taking part in program or school activities and decisions."
+  },
+  "F2.A": {
+   "description": "Household or independent-youth income, public benefits and financial stability."
+  },
+  "F2.B": {
+   "description": "Having enough healthy food and a safe, stable place to live."
+  },
+  "A1.A": {
+   "description": "What staff and volunteers learn and how they apply it in their practice."
+  },
+  "A1.B": {
+   "description": "Whether the workforce stays and stays well: staff retention, turnover and well-being."
+  },
+  "A2.A": {
+   "description": "How good the program is and how it is experienced: assessed program quality and participant or family satisfaction."
+  },
+  "A2.B": {
+   "description": "Making the program reachable for everyone: providing resources and removing barriers through accommodations and language access."
+  },
+  "A2.C": {
+   "description": "How many people the program reaches and how much they receive, and the program's systems for engaging families."
+  },
+  "A3.A": {
+   "description": "Changes in policy, funding or institutional practice in schools, districts, cities or states."
+  },
+  "A3.B": {
+   "description": "Change across organizations and neighborhoods: cross-sector partnerships and community cohesion and collective efficacy."
   }
  },
  "goals": {
