@@ -646,3 +646,22 @@ def test_coded_by_is_an_organization_not_junk():
     })
     clean = app.clean_outcomes(raw)
     assert set(clean["organization"]) == {"Coded by: (formerly Coded by Kids)"}
+
+
+def test_codebook_definitions_cover_every_v3_code():
+    """The wheel's panel has the codebook's words for every 3.x domain and goal, with names for its 'see also' codes."""
+    from outcomes_data import load_codebook_definitions, load_codebook_terms
+    defs = load_codebook_definitions()
+    codes = load_codebook_terms()
+    assert defs["version"]
+    for code in codes:
+        if "." in code:
+            assert defs["goals"][code]["definition"], code
+            assert all(other in codes for other in defs["goals"][code]["see_also"]), code
+        else:
+            assert defs["domains"][code]["description"], code
+    # Codes are swapped for plain names in the text people read.
+    import re
+    for g in defs["goals"].values():
+        for field in ("definition", "include", "exclude"):
+            assert not re.search(r"\b[YFA]\d+\.\d+\b", g[field]), g[field]

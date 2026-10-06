@@ -93,6 +93,7 @@ from outcomes_data import (
     load_codebook_for,
     load_codebook_short_names,
     load_codebook_terms,
+    load_codebook_definitions,
     organizations_for_subcategory,
     peer_heatmap_data,
     population_group,
@@ -162,6 +163,11 @@ def cached_sunburst_nodes(df: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(show_spinner=False, max_entries=24)
 def cached_wheel_nodes(df: pd.DataFrame) -> pd.DataFrame:
     return sunburst_nodes(df, cached_codebook(df), include_empty_goals=True, categories=load_codebook_categories())
+
+
+@st.cache_data(show_spinner=False)
+def cached_definitions() -> dict:
+    return load_codebook_definitions()
 
 
 @st.cache_data(show_spinner=False)
@@ -670,6 +676,7 @@ def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value") -> Opti
     data = charts.codebook_sunburst_data(nodes, measure, selected=st.session_state.get(last_key), layout=layout,
                                          short_names=cached_short_names())
     data["search"] = cached_search_index(df, layout)
+    data["definitions"] = cached_definitions()
     pick = codebook_sunburst(data, key=key)
     ids = set(nodes["id"])
     if pick and pick["domain"] not in ids:

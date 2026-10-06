@@ -167,3 +167,15 @@
 .sb-dom-goal:focus-visible { outline: 2px solid var(--ink-2); outline-offset: -2px; }
 .sb-dom-goal.is-gap .sb-dom-cat-name { color: var(--faint); }
 .sb-dom-goal.is-gap .sb-dom-cat-n { color: var(--faint); font-style: italic; }
+.sb-def { margin: 8px 0 0; font-size: 13.5px; line-height: 1.5; color: #475569; }
+.sb-def-quiet { color: var(--muted); }
+.sb-def-more { margin: 8px 0 4px; font-size: 13px; line-height: 1.45; color: #475569; }
+.sb-def-more summary { cursor: pointer; color: var(--ink-2); font-weight: 600; font-size: 12.5px; }
+.sb-def-more summary:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 2px; border-radius: 4px; }
+.sb-def-more dl { margin: 6px 0 0; }
+.sb-def-more dt { margin-top: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.sb-def-more dd { margin: 2px 0 0; }
+.sb-def-link { all: unset; cursor: pointer; color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 2px; }
+.sb-def-link:hover { text-decoration-color: var(--ink-2); }
+.sb-def-link:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; border-radius: 2px; }
+.sb-def-version { margin-top: 8px; font-size: 11.5px; color: var(--faint); }

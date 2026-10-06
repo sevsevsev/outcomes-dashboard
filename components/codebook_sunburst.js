@@ -1265,7 +1265,7 @@ function readout(sb, hovered) {
     li.append(el('b', '', fmt(n)), document.createTextNode(n === 1 ? one : many));
     counts.append(li);
   }
-  const children = [eyebrow, title, counts];
+  const children = [eyebrow, title, ...(hovered ? [] : definitionOf(sb, focus)), counts];
   if (focus.level === 'root' && hits) {
     children.push(el('div', 'sb-share-note sb-match-note', hits.goals.size
       ? `${plural(hits.goals.size, 'goal', 'goals')} in ${plural(hits.domains.size, 'domain', 'domains')} hold ${query}. Grey slices don't.`
@@ -1340,6 +1340,47 @@ function readout(sb, hovered) {
   children.push(el('div', 'sb-hint', hint(sb, hovered)));
   box.append(...children);
   panel.replaceChildren(box);
+}
+
+/** The codebook's words for what is open or picked (not what is only pointed at, so the panel holds still). */
+function definitionOf(sb, node) {
+  const { model } = sb;
+  const defs = model.data.definitions || {};
+  if (!model.byCode) model.byCode = new Map([...model.byId.values()].filter(n => n.level === 'domain' || n.level === 'goal').map(n => [n.label, n]));
+  if (node.level === 'domain') {
+    const d = (defs.domains || {})[node.label];
+    return d && d.description ? [el('p', 'sb-def', d.description)] : [];
+  }
+  if (node.level === 'category') {
+    // The codebook gives categories no description of their own; its goals, listed below, say what it holds.
+    const domain = model.byId.get(node.parent);
+    return domain ? [el('p', 'sb-def sb-def-quiet', `A category in ${domain.title}.`)] : [];
+  }
+  const g = node.level === 'goal' ? (defs.goals || {})[node.label] : null;
+  if (!g || !g.definition) return [];
+  const out = [el('p', 'sb-def', g.definition)];
+  const more = el('details', 'sb-def-more');
+  more.open = !!sb.defOpen;
+  more.addEventListener('toggle', () => { sb.defOpen = more.open; });
+  more.append(el('summary', '', 'How statements were coded'));
+  const lines = el('dl');
+  if (g.include) lines.append(el('dt', '', 'Counts'), el('dd', '', g.include));
+  if (g.exclude) lines.append(el('dt', '', "Doesn't count"), el('dd', '', g.exclude));
+  const see = (g.see_also || []).map(code => model.byCode.get(code)).filter(Boolean);
+  if (see.length) {
+    const dd = el('dd', 'sb-def-see');
+    see.forEach((n, i) => {
+      const b = el('button', 'sb-def-link', n.title);
+      b.type = 'button';
+      b.addEventListener('click', () => clickNode(sb, n));
+      dd.append(...(i ? [document.createTextNode(', ')] : []), b);
+    });
+    lines.append(el('dt', '', 'See also'), dd);
+  }
+  more.append(lines);
+  if (defs.version) more.append(el('div', 'sb-def-version', `From codebook ${defs.version}`));
+  out.push(more);
+  return out;
 }
 
 /** What the search found in one slice, for the centre (short) or the side panel. */
