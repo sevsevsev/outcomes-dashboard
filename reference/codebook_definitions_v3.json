@@ -1,5 +1,5 @@
 {
- "version": "3.1.3",
+ "version": "3.1.4",
  "domains": {
   "Y1": {
    "description": "What young people learn and how they progress through school: demonstrated learning by subject, the behaviors and beliefs that shape learning, and school and postsecondary status. All academic outcomes live here, in three categories."
@@ -82,7 +82,7 @@
    "description": "Weighing options and solving problems, making ethical and prosocial choices, and avoiding risks and negative peer pressure."
   },
   "Y5.A": {
-   "description": "Who a young person understands themselves to be: exploring their identity, taking pride in their cultural and social identities, and seeing themselves as part of a field such as STEM or the arts."
+   "description": "Who a young person understands themselves to be: exploring their identity, taking pride in their racial, cultural and other social identities, and seeing themselves as part of a field such as STEM or the arts."
   },
   "Y5.B": {
    "description": "A young person's general belief in their own ability and worth: confidence, self-efficacy and self-esteem."
@@ -488,7 +488,7 @@
   },
   "Y4.5": {
    "definition": "Respecting and including people of different backgrounds and identities, and examining one's own biases.",
-   "include": "Respect for peers of other cultures, religions, abilities; inclusive behavior; bias awareness.",
+   "include": "Respect for peers of other races, cultures, religions, abilities; inclusive behavior; bias awareness.",
    "exclude": "Pride in one's own identity; friendships across groups.",
    "see_also": [
     "Y5.2",
@@ -568,7 +568,7 @@
   "Y5.1": {
    "definition": "Understanding who one is, what matters to one, and how one is changing.",
    "include": "Identity exploration; articulating one's values and experiences.",
-   "exclude": "Pride in a cultural or social identity; self-confidence; purpose.",
+   "exclude": "Pride in a racial, cultural or other social identity; self-confidence; purpose.",
    "see_also": [
     "Y5.2",
     "Y5.4",
@@ -576,8 +576,8 @@
    ]
   },
   "Y5.2": {
-   "definition": "Pride in, and acceptance of, one's own cultural, ethnic, linguistic, gender, sexual or other social identity.",
-   "include": "Pride in heritage; self-acceptance of sexual orientation or gender identity; bicultural identity.",
+   "definition": "Pride in, and acceptance of, one's own cultural, racial, ethnic, linguistic, gender, sexual or other social identity.",
+   "include": "Pride in heritage; positive racial or ethnic identity; self-acceptance of sexual orientation or gender identity; bicultural identity.",
    "exclude": "Respect for others' identities; home-language skill.",
    "see_also": [
     "Y4.5",
