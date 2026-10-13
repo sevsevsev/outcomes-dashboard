@@ -294,6 +294,11 @@ button[data-variant*="pills"] {{ transition: background-color .15s, border-color
 [data-testid="stPopoverButton"]:hover {{ border-color: {FAINT}; background: #f8fafc; color: {INK}; }}
 [data-testid="stPopoverButton"] p {{ font-weight: 500; font-size: 0.875rem; white-space: nowrap; }}
 [data-testid="stPopoverButton"] {{ min-width: max-content; }}
+/* The Filters toggle looks like the Data menu's button beside it. */
+.st-key-filters_toggle button {{ border-color: #cbd5e1; border-radius: 0.5rem; min-height: 2.5rem;
+  min-width: max-content; transition: border-color .15s, background-color .15s; }}
+.st-key-filters_toggle button:hover {{ border-color: {FAINT}; background: #f8fafc; color: {INK}; }}
+.st-key-filters_toggle button p {{ font-weight: 500; font-size: 0.875rem; white-space: nowrap; }}
 /* The open menus keep one width. Streamlit sizes a popover to its content, so picking a filter (a chip,
    the Clear button) widened the panel and the browser re-anchored it, moving it under the pointer. */
 [data-testid="stPopoverBody"] {{ width: min(36rem, calc(100vw - 2rem)) !important;
@@ -337,12 +342,21 @@ button[kind="tertiary"]:hover p {{ color: {INK}; }}
 
 /* The filter bar stays under the top bar while the page scrolls (stMain is the scroller, the header is
    4rem). Streamlit wraps the keyed container in an stLayoutWrapper of exactly its own height, so the
-   wrapper is what sticks. The bar is one line of fixed height, so sticking never moves a chart. */
+   wrapper is what sticks. Closed, the bar is one line of fixed height, so sticking never moves a chart;
+   the open Filters panel sticks with it, so it opens in view wherever the page is scrolled. */
 [data-testid="stLayoutWrapper"]:has(> .st-key-filterbar) {{ position: sticky; top: 4rem; z-index: 99;
   background: #fff; margin: -0.75rem 0 0 0; padding: 0.75rem 0 0.6rem 0; box-shadow: 0 1px 0 {HAIRLINE}; }}
 .st-key-filterbar .status {{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
 /* Streamlit pulls markdown up by 1rem; in the bar that sets the status line below the buttons' centre. */
 .st-key-filterbar [data-testid="stMarkdownContainer"] {{ margin-bottom: 0; }}
+/* The Filters panel: every picker side by side under the bar, across the page. Closed, it is only hidden,
+   so its pickers keep running and the filters keep applying. */
+[data-testid="stLayoutWrapper"]:has(> .st-key-filterpanel_closed), .st-key-filterpanel_closed {{ display: none; }}
+.st-key-filterpanel_open {{ margin-top: 0.5rem; padding: 1rem 1.25rem 0.75rem; border: 1px solid {HAIRLINE};
+  border-radius: 0.75rem; background: #f8fafc; animation: od-fade .2s ease-out both; }}
+.st-key-filterpanel_open .panel-head {{ font-weight: 600; font-size: 0.875rem; color: {INK}; margin: 0.25rem 0 0; }}
+/* Long chip lists scroll inside their own picker rather than stretching the panel down the page. */
+.st-key-filterpanel_open [data-testid="stMultiSelectTagsContainer"] {{ max-height: 6.5rem; overflow-y: auto !important; }}
 /* Jumps to an element land below the header and the bar. */
 [data-testid="stMain"] {{ scroll-padding-top: 8.5rem; }}
 /* Phones: the columns stack, so the bar would take a third of the screen; there it scrolls away. */
@@ -1293,6 +1307,13 @@ def reset_filters() -> None:
         st.session_state.pop(key, None)
 
 
+FILTERS_OPEN = "filters_open"   # whether the Filters panel under the bar is showing
+
+
+def toggle_filters() -> None:
+    st.session_state[FILTERS_OPEN] = not st.session_state.get(FILTERS_OPEN, False)
+
+
 FILTER_NOUNS = {"f_domains": ("domain", "domains"), "f_pops": ("audience", "audiences"),
                 "f_orgs": ("organization", "organizations"), "f_conf": ("confidence level", "confidence levels"),
                 "f_zip": ("zip code", "zip codes"), "f_council": ("council district", "council districts"),
@@ -1300,29 +1321,32 @@ FILTER_NOUNS = {"f_domains": ("domain", "domains"), "f_pops": ("audience", "audi
 
 
 def place_filters(df: pd.DataFrame) -> Optional[pd.Series]:
-    """Zip code, council district, learning network and school pickers, inside the Filters menu.
+    """Zip code, council district, learning network and school pickers, one row of the Filters panel.
 
     A place keeps the outcomes of programs that run at its schools, joined on
     district partner and program IDs (the school tables must be loaded).
     Returns a row mask for `df`, or None when no place is picked.
     """
-    st.markdown("**Where programs run**")
+    st.markdown("<p class='panel-head'>Where programs run</p>", unsafe_allow_html=True)
     tables, _ = school_tables()
     relationships = tables.get(schools.RELATIONSHIPS)
     if relationships is None:
-        st.caption("Add the program-to-school table and the schools table to filter by zip code, council "
-                   "district, learning network or school.")
-        school_uploader("school_upload_filters")
+        note, upload = st.columns([1, 1], vertical_alignment="center")
+        note.caption("Add the program-to-school table and the schools table to filter by zip code, council "
+                     "district, learning network or school.")
+        with upload:
+            school_uploader("school_upload_filters")
         return None
     school_list = tables.get(schools.SCHOOLS)
     labels = {"f_zip": "Zip codes", "f_council": "City Council districts", "f_network": "Learning networks"}
     places = {}
+    cols = iter(st.columns(4))
     for key, column in PLACE_KEYS.items():
         values = schools.place_values(school_list, relationships, column)
         if not values:
             continue
         keep_valid(key, values)
-        places[column] = st.multiselect(
+        places[column] = next(cols).multiselect(
             labels[key], values, key=key, placeholder="Anywhere",
             format_func=(lambda v: f"District {v}") if key == "f_council" else str)
     # The school list follows the other place choices.
@@ -1331,7 +1355,7 @@ def place_filters(df: pd.DataFrame) -> Optional[pd.Series]:
     options = options[options[schools.COL_ULCS].isin(nearby | set(st.session_state.get("f_schools", [])))]
     names = dict(zip(options[schools.COL_ULCS], options[schools.COL_SCHOOL]))
     keep_valid("f_schools", list(names))
-    picked = st.multiselect("Schools", list(names), key="f_schools", placeholder="All schools",
+    picked = next(cols).multiselect("Schools", list(names), key="f_schools", placeholder="All schools",
                             format_func=lambda code: names.get(code, f"School {code}"))
     if not any(places.values()) and not picked:
         return None
@@ -1381,37 +1405,52 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
         )
     df = df.assign(**{COL_ORG_VIEW: df[ORG_GROUPING_OPTIONS[grouping]]})
 
-    with filters_col.popover(f"Filters · {len(active)}" if active else "Filters", width="stretch"):
-        domains = domain_order(df)
-        keep_valid("f_domains", domains)
-        chosen_domains = st.multiselect("Domains", domains, key="f_domains", placeholder="All domains",
-                                        format_func=domain_short)
-        pops = sorted(df[COL_POP].unique(), key=pretty_population)
-        keep_valid("f_pops", pops)
-        chosen_pops = st.multiselect("Who the outcome is for", pops, format_func=pretty_population,
-                                     key="f_pops", placeholder="Everyone")
-        # The peers page compares organizations with each other, so an
-        # organization filter there would hide the peers being searched for.
-        # The schools page lists every partner at a school, so it has none either.
-        chosen_orgs = None
-        if page_key not in ("peers", "schools"):
-            orgs = sorted(df[COL_ORG_VIEW].unique(), key=str.casefold)
-            keep_valid("f_orgs", orgs)
-            chosen_orgs = st.multiselect("Organizations", orgs, key="f_orgs", placeholder="All organizations")
-        # The review page has its own confidence control.
-        chosen_conf = None
-        if page_key != "review":
-            levels = [c for c in CONFIDENCE_ORDER if c in set(df[COL_CONF])]
-            keep_valid("f_conf", levels)
-            chosen_conf = st.multiselect("Coder confidence", levels, key="f_conf", placeholder="Any confidence",
-                                         format_func=str.title)
-        # The school page picks one school itself, so the place filters live on the other pages.
-        at_places = place_filters(df) if page_key != "schools" else None
-        if active:
-            st.button("Clear filters", on_click=reset_filters, type="tertiary")
+    label = f"Filters · {len(active)}" if active else "Filters"
+    is_open = st.session_state.get(FILTERS_OPEN, False)
+    filters_col.button(label, key="filters_toggle", on_click=toggle_filters, width="stretch",
+                       icon=":material/expand_less:" if is_open else ":material/expand_more:",
+                       help="Hide the filters" if is_open else "Show the filters")
     if active:
         clear_col.button("Clear", on_click=reset_filters, type="tertiary", key="clear_filters_bar",
                          help="Clear every filter")
+
+    # The panel spans the page under the bar, so every picker shows at once and nothing scrolls inside it.
+    # The pickers still run when it is closed (hidden by CSS): Streamlit forgets a widget it doesn't draw.
+    panel = bar.container(key="filterpanel_open" if is_open else "filterpanel_closed")
+    with panel:
+        first_row = ["domains", "pops"]
+        # The peers page compares organizations with each other, so an
+        # organization filter there would hide the peers being searched for.
+        # The schools page lists every partner at a school, so it has none either.
+        if page_key not in ("peers", "schools"):
+            first_row.append("orgs")
+        # The review page has its own confidence control.
+        if page_key != "review":
+            first_row.append("conf")
+        cols = dict(zip(first_row, st.columns(4)))
+        domains = domain_order(df)
+        keep_valid("f_domains", domains)
+        chosen_domains = cols["domains"].multiselect("Domains", domains, key="f_domains",
+                                                     placeholder="All domains", format_func=domain_short)
+        pops = sorted(df[COL_POP].unique(), key=pretty_population)
+        keep_valid("f_pops", pops)
+        chosen_pops = cols["pops"].multiselect("Who the outcome is for", pops, format_func=pretty_population,
+                                               key="f_pops", placeholder="Everyone")
+        chosen_orgs = None
+        if "orgs" in cols:
+            orgs = sorted(df[COL_ORG_VIEW].unique(), key=str.casefold)
+            keep_valid("f_orgs", orgs)
+            chosen_orgs = cols["orgs"].multiselect("Organizations", orgs, key="f_orgs",
+                                                   placeholder="All organizations")
+        chosen_conf = None
+        if "conf" in cols:
+            levels = [c for c in CONFIDENCE_ORDER if c in set(df[COL_CONF])]
+            keep_valid("f_conf", levels)
+            chosen_conf = cols["conf"].multiselect("Coder confidence", levels, key="f_conf",
+                                                   placeholder="Any confidence", format_func=str.title)
+        # The school page picks one school itself, so the place filters live on the other pages.
+        at_places = place_filters(df) if page_key != "schools" else None
+        st.button("Done", on_click=toggle_filters, key="filters_done", type="secondary")
 
     filtered = filter_outcomes(df, domains=chosen_domains, populations=chosen_pops,
                                organizations=chosen_orgs, confidences=chosen_conf)
