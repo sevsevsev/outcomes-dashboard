@@ -156,3 +156,23 @@ def test_place_filters_keep_programs_at_matching_schools():
     assert df.loc[mask, "program"].unique().tolist() == ["Dance"]
     assert not mask.iloc[3]
     assert sc.at_schools(df, rel, {"1010"}).sum() == 3
+
+
+def test_school_dots_show_every_codebook_domain_with_gaps_marked():
+    df, rel = outcomes(), relationships()
+    portfolio = sc.school_portfolio(rel, "1010", df)
+    labels = dict(zip(portfolio["partner_id"], portfolio["partner"]))
+    rows = sc.school_outcomes(df, rel, "1010", labels)
+    codebook = od.load_codebook(od.CODEBOOK_V3_PATH)
+    columns = od.domain_order_with_codebook(rows, codebook)
+    assert len(columns) == 13 and set(rows["primary_domain"]) <= set(columns)
+    fig = charts.build_school_dots(sc.partner_flows(rows), ["BalletX", "Org From File"],
+                                   [("Partner 30", "Not yet coded")], columns=columns)
+    assert list(fig.layout.xaxis.categoryarray) == columns
+    headers = fig.data[1]
+    named = set(rows["primary_domain"])
+    for domain, text, custom in zip(headers.x, headers.text, headers.customdata):
+        if domain in named:
+            assert custom[0] == charts.DOMAIN_KEY + domain and "none" not in text
+        else:
+            assert custom[0] == "" and "<i>none</i>" in text   # a gap: shown, not clickable

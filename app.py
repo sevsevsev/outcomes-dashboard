@@ -84,6 +84,7 @@ from outcomes_data import (
     compute_peer_overlap,
     count_organizations,
     domain_order,
+    domain_order_with_codebook,
     domain_short,
     domain_summary,
     filter_outcomes,
@@ -1194,7 +1195,8 @@ def school_dots(rows: pd.DataFrame, portfolio: pd.DataFrame, ulcs: str) -> None:
     title = f"Where these partners meet in {plain_domain(zoom)}" if zoom else "Where these partners meet"
     note = ("Bigger dots mean more outcome statements. Click a dot to list its outcomes below." if zoom else
             "Bigger dots mean more outcome statements. Click a domain name to see its goals, or a dot to list "
-            "its outcomes below. Grey rows are partners here without coded outcomes.")
+            "its outcomes below. Grey rows are partners here without coded outcomes; grey domains marked "
+            "\"none\" are ones no partner here names.")
     with section(title, note, key="school_dots"):
         if zoom:
             st.button("‹ All domains", key="v4_unzoom", type="tertiary",
@@ -1204,7 +1206,8 @@ def school_dots(rows: pd.DataFrame, portfolio: pd.DataFrame, ulcs: str) -> None:
             cell = None
         else:
             key = f"v4_dots_{st.session_state.get('v4_dot_nonce', 0)}_{ulcs}_{slug(zoom or 'all')}_{len(rows)}"
-            fig = charts.build_school_dots(flows, plotted, filtered_out + not_coded, zoomed=bool(zoom))
+            fig = charts.build_school_dots(flows, plotted, filtered_out + not_coded, zoomed=bool(zoom),
+                                           columns=None if zoom else domain_order_with_codebook(rows, cached_codebook(rows)))
             cell = clickable(fig, key) or None
         if cell and cell.startswith(charts.DOMAIN_KEY):
             st.session_state["v4_zoom_next"] = cell.removeprefix(charts.DOMAIN_KEY)

@@ -625,6 +625,19 @@ def domain_order(df: pd.DataFrame) -> list[str]:
     return pairs[COL_DOMAIN].tolist()
 
 
+def domain_order_with_codebook(df: pd.DataFrame, codebook: pd.DataFrame) -> list[str]:
+    """Every codebook domain plus any other domain in `df` (such as Uncoded), in numeric order.
+
+    Unlike domain_order, a codebook domain no row names is still listed, so a chart can show it as a gap.
+    A codebook domain whose code the data already has under another label (an older wording) is not
+    listed twice: the data's label wins.
+    """
+    present = set(df[COL_DOMAIN].dropna())
+    codes = {domain_code(d) for d in present} - {None}
+    missing = {d for d in codebook[COL_DOMAIN].dropna() if domain_code(d) not in codes}
+    return sorted(present | missing, key=lambda d: (_domain_number(d), d))
+
+
 def count_organizations(orgs: pd.Series) -> int:
     """Distinct organizations, leaving out the placeholder for rows with no name.
 
