@@ -442,6 +442,7 @@ DOMAIN_KEY = "domain::"   # customdata[0] prefix for a clicked domain header
 # codebook explorer and the sunburst (DOMAIN_HUES, by codebook position).
 DOMAIN_ORDER_V3 = ["Y1", "Y2", "Y3", "Y4", "Y5", "Y6", "Y7", "Y8", "F1", "F2", "A1", "A2", "A3"]
 UNCODED_DOT = "#9aa1ad"
+EMPTY_HEADER = "#94a3b8"   # slate-400: a column no row names (a gap), drawn but quiet
 # Column headers: the code large and bold in the domain's color, a short name
 # under it. When columns get narrow, every other header steps up one tier (a
 # thin line drops to its column), so each header has two columns of width.
@@ -509,16 +510,19 @@ def _header_parts(target: str, zoomed: bool) -> tuple[str, list[str]]:
     return code, _wrap_lines(name, DOMAIN_NAME_WRAP, 2)
 
 
-def _header_text(code: str, lines: list[str], color: str, arrow: bool) -> str:
+def _header_text(code: str, lines: list[str], color: str, arrow: bool, muted: bool = False) -> str:
     tail = " ›" if arrow else ""
-    name = "<br>".join(html.escape(line, quote=False) for line in lines)
+    name = "<br>".join(line if line == "<i>none</i>" else html.escape(line, quote=False) for line in lines)
+    if muted:
+        name = f"<span style='color:{EMPTY_HEADER}'>{name}</span>"
     if not code:
         return f"<b>{name}</b>{tail}"
     return (f"<span style='font-size:{HEADER_CODE_SIZE}px;color:{color}'><b>{code}</b></span>{tail}"
             f"<br>{name}")
 
 
-def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = False):
+def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = False,
+                       columns: Optional[Sequence[str]] = None):
     """Programs (rows) by domain or subcategory (columns); dot area is the number of outcome statements.
 
     It answers "where do these programs overlap?" without crossing lines.
@@ -528,8 +532,13 @@ def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = 
     drill into that domain's goals; axis labels can't be clicked. Rows are
     keyed on full names and printed wrapped; dots and headers take their
     domain's codebook color.
+
+    `columns`, when given, fixes the columns and their order, so a target no
+    row names still gets a column: its header is grey, says "none" and can't
+    be clicked, which shows the gap instead of hiding it.
     """
-    targets = list(dict.fromkeys(flows["target"]))
+    targets = list(dict.fromkeys(list(columns) + list(flows["target"]) if columns is not None
+                                 else flows["target"]))
     rows = [p for p in programs if p in set(flows["source"])]
     peak = flows["outcomes"].max() or 1
     # The biggest dot shrinks when columns get narrow, so neighbors don't touch.
@@ -557,25 +566,31 @@ def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = 
     ))
 
     # The header strip (y2), in pixels: one or two tiers of header text.
+    totals = flows.groupby("target", sort=False)["outcomes"].sum()
+    empty = {t for t in targets if t not in totals.index}
     parts = {t: _header_parts(t, zoomed) for t in targets}
+    for t in empty:
+        parts[t] = (parts[t][0], parts[t][1] + ["<i>none</i>"])
     tier = HEADER_LINE * (1 + max((len(lines) for _, lines in parts.values()), default=1)) + 6
     stagger = len(targets) > STAGGER_AT
     strip = tier * (2 if stagger else 1) + 6
     lifted = [stagger and i % 2 == 1 for i in range(len(targets))]
     centers = [tier * (1.5 if up else 0.5) + 4 for up in lifted]
-    totals = flows.groupby("target", sort=False)["outcomes"].sum()
     fig.add_trace(go.Scatter(
         x=targets,
         y=centers,
         yaxis="y2",
         mode="markers+text",
         marker=dict(symbol="square", size=tier - 4, color=SURFACE, opacity=0),
-        text=[_header_text(*parts[t], domain_color(t, 40), arrow=not zoomed) for t in targets],
+        text=[_header_text(*parts[t], EMPTY_HEADER if t in empty else domain_color(t, 40),
+                           arrow=not zoomed and t not in empty, muted=t in empty) for t in targets],
         textposition="middle center",
         textfont=dict(color=TEXT_PRIMARY, size=HEADER_NAME_SIZE),
-        customdata=[((DOMAIN_KEY + t) if not zoomed else "", "", t, names[t], int(totals[t])) for t in targets],
-        hovertemplate=("<b>%{customdata[3]}</b><br>%{customdata[4]} outcome statements from these rows"
-                       + ("" if zoomed else "<br>Click to see its goals") + "<extra></extra>"),
+        customdata=[((DOMAIN_KEY + t) if not zoomed and t not in empty else "", "", t, names[t],
+                     "No outcome statements from these rows" if t in empty else
+                     f"{int(totals[t])} outcome statements from these rows"
+                     + ("" if zoomed else "<br>Click to see its goals")) for t in targets],
+        hovertemplate="<b>%{customdata[3]}</b><br>%{customdata[4]}<extra></extra>",
         selected=HEADER_SELECTED,
         unselected=HEADER_UNSELECTED,
     ))
@@ -612,14 +627,14 @@ NOT_CODED_TEXT = "#8a909b"   # rows for partners whose outcomes are not coded
 
 
 def build_school_dots(flows: pd.DataFrame, partners: list[str], extra_rows: Sequence[tuple[str, str]] = (),
-                      zoomed: bool = False):
+                      zoomed: bool = False, columns: Optional[Sequence[str]] = None):
     """build_program_dots for one school's partners, plus grey rows for partners with nothing to plot.
 
     `extra_rows` is (partner, note) pairs, such as ("Partner 170", "Not yet coded"):
     they keep the whole portfolio on one chart, so the reader sees how much of
     it the dots cover. They are left out when zoomed into one domain.
     """
-    fig = build_program_dots(flows, partners, zoomed=zoomed)
+    fig = build_program_dots(flows, partners, zoomed=zoomed, columns=columns)
     if zoomed or not extra_rows:
         return fig
     plotted = list(fig.layout.yaxis.categoryarray)
