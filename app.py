@@ -294,6 +294,10 @@ button[data-variant*="pills"] {{ transition: background-color .15s, border-color
 [data-testid="stPopoverButton"]:hover {{ border-color: {FAINT}; background: #f8fafc; color: {INK}; }}
 [data-testid="stPopoverButton"] p {{ font-weight: 500; font-size: 0.875rem; white-space: nowrap; }}
 [data-testid="stPopoverButton"] {{ min-width: max-content; }}
+/* The open menus keep one width. Streamlit sizes a popover to its content, so picking a filter (a chip,
+   the Clear button) widened the panel and the browser re-anchored it, moving it under the pointer. */
+[data-testid="stPopoverBody"] {{ width: min(36rem, calc(100vw - 2rem)) !important;
+  min-width: min(36rem, calc(100vw - 2rem)) !important; max-width: min(36rem, calc(100vw - 2rem)) !important; }}
 
 /* Search boxes: the explorer's rounded field with a soft blue focus ring. */
 [data-testid="stTextInputRootElement"] {{ border-radius: 0.75rem; transition: border-color .15s, box-shadow .15s; }}
