@@ -41,6 +41,7 @@ from outcomes_data import (
     distinct_counts_by,
     domain_code,
     domain_short,
+    goal_name,
     hierarchy_counts,
     sample_outcome_texts,
     SUNBURST_SEP,
@@ -230,7 +231,9 @@ def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_t
 # this section builds its data. One quiet hue per domain, taken by the
 # domain's position in the codebook, so a domain has the same color here as
 # in the explorer whatever the filters.
-DOMAIN_HUES = [28, 350, 262, 214, 158, 190, 4, 232, 44, 292, 128, 16]
+# Codebook 3.x has 13 domains: the explorer's list had 12, so the 13th (A3) wrapped round to
+# Academics' orange, and A2 sat 12 degrees from Career's red. Both now get hues of their own.
+DOMAIN_HUES = [28, 350, 262, 214, 158, 190, 4, 232, 44, 292, 128, 72, 320]
 NOUNS = {MEASURE_PROGRAMS: "programs", MEASURE_ORGS: "organizations"}
 HOVER_SAMPLE_CHARS = 240   # longer sample statements are cut; the readout clamps them to three lines anyway
 
@@ -274,17 +277,18 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
     out = []
     for row, size in zip(nodes.itertuples(index=False), goal_sizes):
         coded = row.level == "root" or is_coded_domain(row.domain)
+        # Eyebrows name the level in words; the code stays in `code`, for search only.
         if row.level == "domain":
-            eyebrow = f"Domain {row.code}" if row.code else "Not coded"
+            eyebrow = "Domain" if row.code else "Not coded"
             label = row.code if coded else "–"
             size = float(domain_sizes.get(row.id, 0.0))
         elif row.level == "category":
-            eyebrow, label = f"{domain_code(row.domain)} · Category {row.code}", row.code
+            eyebrow, label = "Category", row.code
             size = float(category_sizes.get(row.id, 0.0))
         elif row.level == "goal":
             # A domain-only row's "goal" carries the domain's number and no code of its own.
             has_code = "." in row.code
-            eyebrow = (f"Goal {row.code}" if has_code else "Not coded" if not coded
+            eyebrow = ("Goal" if has_code else "Not coded" if not coded
                        else "Domain only" if row.goal.endswith(DOMAIN_ONLY_SUFFIX) else "No goal assigned")
             label = row.code if has_code else ""
         else:
@@ -303,6 +307,7 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
             "goal": row.goal if isinstance(row.goal, str) else None,
             "category": row.category or None,
             "eyebrow": eyebrow, "title": row.title, "label": label,
+            "code": (row.code if row.level != "category" else f"{domain_code(row.domain)}.{row.code}") or "",
             "hue": DOMAIN_HUES[int(row.domain_index) % len(DOMAIN_HUES)] if coded and row.domain_index >= 0 else None,
             "value": size, "count": int(getattr(row, size_col)),
             "programs": int(row.programs), "organizations": int(row.organizations), "outcomes": int(row.outcomes),
@@ -442,12 +447,11 @@ DOMAIN_KEY = "domain::"   # customdata[0] prefix for a clicked domain header
 # codebook explorer and the sunburst (DOMAIN_HUES, by codebook position).
 DOMAIN_ORDER_V3 = ["Y1", "Y2", "Y3", "Y4", "Y5", "Y6", "Y7", "Y8", "F1", "F2", "A1", "A2", "A3"]
 UNCODED_DOT = "#9aa1ad"
-EMPTY_HEADER = "#94a3b8"   # slate-400: a column no row names (a gap), drawn but quiet
-# Column headers: the code large and bold in the domain's color, a short name
-# under it. When columns get narrow, every other header steps up one tier (a
-# thin line drops to its column), so each header has two columns of width.
-HEADER_CODE_SIZE = 15
-HEADER_NAME_SIZE = 12
+EMPTY_HEADER = "#64748b"   # slate-500: a column no row names (a gap); quiet, but readable (4.8:1)
+# Column headers: the domain's short name (or the goal's name), bold in the
+# domain's color; no code. When columns get narrow, every other header steps up
+# one tier (a thin line drops to its column), so each header has two columns of width.
+HEADER_NAME_SIZE = 13
 HEADER_LINE = 16     # pixels per header line
 STAGGER_AT = 7       # more columns than this and the headers stagger
 DOMAIN_NAME_WRAP = 11
@@ -511,14 +515,14 @@ def _header_parts(target: str, zoomed: bool) -> tuple[str, list[str]]:
 
 
 def _header_text(code: str, lines: list[str], color: str, arrow: bool, muted: bool = False) -> str:
+    """A column header: the plain name in bold, in the domain's color. The code is not shown (names first)."""
     tail = " ›" if arrow else ""
-    name = "<br>".join(line if line == "<i>none</i>" else html.escape(line, quote=False) for line in lines)
+    escaped = [line if line == "<i>none</i>" else html.escape(line, quote=False) for line in lines]
     if muted:
-        name = f"<span style='color:{EMPTY_HEADER}'>{name}</span>"
+        return f"<span style='color:{EMPTY_HEADER}'>" + "<br>".join(escaped) + "</span>"
     if not code:
-        return f"<b>{name}</b>{tail}"
-    return (f"<span style='font-size:{HEADER_CODE_SIZE}px;color:{color}'><b>{code}</b></span>{tail}"
-            f"<br>{name}")
+        return "<b>" + "<br>".join(escaped) + f"</b>{tail}"
+    return "<br>".join(f"<span style='color:{color}'><b>{line}</b></span>" for line in escaped) + tail
 
 
 def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = False,
@@ -571,7 +575,7 @@ def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = 
     parts = {t: _header_parts(t, zoomed) for t in targets}
     for t in empty:
         parts[t] = (parts[t][0], parts[t][1] + ["<i>none</i>"])
-    tier = HEADER_LINE * (1 + max((len(lines) for _, lines in parts.values()), default=1)) + 6
+    tier = HEADER_LINE * max((len(lines) for _, lines in parts.values()), default=1) + 8
     stagger = len(targets) > STAGGER_AT
     strip = tier * (2 if stagger else 1) + 6
     lifted = [stagger and i % 2 == 1 for i in range(len(targets))]
@@ -691,13 +695,19 @@ def build_peer_heatmap(counts: pd.DataFrame, samples: pd.DataFrame):
         xgap=2,
         ygap=2,
     )
+    goals = [str(c) for c in counts.columns]
+    top = int(counts.to_numpy().max()) if counts.size else 1
     fig.update_layout(
         height=max(320, 40 * len(counts) + 200),
         plot_bgcolor=EMPTY_CELL,
-        xaxis=dict(side="top", tickangle=-30, showgrid=False),
+        # Goal names, wrapped and level, instead of slanted code-first labels.
+        xaxis=dict(side="top", tickangle=0, showgrid=False, tickmode="array", tickvals=goals,
+                   ticktext=[axis_label(goal_name(g), 18) for g in goals]),
         yaxis=dict(showgrid=False, automargin=True, **category_ticks([str(i) for i in counts.index])),
         margin=dict(t=8, l=0, r=0, b=0),
-        coloraxis_colorbar=dict(thickness=8, len=0.5, outlinewidth=0, tickfont=dict(size=11)),
+        # Counts are whole numbers, so the legend never shows 1.5.
+        coloraxis_colorbar=dict(thickness=8, len=0.5, outlinewidth=0, tickfont=dict(size=11),
+                                tickmode="linear", tick0=0, dtick=max(1, -(-top // 4))),
     )
     return fig
 

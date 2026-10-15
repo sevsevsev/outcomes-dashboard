@@ -696,6 +696,11 @@ def split_code(label: str) -> tuple[str, str]:
     return match.group(1), re.sub(r"\s*\(.*?\)\s*$", "", match.group(2))
 
 
+def goal_name(label: object) -> str:
+    """A goal's plain name for display: "Y1.3 Mathematics" -> "Mathematics". The code stays in exports."""
+    return split_code(str(label))[1]
+
+
 def sunburst_nodes(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = None,
                    include_empty_goals: bool = False, categories: Optional[dict] = None) -> pd.DataFrame:
     """The nodes of the domain -> goal sunburst: one root, one row per domain, one per goal.
