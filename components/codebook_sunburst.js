@@ -46,7 +46,7 @@ const ANIM_MS = 520;         // zoom in / out
 const LEAVE_MS = 70;         // grace period so moving between slices doesn't flash the resting readout
 const MIN_LABEL_DEG = { category: 4.5 };   // narrowest category that gets goal dots or its letter
 const FAN = false;           // fan a pointed-at category's goals out over the wheel (off: the side list shows them)
-const DOT = { r: 2.5, gap: 5.8, at: 28, row: 6.5 };   // the goal dots at a category bar's base
+const DOT = { r: 3.5, gap: 8.4, at: 28, row: 9 };     // the goal dots at a category bar's base
 const FAN_STEP = 9;          // degrees per goal when a category fans its goals out
 const FAN_MAX = 84;          // widest a fan gets
 const MIN_QUERY = 2;         // characters before the search starts greying slices
@@ -60,7 +60,12 @@ const LABEL_STYLE = 'halo';
 const ZOOM_COLOR = 'pale';
 const zoomColor = () => globalThis.SB_ZOOM_COLOR || ZOOM_COLOR;
 const MAX_LINES = 3;         // a label wraps onto at most this many lines
-const LABEL_PX = { domain: 13, domainValue: 13.5, bar: 13, goal: 15, small: 11, tiny: 10 };   // font sizes for the plain-name labels
+const BASE_PX = { domain: 13, domainValue: 13.5, bar: 13, goal: 15, cat: 14, letter: 12, small: 11, tiny: 10 };   // font sizes for the plain-name labels
+// On a narrow screen the SVG shrinks with its labels; there no label is drawn smaller than
+// reads as MIN_PX on screen, so fewer names fit (see labelFloor).
+const MIN_PX = 9;
+const NARROW = 640;
+const LABEL_PX = { ...BASE_PX };
 let lastQuery = '';          // the search outlives a fresh chart (a cleared selection, a page revisit)
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -153,6 +158,14 @@ function viewCat(sb, zoom = sb.zoom, pick = sb.pick) {
   return c && sb.model.byId.has(c) ? c : null;
 }
 
+/** The smallest label size (in SVG units) on a narrow screen, where the SVG is shrunk so far that
+ *  labels would read under MIN_PX; 0 elsewhere. */
+function labelFloor(svg) {
+  const shrink = svg.getBoundingClientRect().width / SIZE;
+  if (!shrink || window.innerWidth >= NARROW) return 0;
+  return Math.round((MIN_PX / shrink) * 2) / 2;
+}
+
 /** True while the wheel shows categories as bars: at rest, or in an open domain before a category is picked. */
 const catBars = sb => sb.model.equal && sb.model.cats.length > 0 && (!sb.zoom || !viewCat(sb));
 /** Where a bar starts: just outside the domain ring, or outside the category ring in an open domain. */
@@ -216,11 +229,12 @@ function baseFills(node, state) {
   }
   const on = activeId === node.id || state.pick === node.id;
   const inDomain = activeDomain === node.parent && (!state.activeCat || node.category === state.activeCat);
+  // The wheel's goals never lift: a lifted slice slides out from under a resting pointer, which
+  // then leaves it, drops it back under the pointer, enters it again, and so on, many times a second.
   if (state.equal && state.zoomed && !grey && node.count > 0 && zoomColor() !== 'full') {
     return {
       fill: on ? `hsl(${h} 58% 46%)` : zoomColor() === 'pale' ? `hsl(${h} 45% 72%)` : '#cbd5e1',
       opacity: 1,
-      lift: on && (activeId === node.id || !hovering),
     };
   }
   if (state.equal) {
@@ -228,7 +242,6 @@ function baseFills(node, state) {
       fill: node.count === 0 ? '#fff' : grey ? (on ? '#7c8492' : '#cbd5e1')
         : on ? `hsl(${h} 62% 40%)` : `hsl(${h} 58% ${inDomain ? 52 : 60}%)`,
       opacity: hovering && !inDomain ? 0.3 : 1,
-      lift: on && (activeId === node.id || !hovering),
     };
   }
   return {
@@ -331,7 +344,7 @@ function searchBar(parentElement, root, sb) {
   icon.append(svgEl('circle', { cx: 8.5, cy: 8.5, r: 5.5, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.8 }),
     svgEl('path', { d: 'M13 13l4 4', stroke: 'currentColor', 'stroke-width': 1.8, 'stroke-linecap': 'round' }));
   const input = el('input');
-  Object.assign(input, { type: 'text', value: sb.query || '', placeholder: 'Search goals and outcomes, e.g. mentoring',
+  Object.assign(input, { type: 'text', value: sb.query || '', placeholder: 'Search goals and outcomes',
     autocomplete: 'off', spellcheck: false });
   input.setAttribute('aria-label', 'Search the chart: slices without the word turn grey');
   const clear = el('button', 'sb-search-clear', '×');
@@ -364,7 +377,7 @@ function prepareSearch(model, data) {
   const names = new Map();
   for (const n of data.nodes) {
     if (n.level === 'root') continue;
-    names.set(n.id, { title: norm(`${n.eyebrow} ${n.title}`), terms: norm(terms[n.id]) });
+    names.set(n.id, { title: norm(`${n.code || ''} ${n.eyebrow} ${n.title}`), terms: norm(terms[n.id]) });
   }
   return { texts: (s.texts || []).map(norm), raw: s.texts || [], rows: s.rows || {}, names };
 }
@@ -522,6 +535,8 @@ function mount(root, sb, data) {
     sb.send('selection', selectionOf(model, sb.pick));
   }
   sb.hover = null;
+  sb.hoverEl = null;
+  clearTimeout(sb.leaveTimer);
 
   root.replaceChildren();
   root.classList.toggle('sb-equal', model.equal);
@@ -630,6 +645,11 @@ function mount(root, sb, data) {
     wire(path, n, sb);
   }
   if (animate) setTimeout(() => svg.classList.remove('sb-enter'), 1600);
+  sb.labelFloor = 0;
+  new ResizeObserver(() => {
+    const px = labelFloor(svg);
+    if (px !== sb.labelFloor) { sb.labelFloor = px; draw(sb); }
+  }).observe(figure);
 
   hole.addEventListener('click', () => { if (sb.zoom) goUp(sb); else setFocus(sb, null); });
   svg.addEventListener('pointerleave', () => setHover(sb, null));
@@ -644,9 +664,9 @@ function mount(root, sb, data) {
 }
 
 function wire(path, node, sb) {
-  path.addEventListener('pointerenter', () => setHover(sb, node.id));
+  path.addEventListener('pointerenter', () => setHover(sb, node.id, false, path));
   path.addEventListener('pointerleave', () => setHover(sb, null));
-  path.addEventListener('focus', () => setHover(sb, node.id, true));
+  path.addEventListener('focus', () => setHover(sb, node.id, true, path));
   path.addEventListener('blur', () => setHover(sb, null, true));
   path.addEventListener('click', () => clickNode(sb, node));
   path.addEventListener('keydown', e => {
@@ -700,7 +720,7 @@ function domainList(sb, model) {
       const btn = el('button', 'sb-dom-cat' + (c.count === 0 ? ' is-gap' : ''));
       btn.type = 'button';
       btn.append(el('span', 'sb-dom-cat-name', c.title), el('span', 'sb-dom-cat-n', c.count === 0 ? 'none' : fmt(c.count)));
-      btn.addEventListener('pointerenter', () => setHover(sb, c.id));
+      btn.addEventListener('pointerenter', () => setHover(sb, c.id, false, btn));
       btn.addEventListener('pointerleave', () => setHover(sb, null));
       btn.addEventListener('click', () => clickNode(sb, c));
       btn.dataset.id = c.id;
@@ -712,7 +732,7 @@ function domainList(sb, model) {
         gb.type = 'button';
         gb.dataset.id = g.id;
         gb.append(el('span', 'sb-dom-cat-name', g.title), el('span', 'sb-dom-cat-n', g.count === 0 ? 'none' : fmt(g.count)));
-        gb.addEventListener('pointerenter', () => setHover(sb, g.id));
+        gb.addEventListener('pointerenter', () => setHover(sb, g.id, false, gb));
         gb.addEventListener('pointerleave', () => setHover(sb, null));
         gb.addEventListener('click', () => clickNode(sb, g));
         gli.append(gb);
@@ -722,9 +742,9 @@ function domainList(sb, model) {
       cats.append(li);
     }
     row.append(head, cats);
-    head.addEventListener('pointerenter', () => setHover(sb, d.id));
+    head.addEventListener('pointerenter', () => setHover(sb, d.id, false, head));
     head.addEventListener('pointerleave', () => setHover(sb, null));
-    head.addEventListener('focus', () => setHover(sb, d.id, true));
+    head.addEventListener('focus', () => setHover(sb, d.id, true, head));
     head.addEventListener('blur', () => setHover(sb, null, true));
     head.addEventListener('click', () => {
       if (sb.zoom) clickNode(sb, d);                 // a domain is open: switch to this one (or back out)
@@ -765,16 +785,21 @@ function paintList(sb, state) {
   for (const btn of list.nav.querySelectorAll('.sb-dom-cat, .sb-dom-goal')) btn.classList.toggle('is-active', active.has(btn.dataset.id));
 }
 
-function setHover(sb, id, now) {
+/** Point at a node (id null lets go); `from` is the slice or row pointed at, so paint can tell when it has gone. */
+function setHover(sb, id, now, from = null) {
   clearTimeout(sb.leaveTimer);
   if (id === null && !now) {
-    sb.leaveTimer = setTimeout(() => { sb.hover = null; paint(sb); }, LEAVE_MS);
+    sb.leaveTimer = setTimeout(() => { sb.hover = null; sb.hoverEl = null; paint(sb); }, LEAVE_MS);
     return;
   }
+  sb.hoverEl = id === null ? null : from;
   if (sb.hover === id) return;
   sb.hover = id;
   paint(sb);
 }
+
+/** Is an element still drawn (not removed, hidden or collapsed)? */
+const shown = e => e.isConnected && e.dataset.empty !== '1' && e.getClientRects().length > 0;
 
 function clickNode(sb, node) {
   if (node.level === 'category') {
@@ -859,6 +884,7 @@ function outerRadius(sb, n, count = n.count) {
 function draw(sb) {
   const { model, els } = sb;
   const R = sb.R;
+  for (const k of Object.keys(BASE_PX)) LABEL_PX[k] = Math.max(BASE_PX[k], sb.labelFloor || 0);
   const resting = catBars(sb);
   for (const [id, track] of els.tracks) {
     const n = model.byId.get(id);
@@ -907,7 +933,7 @@ function draw(sb) {
           : radialLabel(label, n.names, a0, a1, top, R.goal - 4, LABEL_PX.bar);
       } else if (d && n.level === 'category') {
         // In an open domain the name runs along the thin ring (categoryName); failing that, its letter.
-        show = !named && a1 - a0 >= MIN_LABEL_DEG.category && pointLabel(label, n.label, point((R.domain + 2 + R.cat) / 2, (a0 + a1) / 2), 12);
+        show = !named && a1 - a0 >= MIN_LABEL_DEG.category && pointLabel(label, n.label, point((R.domain + 2 + R.cat) / 2, (a0 + a1) / 2), LABEL_PX.letter);
       } else if (d) {
         show = !!sb.zoom && bandLabel(label, els.labelArcs.get(id), n.names, a0, a1, barBase(sb) + 5, R.goal - 4, LABEL_PX.goal);
       }
@@ -1145,7 +1171,7 @@ function categoryName(sb, n, a0, a1, d) {
   const r = (sb.R.domain + 2 + sb.R.cat) / 2;
   const room = (r * (a1 - a0) * Math.PI) / 180 - 12;
   // A narrow category drops to the small font before giving way to its letter.
-  const size = !!sb.zoom && !!d && !catBars(sb) ? [14, LABEL_PX.bar, LABEL_PX.small].find(px => textWidth(n.title, px) <= room) : undefined;
+  const size = !!sb.zoom && !!d && !catBars(sb) ? [LABEL_PX.cat, LABEL_PX.bar, LABEL_PX.small].find(px => textWidth(n.title, px) <= room) : undefined;
   item.name.style.display = size ? '' : 'none';
   if (!size) return false;
   item.name.setAttribute('font-size', size);
@@ -1161,6 +1187,9 @@ function categoryName(sb, n, a0, a1, d) {
 
 function paint(sb) {
   const { model, els } = sb;
+  // A hovered slice or row that has since been hidden never fires pointerleave: let go of it,
+  // so the readout falls back to what is picked or open.
+  if (sb.hover && sb.hoverEl && !shown(sb.hoverEl)) { sb.hover = null; sb.hoverEl = null; }
   // A domain pinned from the list stands in for the pointer while nothing else is pointed at.
   const hoverId = sb.hover || (catBars(sb) && !sb.zoom ? sb.focus : null);
   const hovered = hoverId ? model.byId.get(hoverId) : null;
@@ -1172,6 +1201,7 @@ function paint(sb) {
     catBars: catBars(sb), zoomed: !!sb.zoom };
   // Resting on categories, only a pointed-at category opens to show its goals.
   reveal(sb, hovered && hovered.level === 'category' ? hovered.id : null);
+  if (sb.hover && sb.hoverEl && !shown(sb.hoverEl)) { paint(sb); return; }
   for (const [id, path] of els.slices) {
     const n = model.byId.get(id);
     const look = fills(n, state);
@@ -1209,8 +1239,9 @@ function paint(sb) {
       const dark = lit ? '#fff' : n.hue === null || n.hue === undefined ? '#475569' : `hsl(${n.hue} 45% 24%)`;
       for (const c of dots.children) {
         c.setAttribute('fill', c.dataset.on ? (missed ? GREY.label : dark) : lit ? 'none' : '#fff');
-        c.setAttribute('stroke', missed ? GREY.label : dark);
-        c.setAttribute('stroke-width', 1);
+        // A hollow dot (a gap) is ringed in slate, which reads on the pale track as well as on the bar.
+        c.setAttribute('stroke', missed ? GREY.label : c.dataset.on || lit ? dark : '#475569');
+        c.setAttribute('stroke-width', 1.5);
       }
       dots.style.opacity = look.opacity < 1 ? 0.55 : 1;
     }
@@ -1254,7 +1285,7 @@ function readout(sb, hovered) {
       el('div', 'sb-title', focus.title),
       el('div', 'sb-meta', hits ? matchLine(focus, match, data, true) : plural(focus.count, data.noun_one, data.noun)),
     );
-    if (zoomed && !hovered) inner.append(el('div', 'sb-back', viewCat(sb) ? `‹ ${zoomed.names && zoomed.names.length > 2 ? zoomed.names[1] : zoomed.title}` : '‹ All domains'));
+    if (zoomed && !hovered) inner.append(el('div', 'sb-back', viewCat(sb) ? `‹ ${zoomed.title}` : '‹ All domains'));
   }
   els.center.replaceChildren(inner);
 
@@ -1303,17 +1334,19 @@ function readout(sb, hovered) {
       const li = el('li');
       const sw = el('span', 'sb-swatch');
       sw.style.background = swatchColor(g);
-      li.append(sw, el('span', 'sb-goal-name', `${g.label ? g.label + ' ' : ''}${g.title}`), el('span', 'sb-goal-n', fmt(hit.count)));
+      li.append(sw, el('span', 'sb-goal-name', g.title), el('span', 'sb-goal-n', fmt(hit.count)));
       list.append(li);
     }
     children.push(el('div', 'sb-eyebrow sb-samples-head', hits.goals.size > top.length ? `Top goals of ${hits.goals.size}` : 'Goals that match'), list);
   }
-  // The subcategories: every goal with its count, by name, zeros kept (they are the gaps).
+  // The subcategories: every goal (or an open domain's every category) with its count, by name,
+  // zeros kept (they are the gaps).
   const subList = (members, top) => {
     const list = el('ul', 'sb-goals sb-subs');
     for (const g of members) {
-      const n = hits ? (hits.goals.get(g.id) || { count: 0 }).count : g.count;
-      const li = el('li', (hits && !hits.goals.has(g.id) ? 'sb-goal-miss' : '') + (g.count === 0 ? ' is-zero' : ''));
+      const found = hits && (g.level === 'category' ? hits.cats : hits.goals);
+      const n = found ? (found.get(g.id) || { count: 0 }).count : g.count;
+      const li = el('li', (found && !found.has(g.id) ? 'sb-goal-miss' : '') + (g.count === 0 ? ' is-zero' : ''));
       const bar = el('span', 'sb-mini');
       const fill = el('span');
       // Square root, as on the wheel, so a goal's bar here matches its bar there.
@@ -1322,22 +1355,19 @@ function readout(sb, hovered) {
       bar.append(fill);
       const name = el('span', 'sb-goal-name', g.title);
       name.title = g.title;
-      li.append(name, bar, el('span', 'sb-goal-n', fmt(n)));
+      li.append(name, bar, el('span', 'sb-goal-n', g.count === 0 ? 'none' : fmt(n)));
       list.append(li);
     }
     return list;
   };
-  const subHead = hits ? `Goals (${data.noun} that match)` : `Goals (${data.noun})`;
+  const subHead = what => (hits ? `${what} (${data.noun} that match)` : `${what} (${data.noun})`);
   const domainCats = focus.level === 'domain' && model.equal ? model.cats.filter(c => c.parent === focus.id) : [];
   if (focus.level === 'category') {
     const members = model.goalsOf.get(focus.id) || [];
-    children.push(el('div', 'sb-eyebrow sb-samples-head', subHead), subList(members, Math.max(1, ...members.map(g => g.count))));
+    children.push(el('div', 'sb-eyebrow sb-samples-head', subHead('Goals')), subList(members, Math.max(1, ...members.map(g => g.count))));
   } else if (domainCats.length) {
-    // An open domain lists all its goals under their categories, on one scale.
-    const goals = domainCats.flatMap(c => model.goalsOf.get(c.id) || []);
-    const top = Math.max(1, ...goals.map(g => g.count));
-    children.push(el('div', 'sb-eyebrow sb-samples-head', subHead));
-    for (const c of domainCats) children.push(el('div', 'sb-sub-head', c.title), subList(model.goalsOf.get(c.id) || [], top));
+    // A domain lists its categories (the list beside the wheel already names their goals).
+    children.push(el('div', 'sb-eyebrow sb-samples-head', subHead('Categories')), subList(domainCats, Math.max(1, ...domainCats.map(c => c.count))));
   }
   const found = hits ? matchingSamples(sb, match.rows, focus.level === 'root' || focus.level === 'category' ? 2 : 3) : [];
   if (found.length) {

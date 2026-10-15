@@ -14,7 +14,8 @@
   color: var(--ink);
 }
 
-.sb { display: flex; gap: 28px; align-items: center; justify-content: center; flex-wrap: wrap; }
+/* Everything hangs from the top of the row, so a list row opening or the panel's content changing never moves the wheel. */
+.sb { display: flex; gap: 28px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
 .sb-figure { position: relative; flex: 0 1 690px; min-width: 300px; max-width: 690px; }
 .sb-domains ~ .sb-figure { flex-basis: 520px; }   /* room for the domain list on the left */
 
@@ -46,7 +47,7 @@
 .sb-dom-cat:hover, .sb-dom-cat.is-active { background: #eef2f6; }
 .sb-dom-cat:focus-visible { outline: 2px solid var(--ink-2); outline-offset: -2px; }
 .sb-dom-cat-n { color: var(--muted); font-variant-numeric: tabular-nums; }
-.sb-dom-cat.is-gap .sb-dom-cat-n { color: var(--faint); font-style: italic; }
+.sb-dom-cat.is-gap .sb-dom-cat-n { color: var(--muted); font-style: italic; }
 .sb-svg { display: block; width: 100%; height: auto; overflow: visible; }
 
 .sb-slice {
@@ -77,7 +78,6 @@
 }
 .sb-center .sb-title {
   margin-top: 4px; font-size: 16px; font-weight: 600; line-height: 1.3; color: var(--ink);
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
 .sb-center .sb-meta { margin-top: 4px; font-size: 13px; color: var(--muted); line-height: 1.35; }
 .sb-center .sb-big { font-size: 34px; font-weight: 600; line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -95,7 +95,6 @@
 .sb-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .sb-panel .sb-title {
   margin-top: 8px; font-size: 20px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25; color: var(--ink);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .sb-counts { margin: 14px 0 0; padding: 0; list-style: none; display: flex; gap: 22px; }
 .sb-counts li { font-size: 13px; color: var(--muted); line-height: 1.3; }
@@ -109,7 +108,7 @@
   font-size: 13px; line-height: 1.45; color: var(--ink-2); background: var(--wash); border-radius: 8px; padding: 8px 12px;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
-.sb-hint { margin-top: auto; padding-top: 12px; font-size: 12px; color: var(--faint); }
+.sb-hint { margin-top: auto; padding-top: 12px; font-size: 12px; color: var(--muted); }
 
 @media (prefers-reduced-motion: reduce) {
   .sb-slice, .sb-hit, .sb-label, .sb-share span { transition: none; }
@@ -125,12 +124,12 @@
   border: 1px solid var(--line); border-radius: 8px; background: #fff; transition: border-color .15s ease;
 }
 .sb-search-box:focus-within { border-color: var(--faint); }
-.sb-search-icon { flex: none; margin-left: 10px; color: var(--faint); }
+.sb-search-icon { flex: none; margin-left: 10px; color: var(--muted); }
 .sb-search input {
   flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent;
   padding: 0 4px 0 8px; font: inherit; font-size: 14px; color: var(--ink);
 }
-.sb-search input::placeholder { color: var(--faint); }
+.sb-search input::placeholder { color: var(--muted); }
 .sb-search-clear {
   flex: none; width: 28px; height: 28px; margin-right: 4px; border: 0; border-radius: 6px; background: transparent;
   font: inherit; font-size: 18px; line-height: 1; color: var(--muted); cursor: pointer; visibility: hidden;
@@ -145,13 +144,14 @@
 .sb-match-note { margin-top: 12px; font-size: 13px; line-height: 1.45; }
 .sb-goals { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .sb-goals li { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--ink-2); }
-.sb-goal-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A long name wraps (to two lines at most in practice) rather than being cut; bar and count stay centred on it. */
+.sb-goal-name { flex: 1; min-width: 0; overflow-wrap: break-word; }
 .sb-goal-n { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
-.sb-goal-miss { opacity: .45; }
+.sb-goal-miss { color: var(--muted); }
 .sb-cat-name { pointer-events: none; user-select: none; letter-spacing: .01em; }
 .sb-mini { flex: none; width: 64px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .sb-mini span { display: block; height: 100%; border-radius: 3px; }
-.sb-subs .sb-goal-n { min-width: 22px; text-align: right; }
+.sb-subs .sb-goal-n { min-width: 32px; text-align: right; }
 .sb-fan { pointer-events: none; }
 .sb-dots { pointer-events: none; }
 
@@ -168,7 +168,8 @@
 .sb-domains ~ .sb-panel .sb-goals li { font-size: 12px; line-height: 1.35; }
 .sb-domains ~ .sb-panel .sb-mini { width: 48px; }
 .sb-sub-head { margin: 12px 0 0; font-size: 12px; font-weight: 600; color: var(--ink-2); }
-.sb-subs li.is-zero .sb-goal-name { color: var(--faint); }
+.sb-subs li.is-zero .sb-goal-name { color: var(--muted); }
+.sb-subs li.is-zero .sb-goal-n { font-style: italic; }
 .sb-dom-goals { margin: 0 0 4px; padding: 0 0 0 12px; list-style: none; }
 .sb-dom-goal {
   all: unset; box-sizing: border-box; width: 100%; display: flex; justify-content: space-between; gap: 8px;
@@ -176,8 +177,8 @@
 }
 .sb-dom-goal:hover, .sb-dom-goal.is-active { background: #eef2f6; color: var(--ink-2); }
 .sb-dom-goal:focus-visible { outline: 2px solid var(--ink-2); outline-offset: -2px; }
-.sb-dom-goal.is-gap .sb-dom-cat-name { color: var(--faint); }
-.sb-dom-goal.is-gap .sb-dom-cat-n { color: var(--faint); font-style: italic; }
+.sb-dom-goal.is-gap .sb-dom-cat-name { color: var(--muted); }
+.sb-dom-goal.is-gap .sb-dom-cat-n { color: var(--muted); font-style: italic; }
 .sb-def { margin: 8px 0 0; font-size: 13.5px; line-height: 1.5; color: #475569; }
 .sb-def-quiet { color: var(--muted); }
 .sb-def-more { margin: 8px 0 4px; font-size: 13px; line-height: 1.45; color: #475569; }
@@ -189,4 +190,13 @@
 .sb-def-link { all: unset; cursor: pointer; color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 2px; }
 .sb-def-link:hover { text-decoration-color: var(--ink-2); }
 .sb-def-link:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; border-radius: 2px; }
-.sb-def-version { margin-top: 8px; font-size: 11.5px; color: var(--faint); }
+.sb-def-version { margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+
+/* Phones: the wheel and its panel first, the domain list after them; the wheel takes the full width. */
+@media (max-width: 640px) {
+  .sb { gap: 20px; }
+  .sb-figure, .sb-domains ~ .sb-figure { flex: 1 1 100%; min-width: 0; max-width: none; }
+  .sb-domains ~ .sb-panel { flex: 1 1 100%; min-width: 0; }
+  .sb-domains { order: 1; flex: 1 1 100%; min-width: 0; max-height: none; }
+  .sb-equal .sb-center-inner { width: 34%; }
+}

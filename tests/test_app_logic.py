@@ -364,7 +364,7 @@ def test_wheel_nodes_group_goals_into_codebook_categories(df):
     assert nodes.loc[JOY + app.SUNBURST_SEP + CREATE, "category"] == ""
     data = charts.codebook_sunburst_data(nodes.reset_index(), app.MEASURE_PROGRAMS, layout="equal")
     cat = next(n for n in data["nodes"] if n["level"] == "category" and n["title"] == "Others")
-    assert cat["value"] == 2 and cat["label"] == "B" and cat["eyebrow"].endswith("Category B")
+    assert cat["value"] == 2 and cat["label"] == "B" and cat["eyebrow"] == "Category"
     assert all(n["category"] is None for n in data["nodes"] if n["level"] == "goal" and n["parent"] == JOY)
     # Without categories, nothing changes.
     assert "category" not in set(app.sunburst_nodes(frame)["level"])
@@ -414,10 +414,11 @@ def test_codebook_sunburst_data_sizes_domains_by_their_goals_and_reads_exact_cou
     # Each SEL goal has 2 programs, so the arc is 4 while the readout gives the 2 distinct programs.
     assert nodes[SEL]["value"] == sum(g["value"] for g in goals) == 4
     assert nodes[SEL]["count"] == nodes[SEL]["programs"] == 2
-    assert (nodes[SEL]["eyebrow"], nodes[SEL]["label"], nodes[SEL]["title"]) == (
-        "Domain 3", "3", "Social & Emotional Learning")
+    # Eyebrows name the level in words; codes ride along in "code" for search only.
+    assert (nodes[SEL]["eyebrow"], nodes[SEL]["label"], nodes[SEL]["title"], nodes[SEL]["code"]) == (
+        "Domain", "3", "Social & Emotional Learning", "3")
     conf = nodes[SEL + app.SUNBURST_SEP + CONF]
-    assert (conf["eyebrow"], conf["label"], conf["goal"]) == ("Goal 3.1.4", "3.1.4", CONF)
+    assert (conf["eyebrow"], conf["label"], conf["goal"], conf["code"]) == ("Goal", "3.1.4", CONF, "3.1.4")
     # Same domain, same hue on both rings; the Uncoded domain has none (the chart draws it grey).
     assert nodes[SEL]["hue"] == conf["hue"] is not None
     assert nodes[app.UNCODED_DOMAIN]["hue"] is None
@@ -670,3 +671,12 @@ def test_codebook_definitions_cover_every_v3_code():
     for g in defs["goals"].values():
         for field in ("definition", "include", "exclude"):
             assert not re.search(r"\b[YFA]\d+\.\d+\b", g[field]), g[field]
+
+
+def test_display_labels_leave_codes_off():
+    # Plain names wherever text fits (Severin, 2026-10-05); codes stay in exports.
+    assert app.goal_name("Y7.6 Financial Capability") == "Financial Capability"
+    assert app.goal_name("Unassigned subcategory") == "Unassigned subcategory"
+    assert app.goal_name("Y5. Identity, Confidence & Agency") == "Identity, Confidence & Agency"
+    assert app.goal_name("Y4 Social & Emotional Skills, no specific goal") == (
+        "Social & Emotional Skills, no specific goal")

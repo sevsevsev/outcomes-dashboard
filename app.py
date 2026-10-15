@@ -37,6 +37,7 @@ from __future__ import annotations
 import html
 import io
 import re
+from functools import partial
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
@@ -86,6 +87,7 @@ from outcomes_data import (
     domain_order,
     domain_order_with_codebook,
     domain_short,
+    goal_name,
     domain_summary,
     filter_outcomes,
     goal_summary,
@@ -249,6 +251,9 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 
 /* Sections: a hairline above, no box (see section()). */
 [class*="st-key-sec-"] {{ border-top: 1px solid {HAIRLINE}; padding-top: 1.5rem; margin-top: 1.25rem; }}
+/* The landing page's chart has no heading, so its section needs no rule above it either. */
+.st-key-sec-findings {{ margin-bottom: 1rem; }}
+.st-key-sec-explore {{ border-top: none; padding-top: 0.25rem; margin-top: 0.5rem; }}
 .sec-title {{ font-size: 1.125rem !important; font-weight: 600; letter-spacing: -0.01em; margin: 0; color: {INK}; }}
 .sec-note {{ color: {MUTED}; font-size: 0.875rem !important; margin: 0.15rem 0 0.6rem 0; }}
 /* Chart labels are the explorer's small uppercase eyebrows. */
@@ -458,8 +463,9 @@ DISPLAY_LABELS = {
 DISPLAY_COLUMNS = [COL_ORG_VIEW, COL_OUTCOME, COL_SUBCAT, COL_POP, COL_CONF, COL_PROGRAM, COL_FULL]
 # Table cells can't wrap, so columns get pixel widths sized to what they hold:
 # names and outcomes get room, short columns stay narrow.
-COLUMN_WIDTHS = {COL_ORG_VIEW: 280, COL_PROGRAM: 200, COL_OUTCOME: 380, COL_FULL: 320, COL_SUBCAT: 260,
-                 COL_POP: 140, COL_CONF: 100, COL_NOTES: 260, COL_QA: 110, COL_SOURCE_FILE: 260}
+# Organization to confidence fits the 1,180 px a 1280 px screen leaves; program and full statement scroll.
+COLUMN_WIDTHS = {COL_ORG_VIEW: 230, COL_PROGRAM: 200, COL_OUTCOME: 380, COL_FULL: 320, COL_SUBCAT: 220,
+                 COL_POP: 130, COL_CONF: 100, COL_NOTES: 260, COL_QA: 110, COL_SOURCE_FILE: 260}
 # Columns dropped from a table when every row has the same value, since the selection already says it.
 REPEATABLE = [COL_ORG_VIEW, COL_PROGRAM, COL_SUBCAT, COL_POP, COL_CONF]
 
@@ -473,8 +479,10 @@ def outcome_table(df: pd.DataFrame, columns: Sequence[str] = DISPLAY_COLUMNS, he
     cols = [c for c in columns if c in df.columns]
     if len(df) > 1:
         cols = [c for c in cols if not (c in REPEATABLE and df[c].nunique() == 1)]
-    if COL_FULL in cols and not df[COL_FULL].fillna("").astype(bool).any():
-        cols.remove(COL_FULL)
+    # Columns with nothing in them (no split statements, an export without QA or notes) are left out.
+    for col in (COL_FULL, COL_QA, COL_NOTES):
+        if col in cols and not df[col].fillna("").astype(str).str.strip().astype(bool).any():
+            cols.remove(col)
     config = {c: st.column_config.TextColumn(DISPLAY_LABELS.get(c, c), width=COLUMN_WIDTHS.get(c)) for c in cols}
     config[COL_OUTCOME] = st.column_config.TextColumn(
         DISPLAY_LABELS[COL_OUTCOME], width=COLUMN_WIDTHS[COL_OUTCOME], help="The outcome as the coder categorized it.")
@@ -482,6 +490,8 @@ def outcome_table(df: pd.DataFrame, columns: Sequence[str] = DISPLAY_COLUMNS, he
         DISPLAY_LABELS[COL_FULL], width=COLUMN_WIDTHS[COL_FULL],
         help="Filled in only when the coder split a longer statement into separate outcomes.")
     shown = df[cols].copy()
+    if COL_SUBCAT in shown:
+        shown[COL_SUBCAT] = shown[COL_SUBCAT].map(goal_name)
     if COL_POP in shown:
         shown[COL_POP] = shown[COL_POP].map(pretty_population)
     if COL_CONF in shown:
@@ -520,9 +530,14 @@ def outcomes_panel(rows: pd.DataFrame, where: str, key: str, nonce_key: Optional
         download_button(rows, f"Download these {len(rows):,} (CSV)", f"outcomes_{key}.csv", key=f"{key}_dl")
 
 
+def plain_label(text: str) -> str:
+    """A domain, category or goal label without its code: "Y5. Identity" -> "Identity", "A. Identity" -> "Identity"."""
+    return re.sub(r"^[A-Z]\. ", "", goal_name(text))
+
+
 def describe(*parts: Optional[str], audience: Optional[str] = None) -> str:
-    """ " in <b>A</b> › <b>B</b> for <b>audience</b>", skipping missing parts (escaped)."""
-    path = " › ".join(f"<b>{html.escape(p)}</b>" for p in parts if p)
+    """ " in <b>A</b> › <b>B</b> for <b>audience</b>", skipping missing parts (escaped). Codes are left off."""
+    path = " › ".join(f"<b>{html.escape(plain_label(p))}</b>" for p in parts if p)
     text = f" in {path}" if path else ""
     if audience:
         text += f" for <b>{html.escape(audience)}</b>"
@@ -588,15 +603,21 @@ def page_system_map(df: pd.DataFrame) -> None:
 
     coverage = cached_coverage(df)
 
-    with section("Explore the portfolio", "Click a bar or slice to narrow the charts beside and below it, and the "
-                 "outcomes table.", key="explore"):
-        t0, t1, t2 = st.columns([3, 3, 3])
-        view = t2.segmented_control("View", VIEWS, default="Wheel", key="v1_view") or "Wheel"
-        grouping = t0.segmented_control(
-            "Group by", GROUPINGS, default=GROUP_PRIORITIES, key="v1_grouping", disabled=view != "Ranked",
-            help="Priorities use plain names such as Attendance or Math. Codebook domains are the coder's "
-                 "own twelve domains, which the treemap and sunburst always use.",
-        ) or GROUP_PRIORITIES
+    # No heading or instructions above the chart either: the wheel should sit on the first screen, and its
+    # side panel says what a click does.
+    lead_in = partial(findings_section, df, coverage)
+    with section(key="explore"):
+        # Wide enough that View and Count each stay on one line at 1280 px.
+        t0, t1, t2 = st.columns([3.6, 4.6, 3])
+        view = t0.segmented_control("View", VIEWS, default="Wheel", key="v1_view") or "Wheel"
+        grouping = GROUP_PRIORITIES
+        if view == "Ranked":
+            # Only the ranked bars can group by priority; the other views always show the codebook's domains.
+            grouping = t2.segmented_control(
+                "Group by", GROUPINGS, default=GROUP_PRIORITIES, key="v1_grouping",
+                help="Priorities use plain names such as Attendance or Math. Codebook domains are the coder's "
+                     "own domains, which the wheel, sunburst and treemap always use.",
+            ) or GROUP_PRIORITIES
         if view in ("Wheel", "Sunburst"):
             measure = t1.segmented_control(
                 "Count", SUNBURST_MEASURES, default=MEASURE_PROGRAMS, key="v1_measure_sb",
@@ -610,20 +631,28 @@ def page_system_map(df: pd.DataFrame) -> None:
                      "to organizations that list many outcomes.",
             ) or MEASURE_ORGS
         if view in ("Wheel", "Sunburst"):
-            chosen_domain = sunburst_view(df, measure, layout="equal" if view == "Wheel" else "value")
+            chosen_domain = sunburst_view(df, measure, layout="equal" if view == "Wheel" else "value",
+                                          lead_in=lead_in)
         elif view == "Ranked":
-            chosen_domain = linked_explorer(df, measure, grouping)
+            st.markdown("<p class='sec-note'>Click a bar to narrow the charts beside and below it, and the "
+                        "outcomes table.</p>", unsafe_allow_html=True)
+            chosen_domain = linked_explorer(df, measure, grouping, lead_in=lead_in)
         else:
             chosen_domain = None
-            hierarchy_view(df, measure, view)
+            hierarchy_view(df, measure, view, lead_in=lead_in)
 
-    with section("What stands out", key="findings"):
-        findings(cached_findings(df, coverage))
     thin_goals(coverage, chosen_domain)
     download_button(df, "Download all outcomes on this page (CSV)", "system_map_outcomes.csv", key="v1_dl_all")
 
 
-def linked_explorer(df: pd.DataFrame, measure: str, grouping: str = GROUP_PRIORITIES) -> Optional[str]:
+def findings_section(df: pd.DataFrame, coverage: pd.DataFrame) -> None:
+    """"What stands out": right under the chart, above its outcomes table, so it is read before the rows."""
+    with section("What stands out", key="findings"):
+        findings(cached_findings(df, coverage))
+
+
+def linked_explorer(df: pd.DataFrame, measure: str, grouping: str = GROUP_PRIORITIES,
+                    lead_in: Optional[Callable[[], None]] = None) -> Optional[str]:
     """Priorities (or domains), goals and audiences as ranked bars; each click narrows the charts after it
     and the table.
 
@@ -648,7 +677,8 @@ def linked_explorer(df: pd.DataFrame, measure: str, grouping: str = GROUP_PRIORI
         else:
             groups = domain_summary(df).sort_values([value, COL_DOMAIN_NUM], ascending=[False, True])
             subhead("Domains", f"by {noun}")
-            fig = charts.build_ranked_bars(groups, COL_DOMAIN_SHORT, value, COL_DOMAIN, value_noun=noun)
+            groups = groups.assign(domain_name=groups[COL_DOMAIN].map(plain_domain))
+            fig = charts.build_ranked_bars(groups, "domain_name", value, COL_DOMAIN, value_noun=noun)
         add_hover_value(fig, groups[other].tolist(), other_template)
         chosen = clickable(fig, f"{base}_top")
 
@@ -671,8 +701,8 @@ def linked_explorer(df: pd.DataFrame, measure: str, grouping: str = GROUP_PRIORI
         if goals.empty:
             st.caption("No coded goals here.")
         else:
-            fig = charts.build_ranked_bars(goals, COL_SUBCAT, value, COL_SUBCAT,
-                                           value_noun=noun)
+            fig = charts.build_ranked_bars(goals.assign(goal_name=goals[COL_SUBCAT].map(goal_name)), "goal_name",
+                                           value, COL_SUBCAT, value_noun=noun)
             add_hover_value(fig, goals[other].tolist(), other_template)
             goal = clickable(fig, goal_key)
 
@@ -688,13 +718,16 @@ def linked_explorer(df: pd.DataFrame, measure: str, grouping: str = GROUP_PRIORI
         audience = clickable(fig, pop_key)
 
     rows = scope if audience is None else scope[scope[COL_POP].map(population_group) == audience]
+    if lead_in:
+        lead_in()
     selected_any = chosen is not None or goal is not None or audience is not None
     outcomes_panel(rows, describe(chosen_name, goal, audience=audience), key="v1",
                    nonce_key="v1_nonce" if selected_any else None)
     return domain
 
 
-def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value") -> Optional[str]:
+def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value",
+                  lead_in: Optional[Callable[[], None]] = None) -> Optional[str]:
     """Domains and their goals as one sunburst, styled after the codebook explorer's. A click narrows the table.
 
     `layout="equal"` draws the wheel: every codebook goal gets the same slice,
@@ -735,22 +768,28 @@ def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value") -> Opti
         rows = filter_outcomes(df, domains=[domain], subcategories=goals)
     else:
         rows = df if domain is None else filter_outcomes(df, domains=[domain], subcategories=[goal] if goal else None)
+    if lead_in:
+        lead_in()
     outcomes_panel(rows, describe(domain_short(domain) if domain else None, goal or category), key="v1_sb",
                    nonce_key="v1_nonce" if pick else None)
     return domain
 
 
-def hierarchy_view(df: pd.DataFrame, measure: str, chart_type: str) -> None:
+def hierarchy_view(df: pd.DataFrame, measure: str, chart_type: str,
+                   lead_in: Optional[Callable[[], None]] = None) -> None:
     """The treemap, with pickers for reading the outcomes behind a block."""
     plot(charts.build_hierarchy_chart(df, measure, chart_type), key="v1_hierarchy")
     back = "the domain's name at the top" if chart_type == "Treemap" else "the center"
     st.caption(f"Click a domain to open its goals, and {back} to go back.")
     d1, d2 = st.columns(2)
-    domain_choice = d1.selectbox("Domain", domain_order(df), key="v1_domain", format_func=domain_short)
+    domain_choice = d1.selectbox("Domain", domain_order(df), key="v1_domain", format_func=plain_domain)
     subcats = sorted_subcategories(df.loc[df[COL_DOMAIN] == domain_choice, COL_SUBCAT])
-    subcat_choice = d2.selectbox("Goal", ["All goals"] + subcats, key=f"v1_subcat_{slug(domain_choice)}")
+    subcat_choice = d2.selectbox("Goal", ["All goals"] + subcats, key=f"v1_subcat_{slug(domain_choice)}",
+                                 format_func=goal_name)
     goal = None if subcat_choice == "All goals" else subcat_choice
     chosen = filter_outcomes(df, domains=[domain_choice], subcategories=[goal] if goal else None)
+    if lead_in:
+        lead_in()
     outcomes_panel(chosen, describe(domain_short(domain_choice), goal), key="v1_block")
 
 
@@ -763,12 +802,12 @@ def thin_goals(coverage: pd.DataFrame, domain: Optional[str]) -> None:
     title = "Where coverage is thin" + (f" in {plain_domain(domain)}" if domain else "")
     with section(title, note, key="coverage"):
         st.dataframe(
-            shown[[COL_SUBCAT, COL_DOMAIN_SHORT, "organizations", "programs", "outcomes"]],
+            shown[[COL_SUBCAT, COL_DOMAIN]].map(plain_label).join(shown[["organizations", "programs", "outcomes"]]),
             hide_index=True,
             height=min(400, 35 * len(shown) + 38),
             column_config={
                 COL_SUBCAT: st.column_config.TextColumn("Goal", width=320),
-                COL_DOMAIN_SHORT: st.column_config.TextColumn("Domain", width=300),
+                COL_DOMAIN: st.column_config.TextColumn("Domain", width=300),
                 "organizations": st.column_config.ProgressColumn(
                     "Organizations", format="%d", min_value=0,
                     max_value=int(coverage["organizations"].max() or 1)),
@@ -796,13 +835,15 @@ def page_find_peers(df: pd.DataFrame) -> None:
         st.warning("No outcomes match the current filters. Clear some of them to see results.")
         return
 
-    tab_org, tab_goal, tab_compare = st.tabs(["Peers for an organization", "Who works on a goal",
-                                              "Compare programs"])
-    with tab_org:
+    # The same segmented control as the landing page's views, instead of underlined tabs.
+    modes = ["Peers for an organization", "Who works on a goal", "Compare programs"]
+    mode = st.segmented_control("Start from", modes, default=modes[0], key="v2_mode",
+                                label_visibility="collapsed") or modes[0]
+    if mode == modes[0]:
         peers_for_organization(df)
-    with tab_goal:
+    elif mode == modes[1]:
         organizations_for_goal(df)
-    with tab_compare:
+    else:
         compare_programs(df)
 
 
@@ -827,7 +868,10 @@ def peers_for_organization(df: pd.DataFrame) -> None:
 
     with section("Closest peers", "Ranked by shared goals. Select a row to read the two organizations' "
                  "outcomes side by side.", key="peer_matrix"):
-        table = peers.assign(coverage=(peers["coverage"] * 100).round().astype(int))
+        table = peers.assign(coverage=(peers["coverage"] * 100).round().astype(int),
+                             jaccard=(peers["jaccard"] * 100).round().astype(int),
+                             shared_list=peers["shared_list"].map(
+                                 lambda goals: "; ".join(goal_name(g) for g in goals.split("; "))))
         event = st.dataframe(
             table,
             hide_index=True,
@@ -846,7 +890,7 @@ def peers_for_organization(df: pd.DataFrame) -> None:
                 "jaccard": st.column_config.ProgressColumn(
                     "Overall overlap", help="Shared goals divided by all goals either organization targets. "
                                             "High means the two portfolios look alike overall.",
-                    min_value=0.0, max_value=1.0, format="%.2f"),
+                    min_value=0, max_value=100, format="%d%%"),
                 "shared_list": st.column_config.TextColumn("Shared goals, listed", width=420,
                                                            help="The full list is in the CSV download."),
             },
@@ -861,7 +905,8 @@ def peers_for_organization(df: pd.DataFrame) -> None:
     with section("Overlap across peers", "Outcome statements each peer has in each of this organization's "
                  "goals. Empty cells mean none. Hover a cell to read them.", key="peer_heatmap"):
         max_peers = min(30, len(peers))
-        top_n = st.slider("Peers to show", 1, max_peers, min(10, max_peers), key=f"v2_topn_{slug(org)}") \
+        narrow, _ = st.columns([1, 2])
+        top_n = narrow.slider("Peers to show", 1, max_peers, min(10, max_peers), key=f"v2_topn_{slug(org)}") \
             if max_peers > 1 else 1
         counts, samples = peer_heatmap_data(df, org, peers["organization"].head(top_n).tolist())
         plot(charts.build_peer_heatmap(counts, samples), key="v2_heatmap")
@@ -878,7 +923,7 @@ def side_by_side(df: pd.DataFrame, org: str, peer: str, shared: list[str], picke
         h2.markdown(f"<p class='subhead'>{html.escape(peer)}</p>", unsafe_allow_html=True)
         with st.container(height=520, border=False):
             for goal in shared:
-                st.markdown(f"<p class='goal-name'>{html.escape(goal)}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p class='goal-name'>{html.escape(goal_name(goal))}</p>", unsafe_allow_html=True)
                 c1, c2 = st.columns(2, gap="large")
                 for col, who in ((c1, org), (c2, peer)):
                     texts = pair.loc[(pair[COL_ORG_VIEW] == who) & (pair[COL_SUBCAT] == goal), COL_OUTCOME]
@@ -892,7 +937,8 @@ def organizations_for_goal(df: pd.DataFrame) -> None:
     if not all_subcats:
         st.info("No coded goals under the current filters.")
         return
-    subcat = st.selectbox("Goal", all_subcats, key="v2_subcat", placeholder="Type to search goals")
+    subcat = st.selectbox("Goal", all_subcats, key="v2_subcat", placeholder="Type to search goals",
+                          format_func=goal_name)
     if subcat is None:
         return
     orgs_for = organizations_for_subcategory(df, subcat)
@@ -1010,9 +1056,10 @@ def page_review(df: pd.DataFrame) -> None:
             format_func=lambda c: f"{c.title()} ({int(conf_counts.get(c, 0)):,})",
         )
         qa_statuses = []
-        if COL_QA in df.columns:
-            qa_statuses = f2.pills("QA status", sorted(df[COL_QA].dropna().unique()), selection_mode="multi",
-                                   key="v3_qa")
+        # An export whose QA column is empty gets no QA control (it used to show a label over nothing).
+        if COL_QA in df.columns and df[COL_QA].replace("", pd.NA).notna().any():
+            qa_statuses = f2.pills("QA status", sorted(df[COL_QA].replace("", pd.NA).dropna().unique()),
+                                   selection_mode="multi", key="v3_qa")
         query = st.text_input("Search outcome text", key="v3_query",
                               placeholder="For example: confidence, reading, mentor")
 
@@ -1028,16 +1075,20 @@ def page_review(df: pd.DataFrame) -> None:
     page = st.session_state["v3_page"]
     start = (page - 1) * page_size
 
-    shown = (f"Showing {start + 1:,}–{min(start + page_size, len(filtered)):,}, sorted by domain and goal."
-             if len(filtered) > page_size else "Sorted by domain and goal.")
+    shown = (f"Page {page} of {n_pages}: rows {start + 1:,}–{min(start + page_size, len(filtered)):,}, "
+             "sorted by domain and goal." if len(filtered) > page_size else "Sorted by domain and goal.")
     with section(f"{len(filtered):,} outcomes to check", shown, key="review_table"):
         # What a reviewer checks first (outcome, goal, confidence, notes) comes before the context.
         columns = [COL_ORG_VIEW, COL_OUTCOME, COL_SUBCAT, COL_CONF, COL_NOTES, COL_QA, COL_PROGRAM, COL_FULL,
                    COL_SOURCE_FILE]
         outcome_table(filtered.iloc[start:start + page_size], columns=columns, height=560)
         if n_pages > 1:
-            p1, _, p3 = st.columns([1, 2, 4], vertical_alignment="bottom")
-            p1.number_input(f"Page (of {n_pages})", min_value=1, max_value=n_pages, step=1, key="v3_page")
+            # Previous and Next, which say what they do, rather than a number stepper.
+            p1, p2, p3 = st.columns([1, 1, 5], vertical_alignment="center")
+            p1.button("‹ Previous", key="v3_prev", disabled=page == 1, width="stretch",
+                      on_click=lambda: st.session_state.update(v3_page=page - 1))
+            p2.button("Next ›", key="v3_next", disabled=page == n_pages, width="stretch",
+                      on_click=lambda: st.session_state.update(v3_page=page + 1))
         else:
             p3 = st.container()
         with p3:
@@ -1112,7 +1163,10 @@ def page_schools(df: pd.DataFrame, everything: pd.DataFrame) -> None:
     `df` is the filtered data the charts show; `everything` is the whole file,
     so whether a partner counts as coded never depends on the filters.
     """
-    page_header("Partners at a school")
+    # A lede like the other pages', which also keeps the school picker off the title.
+    page_header("Partners at a school",
+                "Every partner program at one school, from the district's program-to-school table, and what "
+                "those partners aim for.")
     tables, names = school_tables()
     relationships = tables.get(schools.RELATIONSHIPS)
     if relationships is None:
@@ -1434,7 +1488,7 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
         domains = domain_order(df)
         keep_valid("f_domains", domains)
         chosen_domains = cols["domains"].multiselect("Domains", domains, key="f_domains",
-                                                     placeholder="All domains", format_func=domain_short)
+                                                     placeholder="All domains", format_func=plain_domain)
         pops = sorted(df[COL_POP].unique(), key=pretty_population)
         keep_valid("f_pops", pops)
         chosen_pops = cols["pops"].multiselect("Who the outcome is for", pops, format_func=pretty_population,
@@ -1489,15 +1543,19 @@ def main() -> None:
     # Pages read the filtered frame from here once the filter bar has run.
     holder: dict[str, pd.DataFrame] = {}
     pages = {
-        "map": st.Page(lambda: page_system_map(holder["df"]), title="What programs aim for", url_path="system-map",
+        "map": st.Page(lambda: page_system_map(holder["df"]), title="What programs aim for", url_path="aims",
                        default=True),
         "peers": st.Page(lambda: page_find_peers(holder["df"]), title="Find peers", url_path="find-peers"),
         "schools": st.Page(lambda: page_schools(holder["df"], df), title="Partners at a school",
                            url_path="schools"),
         "review": st.Page(lambda: page_review(holder["df"]), title="Review coding", url_path="review-coding"),
     }
-    current = st.navigation(list(pages.values()), position="top")
-    page_key = next(k for k, p in pages.items() if p.url_path == current.url_path)
+    # The default page is served at "/" and its own url_path is ignored, so links to /system-map opened
+    # "Page not found". A hidden page at that address hands over to the landing page.
+    alias = st.Page(lambda: st.switch_page(pages["map"]), title="What programs aim for", url_path="system-map",
+                    visibility="hidden")
+    current = st.navigation([*pages.values(), alias], position="top")
+    page_key = next((k for k, p in pages.items() if p.url_path == current.url_path), "map")
     holder["df"] = filter_bar(df, source, page_key)
     current.run()
 
