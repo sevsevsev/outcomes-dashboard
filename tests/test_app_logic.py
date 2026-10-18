@@ -714,3 +714,23 @@ def test_spotlight_panel_data_for_the_wheel():
     assert panel["guardrail"].startswith("The review found no study")
     assert "Possible links only" in panel["note"]
     assert spotlight_panel_data({}) == {}
+
+
+def test_spotlight_indicator_reach_counts_programs_per_goal():
+    """Each indicator lists the goals that may reach it with how many programs name each; unreached ones are empty."""
+    from outcomes_data import codebook_goal_names, load_spotlight_links, spotlight_indicator_reach
+    rows = pd.DataFrame({
+        app.COL_SUBCAT: ["Y1.3 Mathematics", "Y1.3 Mathematics", "Y1.3 Mathematics", "Y8.1 Something"],
+        app.COL_ORG_VIEW: ["A", "A", "B", "C"],
+        app.COL_PROGRAM: ["Tutors", "Tutors", "Math Club", "Other"],
+    })
+    reach = {r["id"]: r for r in spotlight_indicator_reach(rows, load_spotlight_links(), codebook_goal_names())}
+    assert len(reach) == 13
+    algebra = reach["S10"]
+    assert algebra["goals"] == [{"code": "Y1.3", "name": "Mathematics", "programs": 2}]
+    assert [link["codes"] for link in algebra["links"]] == [["Y1.3"]]
+    unreached = sorted(i for i, r in reach.items() if not r["goals"])
+    assert unreached == ["S11", "S12", "S13", "S2", "S9"]
+    assert all(not reach[i]["links"] for i in unreached)
+    # Goals no program names stay listed with zero, so the gap shows.
+    assert {"code": "Y1.1", "name": "Literacy: Reading & Writing", "programs": 0} in reach["S5"]["goals"]

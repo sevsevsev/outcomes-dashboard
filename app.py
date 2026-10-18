@@ -15,7 +15,8 @@ Pages (top navigation):
 1. What programs aim for - findings, linked priority (or domain) / goal / audience charts, coverage gaps
 2. Find peers        - peers for an organization, organizations by goal, program comparison
 3. Partners at a school - a school's partners, coded or not, and where their outcomes meet
-4. Review coding     - paginated explorer for checking the coder's categorizations
+4. District indicators - which goals may reach the District's SPOTlight indicators (internal only)
+5. Review coding     - paginated explorer for checking the coder's categorizations
 
 Each page opens on a few plain-language findings and simple ranked charts.
 Clicking a bar or dot narrows the charts and the table below it, so readers
@@ -98,6 +99,9 @@ from outcomes_data import (
     load_codebook_terms,
     load_codebook_definitions,
     load_spotlight_links,
+    codebook_goal_names,
+    codebook_scheme,
+    spotlight_indicator_reach,
     organizations_for_subcategory,
     peer_heatmap_data,
     population_group,
@@ -181,6 +185,16 @@ def cached_definitions() -> dict:
 @st.cache_data(show_spinner=False)
 def cached_spotlight() -> dict:
     return load_spotlight_links()
+
+
+@st.cache_data(show_spinner=False)
+def cached_goal_names() -> dict:
+    return codebook_goal_names()
+
+
+@st.cache_data(show_spinner=False, max_entries=24)
+def cached_indicator_reach(df: pd.DataFrame) -> list[dict]:
+    return spotlight_indicator_reach(df, cached_spotlight(), cached_goal_names())
 
 
 @st.cache_data(show_spinner=False)
@@ -281,6 +295,22 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 .statements li {{ margin-bottom: 0.35rem; background: #f8fafc; border-radius: 0.5rem; padding: 0.45rem 0.75rem;
                   color: {INK_2}; }}
 .none {{ color: {FAINT}; font-size: 0.875rem; margin: 0; }}
+
+/* District indicators: one block per indicator, each link's goals with how many programs name them. */
+.ind {{ margin: 0 0 1.4rem 0; max-width: 52rem; }}
+.ind-name {{ font-weight: 600; font-size: 1rem !important; color: {INK}; margin: 0; }}
+.ind-value {{ font-weight: 400; font-size: 0.8125rem; color: {MUTED}; font-variant-numeric: tabular-nums; margin-left: 0.5rem; }}
+.ind-wording {{ color: {MUTED}; font-size: 0.8125rem !important; margin: 0.1rem 0 0.4rem 0; }}
+.ind-link {{ border-left: 2px solid {HAIRLINE}; padding: 0.1rem 0 0.1rem 0.85rem; margin: 0.5rem 0 0 0; }}
+.ind-goals {{ list-style: none; margin: 0 !important; padding: 0; font-size: 0.875rem; line-height: 1.55; color: {INK_2}; }}
+.ind-goals li {{ margin: 0; }}
+.ind-goals b {{ color: {INK}; font-weight: 600; }}
+.ind-goals .n {{ color: {MUTED}; }}
+.ind-ev {{ font-size: 0.8125rem !important; color: {INK_2}; margin: 0.15rem 0 0 0; font-weight: 500; }}
+.ind-model {{ font-size: 0.8125rem !important; color: {MUTED}; line-height: 1.5; margin: 0.1rem 0 0 0; }}
+.ind-model span {{ color: {INK_2}; font-weight: 500; }}
+.lanes {{ font-size: 0.875rem !important; color: {MUTED}; line-height: 1.6; max-width: 52rem; margin: 0 0 0.4rem 0; }}
+.lanes a {{ color: {INK_2}; }}
 
 /* Widget labels: small and medium weight, as in the explorer's forms. */
 [data-testid="stWidgetLabel"] p {{ font-size: 0.8125rem !important; font-weight: 500; color: {INK_2}; }}
@@ -1312,6 +1342,71 @@ def school_partner_list(portfolio: pd.DataFrame, school_name: str, ulcs: str) ->
                            mime="text/csv", key="v4_dl_partners", type="tertiary")
 
 
+def page_indicators(df: pd.DataFrame) -> None:
+    """The District's SPOTlight indicators, the goals that may reach each one, and how many programs name them."""
+    links = cached_spotlight()
+    year, reviewed = links.get("spotlightYear", ""), links.get("reviewedOn", "")
+    page_header("District indicators",
+                f"Which goals may reach the indicators on the District's {year} SPOTlight, from the research "
+                f"review of {reviewed}. A goal says what a program works toward. The studies are about specific "
+                "program models, so a link holds for a program only once someone confirms it runs that model.")
+    if not links:
+        st.info("The indicator links file is missing. Run `scripts/build_spotlight_links.py` to copy it from the "
+                "coder repo.")
+        return
+    if "3.x" not in codebook_scheme(df[COL_DOMAIN].dropna().unique()):
+        st.caption("The links use codebook 3.x goals, and the loaded file uses older codes, so no program counts "
+                   "show here.")
+    reach = cached_indicator_reach(df)
+    unreached = [r["name"] for r in reach if not r["goals"]]
+    guard = links.get("guardrails", {})
+    findings([
+        f"**{len(reach) - len(unreached)} of {len(reach)}** indicators have at least one goal the review "
+        "recommends linking to them. No program's model has been confirmed yet, so the counts below say only "
+        "how many programs name each goal.",
+        f"No study the review checked reaches the other **{len(unreached)}**: {'; '.join(unreached)}.",
+    ])
+    if guard:
+        st.markdown(
+            f"<p class='lanes'>Goals with no indicator link are not worth less. The Board of Education counts them "
+            f"under its guardrails: “{html.escape(guard.get('quote', ''))}” "
+            f"(<a href='{html.escape(guard.get('url', ''))}' target='_blank' rel='noopener noreferrer'>Bylaw "
+            f"003.1</a>). <a href='{html.escape(links.get('report', ''))}' target='_blank' "
+            f"rel='noopener noreferrer'>Read the full review</a>.</p>", unsafe_allow_html=True)
+
+    groups: dict[str, list[dict]] = {}
+    for r in reach:
+        groups.setdefault(r["group"], []).append(r)
+    by_code = {}
+    for r in reach:
+        by_code.update({g["code"]: g for g in r["goals"]})
+    for group, indicators in groups.items():
+        with section(group, key=f"ind_{slug(group)}"):
+            st.markdown("".join(indicator_block(r, by_code, year) for r in indicators), unsafe_allow_html=True)
+
+
+def indicator_block(r: dict, goals: dict, year: str) -> str:
+    """One indicator as HTML: its name and value, then each recommended link's goals, evidence and model."""
+    e = html.escape
+    out = [f"<div class='ind'><p class='ind-name'>{e(r['name'])}<span class='ind-value'>{e(year)}: "
+           f"{e(r['value'])}</span></p><p class='ind-wording'>{e(r['wording'])}</p>"]
+    if not r["links"]:
+        out.append("<p class='none'>No study the review checked reaches this indicator.</p>")
+    for link in r["links"]:
+        items = []
+        for code in link["codes"]:
+            n = goals[code]["programs"]
+            count = (f"{n} {'program names' if n == 1 else 'programs name'} this goal; model not confirmed" if n
+                     else "no program names this goal")
+            items.append(f"<li><b>{e(goals[code]['name'])}</b> <span class='n'>· {count}</span></li>")
+        evidence = link["evidence"] + (". Predicts the indicator; not shown to cause it" if link["predicts"] else "")
+        out.append(f"<div class='ind-link'><ul class='ind-goals'>{''.join(items)}</ul>"
+                   f"<p class='ind-ev'>{e(evidence)}</p>"
+                   f"<p class='ind-model'><span>The program must run:</span> {e(link['model'])}</p></div>")
+    out.append("</div>")
+    return "".join(out)
+
+
 # =============================================================================
 # DATA, FILTER BAR, NAVIGATION
 # =============================================================================
@@ -1556,6 +1651,8 @@ def main() -> None:
         "peers": st.Page(lambda: page_find_peers(holder["df"]), title="Find peers", url_path="find-peers"),
         "schools": st.Page(lambda: page_schools(holder["df"], df), title="Partners at a school",
                            url_path="schools"),
+        "indicators": st.Page(lambda: page_indicators(holder["df"]), title="District indicators",
+                              url_path="district-indicators"),
         "review": st.Page(lambda: page_review(holder["df"]), title="Review coding", url_path="review-coding"),
     }
     # The default page is served at "/" and its own url_path is ignored, so links to /system-map opened
