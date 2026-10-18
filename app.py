@@ -118,6 +118,7 @@ from outcomes_data import (
     sorted_subcategories,
     spotlight_panel_data,
     spotlight_pick_codes,
+    spotlight_scope_goals,
     spotlight_indicator_names,
     SPOTLIGHT_MODEL_NAMES,
     split_code,
@@ -1274,63 +1275,26 @@ def page_schools(df: pd.DataFrame, everything: pd.DataFrame) -> None:
     coded = portfolio[portfolio["status"] != schools.NOT_CODED]
     if not coded.empty:
         school_dots(rows, portfolio, ulcs)
-        # The whole file, not the filtered rows: a filter must not make an indicator look unreached.
-        school_indicators(schools.school_outcomes(coded_all, relationships, ulcs, labels))
+        school_indicators(df, everything, relationships, ulcs, school_name)
     school_partner_list(portfolio, school_name, ulcs)
 
 
-def school_indicators(rows: pd.DataFrame) -> None:
-    """Which District indicators the goals partners here name may reach, and which no partner goal reaches.
+def school_indicators(df: pd.DataFrame, everything: pd.DataFrame, relationships: pd.DataFrame, ulcs: str,
+                      school_name: str) -> None:
+    """The District indicators map for this school's partners: the goals they name stand out, the rest go pale.
 
-    Gaps for the school, never scores for partners: nothing is totalled or ranked per partner.
+    Gaps for the school, never scores for partners: nothing is totalled or ranked per partner. The scope uses
+    every coded outcome at the school, whatever the filters, so a filter never makes a goal look unnamed.
     """
     links = cached_spotlight()
-    if not links or "3.x" not in codebook_scheme(rows[COL_DOMAIN].dropna().unique()):
+    if not links or "3.x" not in codebook_scheme(everything[COL_DOMAIN].dropna().unique()):
         return
-    reach = spotlight_indicator_reach(rows, links, cached_goal_names(),
-                                      counter=lambda d: d[schools.COL_PARTNER].nunique())
-    reached = [r for r in reach if any(g["programs"] for g in r["goals"])]
-    missing = [r for r in reach if r["goals"] and not any(g["programs"] for g in r["goals"])]
-    no_study = [r["name"] for r in reach if not r["goals"]]
-    e = html.escape
+    scope, _ = school_scope(everything, relationships, ulcs, school_name)
     with section("District indicators at this school",
-                 "Which SPOTlight indicators the goals named by partners here may reach. A goal says what a partner "
-                 "works toward; whether it runs the model the studies tested is not confirmed. These are gaps for "
-                 "the school, not scores for partners. Counts use every coded outcome here, whatever the filters.",
-                 key="school_indicators"):
-        left, right = st.columns(2, gap="large")
-        with left:
-            subhead("A partner goal here may reach", f"{len(reached)} of {len(reach)}")
-            if not reached:
-                st.markdown("<p class='none'>No partner here names a goal linked to an indicator.</p>",
-                            unsafe_allow_html=True)
-            for r in reached:
-                named = [g for g in r["goals"] if g["programs"]]
-                goals = "; ".join(f"{e(g['name'])} <span class='n'>({g['programs']} "
-                                  f"{'partner' if g['programs'] == 1 else 'partners'})</span>" for g in named)
-                # A link none of whose goals a partner here names is a gap too, even when another link reaches
-                # the indicator (social and emotional goals reach the math test, but nobody here names math).
-                count = {g["code"]: g["programs"] for g in r["goals"]}
-                unnamed = [g["name"] for g in r["goals"]
-                           if any(g["code"] in link["codes"] and not any(count[c] for c in link["codes"])
-                                  for link in r["links"])]
-                gap = f"<p class='ind-model'>No partner here names {e(', '.join(unnamed))}.</p>" if unnamed else ""
-                st.markdown(f"<div class='ind'><p class='ind-name'>{e(r['name'])}</p>"
-                            f"<ul class='ind-goals'><li>{goals}</li></ul>{gap}</div>", unsafe_allow_html=True)
-        with right:
-            subhead("No partner goal here reaches", f"{len(missing)} of {len(reach)}")
-            if not missing:
-                st.markdown("<p class='none'>Every indicator with a linked goal has a partner here naming one.</p>",
-                            unsafe_allow_html=True)
-            for r in missing:
-                goals = ", ".join(e(g["name"]) for g in r["goals"])
-                st.markdown(f"<div class='ind'><p class='ind-name'>{e(r['name'])}</p>"
-                            f"<p class='ind-model'>No partner here names {goals}.</p></div>",
-                            unsafe_allow_html=True)
-            if no_study:
-                st.markdown(f"<p class='ind-model'>No study the review checked reaches {len(no_study)} more: "
-                            f"{e('; '.join(no_study))}. See the District indicators page.</p>",
-                            unsafe_allow_html=True)
+                 "Which SPOTlight indicators the goals named by partners here could help move. A goal says what a "
+                 "partner works toward; whether it runs the program model a study tested is not confirmed. Pale "
+                 "goals are ones no partner here names.", key="school_indicators"):
+        indicator_map(cached_indicator_reach(df), links, scope, key="school_ind_map")
 
 
 def school_dots(rows: pd.DataFrame, portfolio: pd.DataFrame, ulcs: str) -> None:
@@ -1409,14 +1373,18 @@ def school_partner_list(portfolio: pd.DataFrame, school_name: str, ulcs: str) ->
                            mime="text/csv", key="v4_dl_partners", type="tertiary")
 
 
-def page_indicators(df: pd.DataFrame) -> None:
-    """The District's SPOTlight indicators, the goals that may reach each one, and how many programs name them."""
+def page_indicators(df: pd.DataFrame, everything: pd.DataFrame) -> None:
+    """The District's SPOTlight indicators, the goals that could help move each one, and who names those goals.
+
+    `df` is the filtered data; `everything` is the whole file, which the school view uses so that a filter
+    never makes a school look as if no partner there names a goal.
+    """
     links = cached_spotlight()
     year, reviewed = links.get("spotlightYear", ""), links.get("reviewedOn", "")
     page_header("District indicators",
-                f"Which goals may reach the indicators on the District's {year} SPOTlight, from the research "
-                f"review of {reviewed}. A goal says what a program works toward. The studies are about specific "
-                "program models, so a link holds for a program only once someone confirms it runs that model.")
+                f"Which partner goals could help move the indicators on the District's {year} SPOTlight, according "
+                f"to the research review of {reviewed}. The studies tested specific program models, so a link "
+                "applies to a program only once someone confirms the program runs that model.")
     if not links:
         st.info("The indicator links file is missing. Run `scripts/build_spotlight_links.py` to copy it from the "
                 "coder repo.")
@@ -1426,25 +1394,27 @@ def page_indicators(df: pd.DataFrame) -> None:
                    "show here.")
     reach = cached_indicator_reach(df)
     unreached = [r["name"] for r in reach if not r["goals"]]
-    guard = links.get("guardrails", {})
     findings([
-        f"**{len(reach) - len(unreached)} of {len(reach)}** indicators have at least one goal the review "
-        "recommends linking to them. No program's model has been confirmed yet, so the counts beside the map say "
-        "only how many programs name each goal.",
-        f"No study the review checked reaches the other **{len(unreached)}**: {'; '.join(unreached)}.",
+        f"The research review links partner goals to **{len(reach) - len(unreached)} of {len(reach)}** SPOTlight "
+        "indicators. No program's model has been confirmed yet, so the counts beside the map show only how many "
+        "programs name each goal.",
+        f"For the other **{len(unreached)}**, the review found no study strong enough to link a goal: "
+        f"{'; '.join(unreached)}.",
     ])
-    pick = indicator_map(reach, links)
+    scope, rows = indicator_scope(df, everything)
+    pick = indicator_map(reach, links, scope)
+    guard = links.get("guardrails", {})
     if guard:
         st.markdown(
-            f"<p class='lanes'>Goals with no indicator link are not worth less. The Board of Education counts them "
-            f"under its guardrails: “{html.escape(guard.get('quote', ''))}” "
+            f"<p class='lanes'>The Board of Education counts goals without an indicator link toward its guardrails: "
+            f"“{html.escape(guard.get('quote', ''))}” "
             f"(<a href='{html.escape(guard.get('url', ''))}' target='_blank' rel='noopener noreferrer'>Bylaw "
             f"003.1</a>). <a href='{html.escape(links.get('report', ''))}' target='_blank' "
             f"rel='noopener noreferrer'>Read the full review</a>.</p>", unsafe_allow_html=True)
 
     codes = spotlight_pick_codes(pick, links)
-    goal_codes = df[COL_SUBCAT].map(lambda label: split_code(label)[0])
-    rows = df[goal_codes.isin(codes)] if pick else df[goal_codes.isin(
+    goal_codes = rows[COL_SUBCAT].map(lambda label: split_code(label)[0])
+    rows = rows[goal_codes.isin(codes)] if pick else rows[goal_codes.isin(
         {c for link in links.get("links", []) for c in link["codes"]})]
     where = " naming a goal with an indicator link"
     if pick:
@@ -1453,9 +1423,11 @@ def page_indicators(df: pd.DataFrame) -> None:
                 "link": lambda: SPOTLIGHT_MODEL_NAMES.get(pick["id"], pick["id"]),
                 "indicator": lambda: spotlight_indicator_names(links).get(pick["id"], pick["id"])}.get(pick["kind"])
         where = (f" naming <b>{e(name())}</b>" if pick["kind"] == "goal"
-                 else f" naming a goal joined by <b>{e(name())}</b>" if pick["kind"] == "link"
-                 else f" naming a goal that may reach <b>{e(name())}</b>" if codes
+                 else f" naming a goal in <b>{e(name())}</b>" if pick["kind"] == "link"
+                 else f" naming a goal that could help move <b>{e(name())}</b>" if codes
                  else " naming a goal linked to this pick: none")
+    if scope:
+        where += f" ({html.escape(scope['label'])})"
     outcomes_panel(rows, where, key="ind_map", nonce_key="ind_nonce" if pick else None)
 
     groups: dict[str, list[dict]] = {}
@@ -1470,12 +1442,76 @@ def page_indicators(df: pd.DataFrame) -> None:
                         + "".join(indicator_block(r, by_code, year) for r in indicators), unsafe_allow_html=True)
 
 
-def indicator_map(reach: list[dict], links: dict) -> Optional[dict]:
-    """The goals, program models and indicators as one linked map; returns the pick, if any."""
-    key = f"ind_map_{st.session_state.get('ind_nonce', 0)}"
+SCOPE_ALL, SCOPE_PROGRAM, SCOPE_SCHOOL = "All partners", "One program", "Partners at a school"
+
+
+def indicator_scope(df: pd.DataFrame, everything: pd.DataFrame) -> tuple[Optional[dict], pd.DataFrame]:
+    """The "Show for" row: all partners, one program, or the partners at one school.
+
+    Returns (scope for the map, or None for all partners; the outcome rows the table below starts from).
+    """
+    kinds = [SCOPE_ALL, SCOPE_PROGRAM, SCOPE_SCHOOL]
+    left, right = st.columns([2, 3], vertical_alignment="bottom")
+    kind = left.segmented_control("Show for", kinds, default=SCOPE_ALL, key="ind_scope") or SCOPE_ALL
+    if kind == SCOPE_PROGRAM:
+        programs = (df[[COL_ORG_VIEW, COL_PROGRAM]].dropna().drop_duplicates()
+                    .sort_values([COL_ORG_VIEW, COL_PROGRAM], key=lambda s: s.str.casefold()))
+        options = list(programs.itertuples(index=False, name=None))
+        choice = right.selectbox("Program", options, index=None, key="ind_program", placeholder="Type to search programs",
+                                 format_func=lambda p: p[0] if p[1] == p[0] else f"{p[0]}: {p[1]}",
+                                 label_visibility="collapsed")
+        if choice is None:
+            return None, df
+        org, program = choice
+        rows = df[(df[COL_ORG_VIEW] == org) & (df[COL_PROGRAM] == program)]
+        label = org if program == org else f"{org}: {program}"
+        return {"kind": "program", "label": label,
+                "goals": spotlight_scope_goals(rows, counter=len, samples=3)}, rows
+    if kind == SCOPE_SCHOOL:
+        tables, _ = school_tables()
+        relationships = tables.get(schools.RELATIONSHIPS)
+        if relationships is None:
+            right.caption("Add the school tables on the Partners at a school page to pick a school.")
+            return None, df
+        options = schools.school_options(relationships, tables.get(schools.SCHOOLS))
+        names = dict(zip(options[schools.COL_ULCS], options[schools.COL_SCHOOL]))
+        ulcs = right.selectbox("School", options[schools.COL_ULCS].tolist(), index=None, key="ind_school",
+                               format_func=names.get, placeholder="Type to search schools",
+                               label_visibility="collapsed")
+        if ulcs is None:
+            return None, df
+        scope, rows = school_scope(everything, relationships, ulcs, names[ulcs])
+        return scope, rows
+    return None, df
+
+
+def school_scope(everything: pd.DataFrame, relationships: pd.DataFrame, ulcs: str, school_name: str
+                 ) -> tuple[dict, pd.DataFrame]:
+    """The map's scope for one school: each linked goal with the partners there who name it.
+
+    Uses every coded outcome at the school, whatever the filters, so a filter never makes a goal look unnamed.
+    """
+    coded_all = schools.with_program_ids(everything)
+    portfolio = schools.school_portfolio(relationships, ulcs, coded_all)
+    labels = dict(zip(portfolio[schools.COL_PARTNER_ID], portfolio[schools.COL_PARTNER]))
+    rows = schools.school_outcomes(coded_all, relationships, ulcs, labels)
+    rows = rows.assign(**{COL_ORG_VIEW: rows[schools.COL_PARTNER]})
+    goals = spotlight_scope_goals(rows, counter=lambda d: d[schools.COL_PARTNER].nunique(),
+                                  names_col=schools.COL_PARTNER)
+    return {"kind": "school", "label": f"partners at {school_name}", "goals": goals}, rows
+
+
+def indicator_map(reach: list[dict], links: dict, scope: Optional[dict] = None, key: str = "ind_map") -> Optional[dict]:
+    """The goals, program models and indicators as one linked map; returns the pick, if any.
+
+    With a `scope`, the goals that program or school's partners name stand out and the rest go pale.
+    """
+    scope_id = "" if not scope else f"_{slug(scope['label'])}"
+    key = f"{key}_{st.session_state.get('ind_nonce', 0)}{scope_id}"
     last_key = f"{key}_last"
     data = charts.spotlight_map_data(reach, links, cached_domain_names(), cached_definitions(),
-                                     n_goals=len(cached_goal_names()), selected=st.session_state.get(last_key))
+                                     n_goals=len(cached_goal_names()), selected=st.session_state.get(last_key),
+                                     scope=scope)
     pick = spotlight_map(data, key=key)
     st.session_state[last_key] = pick
     return pick
@@ -1487,7 +1523,8 @@ def indicator_block(r: dict, goals: dict, year: str) -> str:
     out = [f"<div class='ind'><p class='ind-name'>{e(r['name'])}<span class='ind-value'>{e(year)}: "
            f"{e(r['value'])}</span></p><p class='ind-wording'>{e(r['wording'])}</p>"]
     if not r["links"]:
-        out.append("<p class='none'>No study the review checked reaches this indicator.</p>")
+        out.append("<p class='none'>The review found no study strong enough to link a partner goal to this "
+                   "indicator.</p>")
     for link in r["links"]:
         items = []
         for code in link["codes"]:
@@ -1495,7 +1532,8 @@ def indicator_block(r: dict, goals: dict, year: str) -> str:
             count = (f"{n} {'program names' if n == 1 else 'programs name'} this goal; model not confirmed" if n
                      else "no program names this goal")
             items.append(f"<li><b>{e(goals[code]['name'])}</b> <span class='n'>· {count}</span></li>")
-        evidence = link["evidence"] + (". Predicts the indicator; not shown to cause it" if link["predicts"] else "")
+        evidence = link["evidence"] + (". A correlation: the goal predicts the indicator, but no study shows a "
+                                       "program causes the change" if link["predicts"] else "")
         out.append(f"<div class='ind-link'><ul class='ind-goals'>{''.join(items)}</ul>"
                    f"<p class='ind-ev'>{e(evidence)}</p>"
                    f"<p class='ind-model'><span>The program must run:</span> {e(link['model'])}</p></div>")
@@ -1747,7 +1785,7 @@ def main() -> None:
         "peers": st.Page(lambda: page_find_peers(holder["df"]), title="Find peers", url_path="find-peers"),
         "schools": st.Page(lambda: page_schools(holder["df"], df), title="Partners at a school",
                            url_path="schools"),
-        "indicators": st.Page(lambda: page_indicators(holder["df"]), title="District indicators",
+        "indicators": st.Page(lambda: page_indicators(holder["df"], df), title="District indicators",
                               url_path="district-indicators"),
         "review": st.Page(lambda: page_review(holder["df"]), title="Review coding", url_path="review-coding"),
     }

@@ -46,6 +46,7 @@ from outcomes_data import (
     sample_outcome_texts,
     SPOTLIGHT_EVIDENCE,
     SPOTLIGHT_MODEL_NAMES,
+    SPOTLIGHT_NO_LINK,
     SPOTLIGHT_POSSIBLE,
     SUNBURST_SEP,
     _without_codes,
@@ -755,8 +756,16 @@ def build_confidence_bar(counts: pd.Series):
 # =============================================================================
 
 
+def spotlight_link_kind(link: dict) -> str:
+    """What kind of connection a link is: "definition" (the indicator counts the outcome itself), "correlation"
+    (the goal predicts the indicator, no cause shown) or "cause" (studies found the model changes it)."""
+    if link.get("evidence") == "definitional":
+        return "definition"
+    return "correlation" if link.get("contribution") == "predicts" else "cause"
+
+
 def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, str], definitions: dict,
-                       n_goals: int, selected: Optional[dict] = None) -> dict:
+                       n_goals: int, selected: Optional[dict] = None, scope: Optional[dict] = None) -> dict:
     """What the District indicators map (spotlight_component.py) draws: goals, program models, indicators.
 
     `reach` comes from outcomes_data.spotlight_indicator_reach. Goals are in codebook order under
@@ -765,6 +774,10 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
     Program counts go to the side panel as text only; they are never drawn as lengths or widths,
     and never added up per indicator. `n_goals` is how many goals the codebook has, so the map
     can say how many have no link.
+
+    `scope` (from app.indicator_scope) narrows the view to one program or one school's partners: each
+    goal then carries "here", what the scope's count is for it (0 when no one there names it), with
+    the partner names or sample statements behind it.
     """
     if not links:
         return {}
@@ -778,29 +791,42 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
                       "domainName": domain_names.get(domain, domain), "hue": hue,
                       "programs": goals_by_code[code]["programs"],
                       "definition": goal_defs.get(code, {}).get("definition", "")})
+    if scope:
+        for g in goals:
+            found = scope["goals"].get(g["id"], {})
+            g["here"] = found.get("count", 0)
+            g["hereNames"] = found.get("names", [])
+            g["hereSamples"] = found.get("samples", [])
     hue_of = {g["id"]: g["hue"] for g in goals}
     out_links = []
     for link in links.get("links", []):
-        scope = link.get("evidenceScope")
+        ev_scope = link.get("evidenceScope")
         level = SPOTLIGHT_EVIDENCE.get(link.get("evidence"), str(link.get("evidence", "")).capitalize())
         out_links.append({
             "id": link["id"], "goals": link["codes"], "indicators": link["indicators"],
             "name": SPOTLIGHT_MODEL_NAMES.get(link["id"], link["id"]),
-            "evidence": link.get("evidence", ""), "evidenceLabel": level, "scope": scope or "",
+            "evidence": link.get("evidence", ""), "evidenceLabel": level, "scope": ev_scope or "",
             "predicts": link.get("contribution") == "predicts",
             "model": _without_codes(link.get("modelMatch")), "pathway": _without_codes(link.get("pathway")),
             "conditions": _without_codes(link.get("conditions")),
+            "kind": spotlight_link_kind(link),
+            "effect": _without_codes(link.get("typicalEffect")), "size": _without_codes(link.get("magnitude")),
+            "caveats": _without_codes(link.get("caveats")),
+            "philadelphia": _without_codes((link.get("philadelphia") or {}).get("note")),
+            "studies": [str(c) for c in link.get("studies") or []],
             "hue": hue_of.get(link["codes"][0]),
         })
     indicators = [{"id": r["id"], "group": r["group"], "name": r["name"], "wording": r["wording"],
                    "value": r["value"], "reached": bool(r["links"])} for r in reach]
     guard = links.get("guardrails", {})
-    sig = hashlib.sha1(json.dumps([goals, [i["id"] for i in indicators]], sort_keys=True).encode()).hexdigest()
+    scope_out = {"kind": scope["kind"], "label": scope["label"]} if scope else None
+    sig = hashlib.sha1(json.dumps([goals, [i["id"] for i in indicators], scope_out],
+                                  sort_keys=True).encode()).hexdigest()
     return {
         "sig": sig[:16], "goals": goals, "links": out_links, "indicators": indicators,
-        "otherGoals": max(0, n_goals - len(goals)), "year": links.get("spotlightYear", ""),
+        "otherGoals": max(0, n_goals - len(goals)), "year": links.get("spotlightYear", ""), "scope": scope_out,
         "possible": SPOTLIGHT_POSSIBLE,
-        "guardrail": {"summary": guard.get("summary", ""), "quote": guard.get("quote", ""),
+        "guardrail": {"summary": SPOTLIGHT_NO_LINK, "quote": guard.get("quote", ""),
                       "url": guard.get("url", "")},
         "selected": selected,
     }

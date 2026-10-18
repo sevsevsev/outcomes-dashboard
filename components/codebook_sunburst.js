@@ -1448,7 +1448,7 @@ function spotlightOf(sb, node) {
     for (const l of links) {
       const item = el('div', 'sb-spot-link');
       item.append(el('div', 'sb-spot-ind', l.indicators.join('; ')),
-        el('div', 'sb-spot-ev', l.predicts ? `${l.evidence}. Predicts the indicator; not shown to cause it.` : l.evidence));
+        el('div', 'sb-spot-ev', l.predicts ? `${l.evidence}. A correlation: the goal predicts the indicator, but no study shows a program causes the change.` : l.evidence));
       const lines = el('dl');
       lines.append(el('dt', '', 'The program must run'), el('dd', '', l.model));
       if (l.size) lines.append(el('dt', '', 'What it could mean for a school'), el('dd', '', l.size));
