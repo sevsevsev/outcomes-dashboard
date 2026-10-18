@@ -734,3 +734,44 @@ def test_spotlight_indicator_reach_counts_programs_per_goal():
     assert all(not reach[i]["links"] for i in unreached)
     # Goals no program names stay listed with zero, so the gap shows.
     assert {"code": "Y1.1", "name": "Literacy: Reading & Writing", "programs": 0} in reach["S5"]["goals"]
+
+
+
+def test_spotlight_map_data_draws_each_link_once_and_never_totals():
+    """The District indicators map: one node per link, goals in codebook order, counts per goal only."""
+    from outcomes_data import (SPOTLIGHT_MODEL_NAMES, codebook_domain_names, codebook_goal_names,
+                               load_spotlight_links, spotlight_indicator_reach)
+    links = load_spotlight_links()
+    rows = pd.DataFrame({
+        app.COL_SUBCAT: ["Y1.3 Mathematics", "Y1.3 Mathematics", "Y4.1 Emotion Awareness"],
+        app.COL_ORG_VIEW: ["A", "B", "A"],
+        app.COL_PROGRAM: ["Tutors", "Math Club", "Tutors"],
+    })
+    reach = spotlight_indicator_reach(rows, links, codebook_goal_names())
+    goal_names = codebook_goal_names()
+    data = charts.spotlight_map_data(reach, links, codebook_domain_names(), {}, n_goals=len(goal_names))
+    assert [l["id"] for l in data["links"]] == [l["id"] for l in links["links"]]
+    assert set(SPOTLIGHT_MODEL_NAMES) == {l["id"] for l in links["links"]}   # every node has a plain name
+    codes = [g["id"] for g in data["goals"]]
+    assert codes == sorted(codes, key=app.subcategory_sort_key)
+    assert {c for l in links["links"] for c in l["codes"]} == set(codes)
+    assert next(g for g in data["goals"] if g["id"] == "Y1.3")["programs"] == 2
+    assert next(g for g in data["goals"] if g["id"] == "Y1.3")["domainName"].startswith("Academic")
+    assert data["otherGoals"] == len(goal_names) - len(codes)
+    # Indicators carry no program count, so nothing can add up per indicator.
+    assert all("programs" not in i for i in data["indicators"])
+    assert sum(not i["reached"] for i in data["indicators"]) == 5
+    assert charts.spotlight_map_data(reach, {}, {}, {}, n_goals=0) == {}
+
+
+def test_spotlight_pick_codes():
+    """A pick stands for the goals it covers: a goal itself, a link its goals, an indicator its links' goals."""
+    from outcomes_data import load_spotlight_links, spotlight_pick_codes
+    links = load_spotlight_links()
+    assert spotlight_pick_codes({"kind": "goal", "id": "Y1.3"}, links) == ["Y1.3"]
+    assert spotlight_pick_codes({"kind": "link", "id": "L-36"}, links) == ["A2.3", "A3.2"]
+    assert spotlight_pick_codes({"kind": "indicator", "id": "S10"}, links) == ["Y1.3"]
+    assert "Y1.13" in spotlight_pick_codes({"kind": "indicator", "id": "S1"}, links)
+    assert spotlight_pick_codes({"kind": "indicator", "id": "S11"}, links) == []
+    assert spotlight_pick_codes({"kind": "other", "id": "other"}, links) == []
+    assert spotlight_pick_codes(None, links) == []

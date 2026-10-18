@@ -44,7 +44,12 @@ from outcomes_data import (
     goal_name,
     hierarchy_counts,
     sample_outcome_texts,
+    SPOTLIGHT_EVIDENCE,
+    SPOTLIGHT_MODEL_NAMES,
+    SPOTLIGHT_POSSIBLE,
     SUNBURST_SEP,
+    _without_codes,
+    subcategory_sort_key,
 )
 
 # =============================================================================
@@ -743,3 +748,59 @@ def build_confidence_bar(counts: pd.Series):
         barcornerradius=4,
     )
     return fig
+
+
+# =============================================================================
+# DISTRICT INDICATORS MAP (spotlight_component.py)
+# =============================================================================
+
+
+def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, str], definitions: dict,
+                       n_goals: int, selected: Optional[dict] = None) -> dict:
+    """What the District indicators map (spotlight_component.py) draws: goals, program models, indicators.
+
+    `reach` comes from outcomes_data.spotlight_indicator_reach. Goals are in codebook order under
+    their domains, in the domain's wheel hue. Each recommended link is one program-model node, so
+    a link with six goals and four indicators is drawn as six bands in and four out, not 24.
+    Program counts go to the side panel as text only; they are never drawn as lengths or widths,
+    and never added up per indicator. `n_goals` is how many goals the codebook has, so the map
+    can say how many have no link.
+    """
+    if not links:
+        return {}
+    goals_by_code = {g["code"]: g for r in reach for g in r["goals"]}
+    goal_defs = definitions.get("goals", {}) if definitions else {}
+    goals = []
+    for code in sorted(goals_by_code, key=subcategory_sort_key):
+        domain = code.split(".")[0]
+        hue = DOMAIN_HUES[DOMAIN_ORDER_V3.index(domain)] if domain in DOMAIN_ORDER_V3 else None
+        goals.append({"id": code, "name": goals_by_code[code]["name"], "domain": domain,
+                      "domainName": domain_names.get(domain, domain), "hue": hue,
+                      "programs": goals_by_code[code]["programs"],
+                      "definition": goal_defs.get(code, {}).get("definition", "")})
+    hue_of = {g["id"]: g["hue"] for g in goals}
+    out_links = []
+    for link in links.get("links", []):
+        scope = link.get("evidenceScope")
+        level = SPOTLIGHT_EVIDENCE.get(link.get("evidence"), str(link.get("evidence", "")).capitalize())
+        out_links.append({
+            "id": link["id"], "goals": link["codes"], "indicators": link["indicators"],
+            "name": SPOTLIGHT_MODEL_NAMES.get(link["id"], link["id"]),
+            "evidence": link.get("evidence", ""), "evidenceLabel": level, "scope": scope or "",
+            "predicts": link.get("contribution") == "predicts",
+            "model": _without_codes(link.get("modelMatch")), "pathway": _without_codes(link.get("pathway")),
+            "conditions": _without_codes(link.get("conditions")),
+            "hue": hue_of.get(link["codes"][0]),
+        })
+    indicators = [{"id": r["id"], "group": r["group"], "name": r["name"], "wording": r["wording"],
+                   "value": r["value"], "reached": bool(r["links"])} for r in reach]
+    guard = links.get("guardrails", {})
+    sig = hashlib.sha1(json.dumps([goals, [i["id"] for i in indicators]], sort_keys=True).encode()).hexdigest()
+    return {
+        "sig": sig[:16], "goals": goals, "links": out_links, "indicators": indicators,
+        "otherGoals": max(0, n_goals - len(goals)), "year": links.get("spotlightYear", ""),
+        "possible": SPOTLIGHT_POSSIBLE,
+        "guardrail": {"summary": guard.get("summary", ""), "quote": guard.get("quote", ""),
+                      "url": guard.get("url", "")},
+        "selected": selected,
+    }
