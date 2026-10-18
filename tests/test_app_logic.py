@@ -680,3 +680,37 @@ def test_display_labels_leave_codes_off():
     assert app.goal_name("Y5. Identity, Confidence & Agency") == "Identity, Confidence & Agency"
     assert app.goal_name("Y4 Social & Emotional Skills, no specific goal") == (
         "Social & Emotional Skills, no specific goal")
+
+
+def test_spotlight_links_name_real_codes_and_indicators():
+    """The copied SPOTlight links point at 3.x goals the dashboard knows and indicators the file lists."""
+    from outcomes_data import load_codebook_terms, load_spotlight_links
+    links = load_spotlight_links()
+    codes = load_codebook_terms()
+    indicators = {i["id"] for i in links["indicators"]}
+    assert len(indicators) == 13
+    for link in links["links"]:
+        assert set(link["codes"]) <= set(codes), link["id"]
+        assert set(link["indicators"]) <= indicators, link["id"]
+        assert link["modelMatch"], link["id"]
+    assert links["guardrails"]["summary"]
+
+
+def test_spotlight_panel_data_for_the_wheel():
+    """A linked goal gets each link's indicators, evidence and model, with codes taken out; others get the guardrail."""
+    import re
+    from outcomes_data import load_spotlight_links, spotlight_panel_data
+    panel = spotlight_panel_data(load_spotlight_links())
+    maths = panel["goals"]["Y1.3"]
+    assert [link["id"] for link in maths] == ["L-02", "L-03"]
+    assert maths[0]["indicators"] == ["Math test, grade 3", "Math test, grades 3 to 8"]
+    assert maths[0]["evidence"] == "Strong evidence, for the tutoring model only"
+    assert "A partner coded Mathematics that" in maths[0]["model"]
+    for links in panel["goals"].values():
+        for link in links:
+            for field in ("pathway", "model", "size"):
+                assert not re.search(r"\b[YFA]\d+(\.\d+)?\b", link[field]), link[field]
+    assert "Y8.1" not in panel["goals"]
+    assert panel["guardrail"].startswith("The review found no study")
+    assert "Possible links only" in panel["note"]
+    assert spotlight_panel_data({}) == {}

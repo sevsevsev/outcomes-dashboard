@@ -56,6 +56,9 @@ CODEBOOK_PATH = APP_DIR / "reference" / "codebook_subcategories.csv"
 CODEBOOK_V3_PATH = APP_DIR / "reference" / "codebook_subcategories_v3.csv"
 CODEBOOK_TERMS_V3_PATH = APP_DIR / "reference" / "codebook_terms_v3.csv"   # codebook words for the chart search
 CODEBOOK_DEFINITIONS_V3_PATH = APP_DIR / "reference" / "codebook_definitions_v3.json"   # what the wheel's panel says a code means
+# Which 3.x goals may reach the District's SPOTlight indicators, copied from the coder repo by
+# scripts/build_spotlight_links.py. Internal dashboard only: public display needs district sign-off.
+SPOTLIGHT_LINKS_V3_PATH = APP_DIR / "reference" / "spotlight_links_v3.json"
 
 # Column names used throughout the app. Keeping them in one place means a
 # renamed column in a future export only needs changing here.
@@ -832,6 +835,65 @@ def load_codebook_definitions(path: Union[str, Path] = CODEBOOK_DEFINITIONS_V3_P
         return json.loads(Path(path).read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
+
+
+# The SPOTlight review's evidence levels, as the coder's codebook tab names them.
+SPOTLIGHT_EVIDENCE = {"strong": "Strong evidence", "good": "Good evidence", "suggestive": "Suggestive evidence",
+                      "thin": "Thin evidence", "definitional": "By definition"}
+SPOTLIGHT_POSSIBLE = ("Possible links only. A link counts for a program that runs the model named here, which a "
+                      "person has to confirm; naming the goal earns no credit on its own.")
+_CODE_IN_PARENS = re.compile(r"\s*\((?:[YFA]\d+(?:\.\d+)?)\)|,\s*[YFA]\d+(?:\.\d+)?(?=\))")
+
+
+def load_spotlight_links(path: Union[str, Path] = SPOTLIGHT_LINKS_V3_PATH) -> dict:
+    """The SPOTlight indicator links (indicators, links, notRecommended, guardrails); {} if missing."""
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+
+
+def _without_codes(text: Optional[str]) -> str:
+    """Drop codebook codes the review's text gives after a name: "Mathematics (Y1.3)" -> "Mathematics"."""
+    return _CODE_IN_PARENS.sub("", text or "").strip()
+
+
+def spotlight_indicator_names(links: dict) -> dict[str, str]:
+    """Indicator id ("S5") -> its plain name ("English language arts test, grade 3")."""
+    return {i["id"]: i["name"] for i in links.get("indicators", [])}
+
+
+def spotlight_link_summary(link: dict, names: dict[str, str]) -> dict:
+    """What the dashboard shows of one recommended link, with codes taken out of its text."""
+    scope = link.get("evidenceScope")
+    evidence = SPOTLIGHT_EVIDENCE.get(link.get("evidence"), str(link.get("evidence", "")).capitalize())
+    return {
+        "id": link["id"],
+        "indicators": [names.get(i, i) for i in link["indicators"]],
+        "evidence": f"{evidence}, {scope}" if scope else evidence,
+        "pathway": _without_codes(link.get("pathway")),
+        "model": _without_codes(link.get("modelMatch")),
+        "size": _without_codes(link.get("magnitude")),
+        "predicts": link.get("contribution") == "predicts",
+    }
+
+
+def spotlight_panel_data(links: dict) -> dict:
+    """What the wheel's side panel shows under a picked goal's "Connection to District indicators".
+
+    {"goals": {"Y1.1": [link summaries]}, "guardrail": the note for goals with no link, "note": the
+    possible-only caution, "reviewed", "year", "report"}; {} when the links file is missing.
+    """
+    if not links:
+        return {}
+    names = spotlight_indicator_names(links)
+    goals: dict[str, list[dict]] = {}
+    for link in links.get("links", []):
+        for code in link["codes"]:
+            goals.setdefault(code, []).append(spotlight_link_summary(link, names))
+    return {"goals": goals, "guardrail": links.get("guardrails", {}).get("summary", ""), "note": SPOTLIGHT_POSSIBLE,
+            "reviewed": links.get("reviewedOn", ""), "year": links.get("spotlightYear", ""),
+            "report": links.get("report", "")}
 
 
 def load_codebook_categories(path: Union[str, Path] = CODEBOOK_TERMS_V3_PATH) -> dict[str, str]:

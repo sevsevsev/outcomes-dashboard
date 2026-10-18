@@ -97,6 +97,7 @@ from outcomes_data import (
     load_codebook_short_names,
     load_codebook_terms,
     load_codebook_definitions,
+    load_spotlight_links,
     organizations_for_subcategory,
     peer_heatmap_data,
     population_group,
@@ -109,6 +110,7 @@ from outcomes_data import (
     read_outcomes_csv,
     resolve_data_path,
     sorted_subcategories,
+    spotlight_panel_data,
     subcategory_coverage,
     sunburst_nodes,
     to_export_frame,
@@ -174,6 +176,11 @@ def cached_wheel_nodes(df: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(show_spinner=False)
 def cached_definitions() -> dict:
     return load_codebook_definitions()
+
+
+@st.cache_data(show_spinner=False)
+def cached_spotlight() -> dict:
+    return load_spotlight_links()
 
 
 @st.cache_data(show_spinner=False)
@@ -748,6 +755,7 @@ def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value",
                                          short_names=cached_short_names())
     data["search"] = cached_search_index(df, layout)
     data["definitions"] = cached_definitions()
+    data["spotlight"] = spotlight_panel_data(cached_spotlight())
     pick = codebook_sunburst(data, key=key)
     ids = set(nodes["id"])
     if pick and pick["domain"] not in ids:
