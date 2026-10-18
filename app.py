@@ -47,6 +47,7 @@ import streamlit as st
 
 import charts
 import schools
+from spotlight_component import spotlight_map
 from sunburst_component import codebook_sunburst
 from outcomes_data import (
     CATEGORY_SEP,
@@ -99,6 +100,7 @@ from outcomes_data import (
     load_codebook_terms,
     load_codebook_definitions,
     load_spotlight_links,
+    codebook_domain_names,
     codebook_goal_names,
     codebook_scheme,
     spotlight_indicator_reach,
@@ -115,6 +117,10 @@ from outcomes_data import (
     resolve_data_path,
     sorted_subcategories,
     spotlight_panel_data,
+    spotlight_pick_codes,
+    spotlight_indicator_names,
+    SPOTLIGHT_MODEL_NAMES,
+    split_code,
     subcategory_coverage,
     sunburst_nodes,
     to_export_frame,
@@ -185,6 +191,11 @@ def cached_definitions() -> dict:
 @st.cache_data(show_spinner=False)
 def cached_spotlight() -> dict:
     return load_spotlight_links()
+
+
+@st.cache_data(show_spinner=False)
+def cached_domain_names() -> dict:
+    return codebook_domain_names()
 
 
 @st.cache_data(show_spinner=False)
@@ -1418,10 +1429,11 @@ def page_indicators(df: pd.DataFrame) -> None:
     guard = links.get("guardrails", {})
     findings([
         f"**{len(reach) - len(unreached)} of {len(reach)}** indicators have at least one goal the review "
-        "recommends linking to them. No program's model has been confirmed yet, so the counts below say only "
-        "how many programs name each goal.",
+        "recommends linking to them. No program's model has been confirmed yet, so the counts beside the map say "
+        "only how many programs name each goal.",
         f"No study the review checked reaches the other **{len(unreached)}**: {'; '.join(unreached)}.",
     ])
+    pick = indicator_map(reach, links)
     if guard:
         st.markdown(
             f"<p class='lanes'>Goals with no indicator link are not worth less. The Board of Education counts them "
@@ -1430,15 +1442,43 @@ def page_indicators(df: pd.DataFrame) -> None:
             f"003.1</a>). <a href='{html.escape(links.get('report', ''))}' target='_blank' "
             f"rel='noopener noreferrer'>Read the full review</a>.</p>", unsafe_allow_html=True)
 
+    codes = spotlight_pick_codes(pick, links)
+    goal_codes = df[COL_SUBCAT].map(lambda label: split_code(label)[0])
+    rows = df[goal_codes.isin(codes)] if pick else df[goal_codes.isin(
+        {c for link in links.get("links", []) for c in link["codes"]})]
+    where = " naming a goal with an indicator link"
+    if pick:
+        e = html.escape
+        name = {"goal": lambda: cached_goal_names().get(pick["id"], pick["id"]),
+                "link": lambda: SPOTLIGHT_MODEL_NAMES.get(pick["id"], pick["id"]),
+                "indicator": lambda: spotlight_indicator_names(links).get(pick["id"], pick["id"])}.get(pick["kind"])
+        where = (f" naming <b>{e(name())}</b>" if pick["kind"] == "goal"
+                 else f" naming a goal joined by <b>{e(name())}</b>" if pick["kind"] == "link"
+                 else f" naming a goal that may reach <b>{e(name())}</b>" if codes
+                 else " naming a goal linked to this pick: none")
+    outcomes_panel(rows, where, key="ind_map", nonce_key="ind_nonce" if pick else None)
+
     groups: dict[str, list[dict]] = {}
     for r in reach:
         groups.setdefault(r["group"], []).append(r)
     by_code = {}
     for r in reach:
         by_code.update({g["code"]: g for g in r["goals"]})
-    for group, indicators in groups.items():
-        with section(group, key=f"ind_{slug(group)}"):
-            st.markdown("".join(indicator_block(r, by_code, year) for r in indicators), unsafe_allow_html=True)
+    with st.expander("Every link as text"):
+        for group, indicators in groups.items():
+            st.markdown(f"<p class='sec-title'>{html.escape(group)}</p>"
+                        + "".join(indicator_block(r, by_code, year) for r in indicators), unsafe_allow_html=True)
+
+
+def indicator_map(reach: list[dict], links: dict) -> Optional[dict]:
+    """The goals, program models and indicators as one linked map; returns the pick, if any."""
+    key = f"ind_map_{st.session_state.get('ind_nonce', 0)}"
+    last_key = f"{key}_last"
+    data = charts.spotlight_map_data(reach, links, cached_domain_names(), cached_definitions(),
+                                     n_goals=len(cached_goal_names()), selected=st.session_state.get(last_key))
+    pick = spotlight_map(data, key=key)
+    st.session_state[last_key] = pick
+    return pick
 
 
 def indicator_block(r: dict, goals: dict, year: str) -> str:

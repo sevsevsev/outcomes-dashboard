@@ -842,6 +842,22 @@ SPOTLIGHT_EVIDENCE = {"strong": "Strong evidence", "good": "Good evidence", "sug
                       "thin": "Thin evidence", "definitional": "By definition"}
 SPOTLIGHT_POSSIBLE = ("Possible links only. A link counts for a program that runs the model named here, which a "
                       "person has to confirm; naming the goal earns no credit on its own.")
+# A short name for each recommended link's program model, for the District indicators map; the full
+# model text (modelMatch) is in the side panel. Written from each link's modelMatch, not from memory.
+SPOTLIGHT_MODEL_NAMES = {
+    "L-01": "School-day reading tutoring",
+    "L-02": "School-day math tutoring",
+    "L-03": "Daily high school math tutoring",
+    "L-13": "School-day social and emotional learning curriculum",
+    "L-17": "Middle school belonging exercises",
+    "L-27": "Attendance gains, counted by definition",
+    "L-28": "Personal absence messages to families",
+    "L-36": "Community school lead agency",
+    "L-72": "Paid summer jobs",
+    "L-81": "Ninth-grade course and credit tracking",
+    "L-82": "Attendance gains in school records",
+    "L-83": "Attendance gains in school records",
+}
 _CODE_IN_PARENS = re.compile(r"\s*\((?:[YFA]\d+(?:\.\d+)?)\)|,\s*[YFA]\d+(?:\.\d+)?(?=\))")
 
 
@@ -894,6 +910,34 @@ def spotlight_panel_data(links: dict) -> dict:
     return {"goals": goals, "guardrail": links.get("guardrails", {}).get("summary", ""), "note": SPOTLIGHT_POSSIBLE,
             "reviewed": links.get("reviewedOn", ""), "year": links.get("spotlightYear", ""),
             "report": links.get("report", "")}
+
+
+def codebook_domain_names(path: Union[str, Path] = CODEBOOK_V3_PATH) -> dict[str, str]:
+    """3.x domain code ("Y1") -> its plain name ("Academic Learning & Achievement"); {} if missing."""
+    codebook = load_codebook(path)
+    if codebook.empty:
+        return {}
+    return dict(split_code(label) for label in codebook[COL_DOMAIN].drop_duplicates())
+
+
+def spotlight_pick_codes(pick: Optional[dict], links: dict) -> list[str]:
+    """The goal codes a pick on the District indicators map stands for, in codebook order.
+
+    A goal stands for itself, a link for its goals, an indicator for the goals of every link that
+    reaches it; an indicator no link reaches, or the "other goals" row, stands for none.
+    """
+    if not pick or not links:
+        return []
+    kind, pid = pick.get("kind"), pick.get("id")
+    if kind == "goal":
+        codes = {pid}
+    elif kind == "link":
+        codes = {c for link in links.get("links", []) if link["id"] == pid for c in link["codes"]}
+    elif kind == "indicator":
+        codes = {c for link in links.get("links", []) if pid in link["indicators"] for c in link["codes"]}
+    else:
+        codes = set()
+    return sorted(codes, key=subcategory_sort_key)
 
 
 def codebook_goal_names(path: Union[str, Path] = CODEBOOK_V3_PATH) -> dict[str, str]:
