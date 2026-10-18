@@ -1,15 +1,23 @@
 // The District indicators map: the goals partners name on the left, the program
 // models the studies tested in the middle, and the District's SPOTlight
-// indicators on the right, joined by thin bands. Drawn in the browser so
+// indicators on the right, joined by thin lines. Drawn in the browser so
 // pointing costs no round trip to Python (see spotlight_component.py).
 //
 // It follows the codebook wheel's habits: plain names, per-domain hues, pale at
 // rest and full hue only for what is pointed at or picked, and a side panel
 // that says what that is. The rows and model nodes are the targets, never the
-// bands, so a pointer resting on the map never sits on something that moves.
-// Every band is the same width: program counts are text in the panel, never a
-// length, so nothing adds up per indicator. Line style repeats the evidence
-// level, which the node and the panel also say in words.
+// lines, so a pointer resting on the map never sits on something that moves.
+// Line style says what kind of link it is (cause shown, correlation only, or by
+// definition), which the node and the panel also say in words.
+//
+// Lines are one width by default. The "Line width" switch can make a goal's
+// line into its model as thick as the number of programs naming the goal; the
+// lines from models to indicators always stay one width, so nothing stacks up
+// at an indicator into something that reads like a total.
+//
+// With `data.scope` (one program, or the partners at one school), the goals
+// named there stay dark and the rest of the map goes pale, so the shape never
+// changes and the gaps stay in view.
 //
 // A click (or Enter, or a tap) pins a row or node; clicking it again, clicking
 // empty space or Escape unpins. While something is pinned, pointing elsewhere
@@ -19,12 +27,31 @@
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const NODE_GAP = 10;        // least space between two model nodes
-const STUB = 34;            // length of the dotted stub beside a row no study reaches
-const DASH = { strong: null, good: null, suggestive: '6 4', definitional: '1.5 4', thin: '1.5 4' };
+const STUB = 34;            // length of the dotted stub beside a row with no link
+const DASH = { cause: null, correlation: '6 4', definition: '1.5 4' };
+const KIND = {
+  cause: {
+    word: 'Cause shown',
+    explain: 'Studies that compared similar students or schools found that this kind of program, or this change ' +
+      'in students, moves what the indicator measures. How sure that is depends on the evidence level.',
+  },
+  correlation: {
+    word: 'Correlation only',
+    explain: 'Students who do well on this goal tend to do well on the indicator, but no study shows that a ' +
+      'program causes the change. It is a warning sign worth watching, not proof of an effect.',
+  },
+  definition: {
+    word: 'By definition',
+    explain: 'The indicator counts this outcome directly, so a program helps only if school records show the ' +
+      "change for its own students. It says nothing about which kinds of program work.",
+  },
+};
+const WIDTH = { min: 1.6, max: 9, zero: 1.1 };   // line widths when they follow program counts
 
 const pale = h => (h === null || h === undefined ? '#cbd5e1' : `hsl(${h} 42% 74%)`);
 const full = h => (h === null || h === undefined ? '#64748b' : `hsl(${h} 58% 40%)`);
 const swatch = h => (h === null || h === undefined ? '#94a3b8' : `hsl(${h} 55% 52%)`);
+let widthMode = 'same';     // outlives a fresh map (a new scope, a page revisit)
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -42,6 +69,7 @@ function svgEl(tag, attrs) {
 const plural = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 const programs = n => (n ? `${plural(n, 'program names', 'programs name')} this goal; model not confirmed`
   : 'No program names this goal');
+const kindLine = l => (l.kind === 'definition' ? KIND.definition.word : `${KIND[l.kind].word} · ${l.evidenceLabel}`);
 
 export default function (component) {
   const { data, parentElement, setStateValue } = component;
@@ -64,10 +92,15 @@ function buildModel(data) {
   const indicators = new Map(data.indicators.map(i => [i.id, i]));
   const linksOfGoal = new Map(data.goals.map(g => [g.id, data.links.filter(l => l.goals.includes(g.id))]));
   const linksOfInd = new Map(data.indicators.map(i => [i.id, data.links.filter(l => l.indicators.includes(i.id))]));
-  return { data, goals, links, indicators, linksOfGoal, linksOfInd };
+  // In a scoped view, what the program or school's partners name; everything is "in" without a scope.
+  const scope = data.scope;
+  const goalIn = g => !scope || (goals.get(g)?.here || 0) > 0;
+  const linkIn = l => l.goals.some(goalIn);
+  const indIn = i => !scope || (linksOfInd.get(i) || []).some(linkIn);
+  return { data, scope, goals, links, indicators, linksOfGoal, linksOfInd, goalIn, linkIn, indIn };
 }
 
-/** What a pick lights: the rows, nodes and band segments ("in" goal->link, "out" link->indicator). */
+/** What a pick lights: the rows, nodes and line segments ("in" goal->link, "out" link->indicator). */
 function litBy(model, item) {
   const lit = { goal: new Set(), link: new Set(), indicator: new Set(), other: false, seg: new Set() };
   if (!item) return null;
@@ -102,6 +135,7 @@ function mount(root, sm, data) {
   if (firstMount && data.selected && data.selected.kind) sm.pick = data.selected;
   root.replaceChildren();
   sm.rows = { goal: new Map(), link: new Map(), indicator: new Map(), other: null };
+  const scope = data.scope;
 
   const map = el('div', 'sm-map');
   const svg = svgEl('svg', { class: 'sm-bands', 'aria-hidden': 'true' });
@@ -124,15 +158,20 @@ function mount(root, sm, data) {
       head.append(sw, el('span', null, g.domainName));
       goalCol.append(head);
     }
-    const row = button('sm-row sm-goal', { kind: 'goal', id: g.id }, sm, `${g.name}. ${programs(g.programs)}.`);
-    row.append(el('span', 'sm-name', g.name));
+    const here = scope ? hereWords(scope, g.here || 0) : '';
+    const row = button(`sm-row sm-goal${model.goalIn(g.id) ? '' : ' is-out'}`, { kind: 'goal', id: g.id }, sm,
+      `${g.name}. ${scope ? `${here || 'Not named here'}.` : `${programs(g.programs)}.`}`);
+    const line = el('span', 'sm-line');
+    line.append(el('span', 'sm-name', g.name));
+    if (scope && g.here) line.append(el('span', 'sm-value', here));
+    row.append(line);
     sm.rows.goal.set(g.id, row);
     goalCol.append(row);
   }
   if (data.otherGoals) {
     const other = button('sm-row sm-other', { kind: 'other', id: 'other' }, sm);
-    other.append(el('span', 'sm-name', `${data.otherGoals} other goals have no indicator link`),
-      el('span', 'sm-note', "They count under the Board's guardrails: a well-rounded education and safe, welcoming schools."));
+    other.append(el('span', 'sm-name', `${data.otherGoals} other goals have no link to an indicator`),
+      el('span', 'sm-note', 'The Board counts them toward its guardrails: a well-rounded education and safe, welcoming schools.'));
     sm.rows.other = other;
     goalCol.append(other);
   }
@@ -144,10 +183,11 @@ function mount(root, sm, data) {
   linkCol.append(stack);
   sm.stack = stack;
   for (const l of data.links) {
-    const node = button('sm-node', { kind: 'link', id: l.id }, sm, `${l.name}. ${l.evidenceLabel}. Possible link only.`);
+    const node = button(`sm-node${model.linkIn(l) ? '' : ' is-out'}`, { kind: 'link', id: l.id }, sm,
+      `${l.name}. ${kindLine(l)}. A possible link only.`);
     node.style.setProperty('--hue-pale', pale(l.hue));
     node.style.setProperty('--hue-full', full(l.hue));
-    node.append(el('span', 'sm-name', l.name), el('span', 'sm-ev', evidenceWords(l)));
+    node.append(el('span', 'sm-name', l.name), el('span', 'sm-ev', kindLine(l)));
     sm.rows.link.set(l.id, node);
     stack.append(node);
   }
@@ -161,15 +201,17 @@ function mount(root, sm, data) {
       group = i.group;
       indCol.append(el('div', 'sm-group', group));
     }
-    const row = button(`sm-row sm-ind${i.reached ? '' : ' is-unreached'}`, { kind: 'indicator', id: i.id }, sm,
-      `${i.name}, ${data.year}: ${i.value}.${i.reached ? '' : ' No study the review checked reaches this indicator.'}`);
+    const out = !model.indIn(i.id);   // in a scoped view, unreached indicators go pale too
+    const row = button(`sm-row sm-ind${i.reached ? '' : ' is-unreached'}${out ? ' is-out' : ''}`,
+      { kind: 'indicator', id: i.id }, sm,
+      `${i.name}, ${data.year}: ${i.value}.${i.reached ? '' : ' No strong study links a partner goal to this yet.'}`);
     const line = el('span', 'sm-line');
     const short = i.value.length <= 8;
     line.append(el('span', 'sm-name', i.name));
     if (short) line.append(el('span', 'sm-value', i.value));
     row.append(line);
     if (!short) row.append(el('span', 'sm-value sm-value-long', i.value));
-    if (!i.reached) row.append(el('span', 'sm-note', "No study reaches this. Counts under the Board's guardrails."));
+    if (!i.reached) row.append(el('span', 'sm-note', 'No strong study links a partner goal to this yet.'));
     sm.rows.indicator.set(i.id, row);
     indCol.append(row);
   }
@@ -181,19 +223,9 @@ function mount(root, sm, data) {
   panel.setAttribute('aria-live', 'polite');
   sm.panel = panel;
 
-  const legend = el('div', 'sm-legend');
-  for (const [label, dash] of [['Strong or good evidence', null], ['Suggestive evidence', DASH.suggestive], ['By definition', DASH.definitional]]) {
-    const item = el('span', 'sm-key');
-    const s = svgEl('svg', { width: 28, height: 8, 'aria-hidden': 'true' });
-    s.append(svgEl('line', { x1: 1, y1: 4, x2: 27, y2: 4, stroke: '#64748b', 'stroke-width': 2, 'stroke-dasharray': dash, 'stroke-linecap': 'round' }));
-    item.append(s, el('span', null, label));
-    legend.append(item);
-  }
-  legend.append(el('span', 'sm-key-note', 'Every band is a possible link only. Bands are all one width; they do not add up.'));
-
   const body = el('div', 'sm-body');
   body.append(map, panel);
-  root.append(body, legend);
+  root.append(widthSwitch(sm, scope), body, howToRead());
 
   if (!sm.keys) {
     sm.keys = true;
@@ -208,9 +240,53 @@ function mount(root, sm, data) {
   paint(sm);
 }
 
-function evidenceWords(l) {
-  const words = l.predicts ? `${l.evidenceLabel}; predicts, not shown to cause` : l.evidenceLabel;
-  return words;
+/** "3 statements" for a program, "2 partners" for a school; '' when nobody there names the goal. */
+function hereWords(scope, n) {
+  if (!n) return '';
+  return scope.kind === 'school' ? plural(n, 'partner', 'partners') : plural(n, 'statement', 'statements');
+}
+
+/** The "Line width" switch: one width for all lines, or a goal's line as thick as its count. */
+function widthSwitch(sm, scope) {
+  const bar = el('div', 'sm-switch');
+  bar.append(el('span', 'sm-switch-label', 'Line width'));
+  const group = el('div', 'sm-seg');
+  group.setAttribute('role', 'radiogroup');
+  group.setAttribute('aria-label', 'Line width');
+  const counted = !scope ? 'Programs naming the goal' : scope.kind === 'school' ? 'Partners naming the goal'
+    : 'Statements naming the goal';
+  for (const [mode, label] of [['same', 'Same for all'], ['count', counted]]) {
+    const b = el('button', 'sm-seg-btn', label);
+    b.type = 'button';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(widthMode === mode));
+    b.addEventListener('click', () => {
+      widthMode = mode;
+      for (const other of group.children) other.setAttribute('aria-checked', String(other === b));
+      draw(sm);
+    });
+    group.append(b);
+  }
+  bar.append(group,
+    el('span', 'sm-switch-note', 'Only the lines from goals to program models change; lines into indicators stay one width, so they never add up.'));
+  return bar;
+}
+
+/** How to read a link: the three line styles, each with what it means in a sentence. */
+function howToRead() {
+  const box = el('div', 'sm-legend');
+  box.append(el('div', 'sm-legend-head', 'How to read a link'));
+  for (const kind of ['cause', 'correlation', 'definition']) {
+    const item = el('div', 'sm-key');
+    const s = svgEl('svg', { width: 30, height: 10, 'aria-hidden': 'true' });
+    s.append(svgEl('line', { x1: 1, y1: 5, x2: 29, y2: 5, stroke: '#64748b', 'stroke-width': 2, 'stroke-dasharray': DASH[kind], 'stroke-linecap': 'round' }));
+    const text = el('div');
+    text.append(el('b', null, KIND[kind].word), el('span', null, ` ${KIND[kind].explain}`));
+    item.append(s, text);
+    box.append(item);
+  }
+  box.append(el('p', 'sm-key-note', 'Every line is a possible link. It holds for a program only after someone confirms the program runs the model the study tested.'));
+  return box;
 }
 
 function button(cls, item, sm, label) {
@@ -279,7 +355,10 @@ function curve(x0, y0, x1, y1) {
   return `M${x0.toFixed(1)},${y0.toFixed(1)} C${(x0 + dx).toFixed(1)},${y0.toFixed(1)} ${(x1 - dx).toFixed(1)},${y1.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`;
 }
 
-/** Draws the bands from the rows' and nodes' current places. */
+/** A goal's count in view: statements or partners in a scoped view, programs otherwise. */
+const countOf = (model, g) => (model.scope ? g.here || 0 : g.programs);
+
+/** Draws the lines from the rows' and nodes' current places. */
 function draw(sm) {
   const { svg, cols, model } = sm;
   const base = cols.getBoundingClientRect();
@@ -290,31 +369,41 @@ function draw(sm) {
   sm.segs = [];
   const box = row => rel(row.getBoundingClientRect(), base);
   const mid = r => (r.top + r.bottom) / 2;
+  const maxCount = Math.max(1, ...model.data.goals.map(g => countOf(model, g)));
+  const widthOf = g => {
+    if (widthMode !== 'count') return null;
+    const n = countOf(model, g);
+    return n ? WIDTH.min + (WIDTH.max - WIDTH.min) * Math.sqrt(n / maxCount) : WIDTH.zero;
+  };
   const bands = svgEl('g', { class: 'sm-bandset' });
   const ends = svgEl('g', { class: 'sm-ends' });
   for (const l of model.data.links) {
     const n = box(sm.rows.link.get(l.id));
-    const add = (key, d, hue, endAt) => {
-      const path = svgEl('path', { d, class: 'sm-band', 'stroke-dasharray': DASH[l.evidence] ?? null });
+    const add = (key, d, hue, endAt, width, out) => {
+      const path = svgEl('path', { d, class: 'sm-band', 'stroke-dasharray': DASH[l.kind] ?? null });
+      if (width) path.style.strokeWidth = `${width}px`;
       bands.append(path);
       const dot = svgEl('circle', { cx: endAt[0], cy: endAt[1], r: 2.6, class: 'sm-end' });
       ends.append(dot);
-      sm.segs.push({ key, path, dot, hue });
+      sm.segs.push({ key, path, dot, hue, width, out });
     };
     for (const g of l.goals) {
       const row = sm.rows.goal.get(g);
       if (!row) continue;
       const r = box(row);
-      add(`in|${g}|${l.id}`, curve(r.right + 3, mid(r), n.left, mid(n)), model.goals.get(g)?.hue, [r.right + 3, mid(r)]);
+      const goal = model.goals.get(g);
+      add(`in|${g}|${l.id}`, curve(r.right + 3, mid(r), n.left, mid(n)), goal?.hue, [r.right + 3, mid(r)],
+        goal ? widthOf(goal) : null, !model.goalIn(g));
     }
     for (const i of l.indicators) {
       const row = sm.rows.indicator.get(i);
       if (!row) continue;
       const r = box(row);
-      add(`out|${l.id}|${i}`, curve(n.right, mid(n), r.left - 3, mid(r)), l.hue, [r.left - 3, mid(r)]);
+      add(`out|${l.id}|${i}`, curve(n.right, mid(n), r.left - 3, mid(r)), l.hue, [r.left - 3, mid(r)], null,
+        !model.linkIn(l));
     }
   }
-  // A short dotted stub beside each row no study reaches, so the gap is drawn, not left blank.
+  // A short dotted stub beside each row with no link, so the gap is drawn, not left blank.
   const stubs = svgEl('g', { class: 'sm-stubs' });
   for (const i of model.data.indicators) {
     if (i.reached) continue;
@@ -334,8 +423,7 @@ function draw(sm) {
 function paint(sm) {
   const item = sm.pick || sm.hover;
   const lit = litBy(sm.model, item);
-  const map = sm.map;
-  map.classList.toggle('is-focus', !!lit);
+  sm.map.classList.toggle('is-focus', !!lit);
   for (const [kind, rows] of [['goal', sm.rows.goal], ['link', sm.rows.link], ['indicator', sm.rows.indicator]]) {
     for (const [id, row] of rows) {
       const on = !!lit && lit[kind].has(id);
@@ -355,11 +443,12 @@ function paint(sm) {
     s.path.style.stroke = on ? full(s.hue) : pale(s.hue);
     s.path.classList.toggle('is-on', on);
     s.path.classList.toggle('is-dim', !!lit && !on);
+    s.path.classList.toggle('is-out', s.out && !on);
     s.dot.style.fill = on ? full(s.hue) : pale(s.hue);
-    s.dot.classList.toggle('is-dim', !!lit && !on);
+    s.dot.classList.toggle('is-dim', (!!lit && !on) || (s.out && !on));
     if (on) front.push(s.path);
   }
-  for (const p of front) p.parentNode.appendChild(p);   // lit bands on top of the pale ones
+  for (const p of front) p.parentNode.appendChild(p);   // lit lines on top of the pale ones
   readout(sm, item);
 }
 
@@ -367,7 +456,7 @@ function paint(sm) {
 
 function readout(sm, item) {
   const { panel, model } = sm;
-  const { data } = model;
+  const { data, scope } = model;
   const inner = el('div', 'sm-panel-inner');
   const eyebrow = (text, hue) => {
     const e = el('div', 'sm-eyebrow');
@@ -376,12 +465,11 @@ function readout(sm, item) {
     return e;
   };
   const section = (title, ...kids) => { const s = el('div', 'sm-sec'); s.append(el('div', 'sm-sec-head', title), ...kids); return s; };
+  const text = (t, cls = '') => el('p', `sm-text ${cls}`.trim(), t);
   const guardrail = () => {
     const g = data.guardrail || {};
-    const p = el('p', 'sm-text', g.summary);
-    const q = el('p', 'sm-quote', g.quote ? `“${g.quote}”` : '');
-    const kids = [p];
-    if (g.quote) kids.push(q);
+    const kids = [text(g.summary)];
+    if (g.quote) kids.push(el('p', 'sm-quote', `“${g.quote}”`));
     if (g.url) {
       const a = el('a', 'sm-link', 'Board of Education Bylaw 003.1, Goals and Guardrails');
       a.href = g.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
@@ -391,40 +479,71 @@ function readout(sm, item) {
   };
   const linkLine = l => {
     const li = el('li');
-    li.append(el('b', null, l.name), el('span', 'sm-muted', ` · ${evidenceWords(l)}`));
+    li.append(el('b', null, l.name), el('span', 'sm-muted', ` · ${kindLine(l)}`));
     return li;
   };
+  const goalName = id => {
+    const g = model.goals.get(id);
+    if (!g) return null;
+    const span = el('span', scope && !model.goalIn(id) ? 'sm-muted' : null, g.name);
+    if (scope && !model.goalIn(id)) span.textContent += ' (not named here)';
+    return span;
+  };
+  const joined = ids => {
+    const div = el('div', 'sm-sub');
+    ids.map(goalName).filter(Boolean).forEach((s, k) => { if (k) div.append('; '); div.append(s); });
+    return div;
+  };
+  const who = scope ? (scope.kind === 'school' ? 'No partner there' : scope.label) : '';
 
   if (!item) {
-    inner.append(eyebrow('District indicators'),
-      el('div', 'sm-title', 'Which goals may reach the District’s indicators'),
-      el('p', 'sm-text', `${data.goals.length} goals reach ${data.indicators.filter(i => i.reached).length} of ${data.indicators.length} indicators through ${data.links.length} program models the studies tested.`),
-      el('p', 'sm-text sm-caution', data.possible),
-      el('p', 'sm-hint', 'Point at or pick a goal, a program model or an indicator to see the evidence and what a program must run.'));
+    if (scope) {
+      inner.append(eyebrow('Showing'), el('div', 'sm-title', scope.label),
+        text(`Goals in dark type are the linked goals ${scope.kind === 'school' ? 'these partners name' : 'this program names'}. ` +
+          `Pale goals are linked goals ${scope.kind === 'school' ? 'no partner there names' : 'it does not name'}, so the gaps stay in view.`),
+        text(data.possible, 'sm-caution'));
+    } else {
+      inner.append(eyebrow('District indicators'),
+        el('div', 'sm-title', 'Which partner goals could help move the District’s indicators'),
+        text(`${data.goals.length} partner goals link to ${data.indicators.filter(i => i.reached).length} of the ${data.indicators.length} indicators through ${data.links.length} program models that studies tested.`),
+        text(data.possible, 'sm-caution'));
+    }
+    inner.append(el('p', 'sm-hint', 'Point at or pick a goal, a program model or an indicator to see why it is linked and what a program would have to run.'));
   } else if (item.kind === 'goal') {
     const g = model.goals.get(item.id);
     const ls = model.linksOfGoal.get(item.id) || [];
     const list = el('ul', 'sm-list');
     for (const l of ls) {
       const li = linkLine(l);
-      li.append(el('div', 'sm-sub', `may reach ${l.indicators.map(i => model.indicators.get(i)?.name).join('; ')}`));
+      li.append(el('div', 'sm-sub', `could help move ${l.indicators.map(i => model.indicators.get(i)?.name).join('; ')}`));
       list.append(li);
     }
     inner.append(eyebrow(`Goal · ${g.domainName}`, g.hue), el('div', 'sm-title', g.name));
-    if (g.definition) inner.append(el('p', 'sm-text', g.definition));
-    inner.append(el('p', 'sm-count', programs(g.programs)),
-      section(ls.length === 1 ? 'Program model that may connect it' : 'Program models that may connect it', list),
-      el('p', 'sm-text sm-caution', 'Naming this goal earns no credit on its own: a link holds for a program only once someone confirms it runs the model.'));
+    if (g.definition) inner.append(text(g.definition));
+    if (scope) {
+      if (scope.kind === 'school') {
+        inner.append(el('p', 'sm-count', g.here
+          ? `${plural(g.here, 'partner here names', 'partners here name')} this goal; model not confirmed`
+          : `${who} names this goal.`));
+        if (g.hereNames?.length) inner.append(el('p', 'sm-sub', g.hereNames.join('; ')));
+      } else {
+        inner.append(el('p', 'sm-count', g.here
+          ? `${scope.label} names this goal in ${plural(g.here, 'statement', 'statements')}; model not confirmed`
+          : `${scope.label} does not name this goal.`));
+        if (g.hereSamples?.length) {
+          const quotes = el('ul', 'sm-quotes');
+          for (const t of g.hereSamples) quotes.append(el('li', null, t));
+          inner.append(quotes);
+        }
+      }
+      inner.append(el('p', 'sm-sub', `Across all partners: ${programs(g.programs).toLowerCase()}.`));
+    } else {
+      inner.append(el('p', 'sm-count', programs(g.programs)));
+    }
+    inner.append(section(ls.length === 1 ? 'Program model that could connect it' : 'Program models that could connect it', list),
+      text('Naming this goal earns no credit on its own. A link holds for a program only once someone confirms it runs the model.', 'sm-caution'));
   } else if (item.kind === 'link') {
     const l = model.links.get(item.id);
-    const goals = el('ul', 'sm-list');
-    for (const id of l.goals) {
-      const g = model.goals.get(id);
-      if (!g) continue;
-      const li = el('li');
-      li.append(el('b', null, g.name), el('div', 'sm-sub', programs(g.programs)));
-      goals.append(li);
-    }
     const inds = el('ul', 'sm-list');
     for (const id of l.indicators) {
       const i = model.indicators.get(id);
@@ -432,33 +551,55 @@ function readout(sm, item) {
       li.append(el('b', null, i.name), el('span', 'sm-muted', ` · ${data.year}: ${i.value}`));
       inds.append(li);
     }
-    inner.append(eyebrow('Program model · possible link only', l.hue), el('div', 'sm-title', l.name),
-      section('The program must run', el('p', 'sm-text sm-strong', l.model)),
-      section('Evidence', el('p', 'sm-text', `${evidenceWords(l)}${l.scope ? `, ${l.scope}` : ''}. ${l.pathway}`)));
-    if (l.conditions) inner.append(section('Holds only when', el('p', 'sm-text', l.conditions)));
-    inner.append(section('Goals it joins', goals), section('Indicators it may reach', inds));
+    const goals = el('ul', 'sm-list');
+    for (const id of l.goals) {
+      const g = model.goals.get(id);
+      if (!g) continue;
+      const li = el('li');
+      li.append(el('b', null, g.name), el('div', 'sm-sub', scope
+        ? (g.here ? `${hereWords(scope, g.here)} here; model not confirmed` : 'Not named here')
+        : programs(g.programs)));
+      goals.append(li);
+    }
+    inner.append(eyebrow('Program model · a possible link', l.hue), el('div', 'sm-title', l.name),
+      section('The program must run', text(l.model, 'sm-strong')),
+      section(`What kind of link: ${KIND[l.kind].word.toLowerCase()}`, text(KIND[l.kind].explain),
+        text(`Evidence: ${l.evidenceLabel}${l.scope ? `, ${l.scope}` : ''}.`, 'sm-caution')),
+      section('Why the link makes sense', text(l.pathway)));
+    if (l.effect) inner.append(section('What the studies found', text(l.effect)));
+    if (l.size) inner.append(section('What it could mean for a school', text(l.size)));
+    if (l.caveats) inner.append(section('Limits of the evidence', text(l.caveats)));
+    if (l.philadelphia) inner.append(section('In Philadelphia', text(l.philadelphia)));
+    if (l.conditions) inner.append(section('Holds only when', text(l.conditions)));
+    inner.append(section('Goals it joins', goals), section('Indicators it could help move', inds));
+    if (l.studies?.length) {
+      const details = el('details', 'sm-studies');
+      details.append(el('summary', null, `The ${plural(l.studies.length, 'study', 'studies')} behind it`));
+      const ol = el('ol', 'sm-list');
+      for (const c of l.studies) ol.append(el('li', null, c));
+      details.append(ol);
+      inner.append(details);
+    }
   } else if (item.kind === 'indicator') {
     const i = model.indicators.get(item.id);
     const ls = model.linksOfInd.get(item.id) || [];
-    inner.append(eyebrow(`District indicator · ${i.group}`), el('div', 'sm-title', i.name), el('p', 'sm-text', i.wording),
+    inner.append(eyebrow(`District indicator · ${i.group}`), el('div', 'sm-title', i.name), text(i.wording),
       el('p', 'sm-count', `${data.year}: ${i.value}`));
     if (!ls.length) {
-      inner.append(section('No study the review checked reaches this indicator', ...guardrail()));
+      inner.append(section('No link yet', text('The research review found no study strong enough to link a partner goal to this indicator.')));
     } else {
       const list = el('ul', 'sm-list');
       for (const l of ls) {
         const li = linkLine(l);
-        li.append(el('div', 'sm-sub', l.goals.map(g => model.goals.get(g)?.name).filter(Boolean).join('; ')));
+        li.append(joined(l.goals));
         list.append(li);
       }
-      inner.append(section('Program models that may reach it, and the goals they join', list),
-        el('p', 'sm-text sm-caution', 'Program counts are per goal and never add up per indicator: one program can name several of these goals.'));
+      inner.append(section('Program models that could help move it, and the goals they join', list),
+        text('Counts are per goal and never add up per indicator: one program can name several of these goals.', 'sm-caution'));
     }
   } else if (item.kind === 'other') {
-    inner.append(eyebrow('Goals with no indicator link'),
-      el('div', 'sm-title', `${data.otherGoals} other goals`),
-      el('p', 'sm-text', 'Goals with no indicator link are not worth less.'),
-      ...guardrail());
+    inner.append(eyebrow('Goals with no link to an indicator'),
+      el('div', 'sm-title', `${data.otherGoals} other goals`), ...guardrail());
   }
   panel.replaceChildren(inner);
 }

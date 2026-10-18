@@ -840,8 +840,11 @@ def load_codebook_definitions(path: Union[str, Path] = CODEBOOK_DEFINITIONS_V3_P
 # The SPOTlight review's evidence levels, as the coder's codebook tab names them.
 SPOTLIGHT_EVIDENCE = {"strong": "Strong evidence", "good": "Good evidence", "suggestive": "Suggestive evidence",
                       "thin": "Thin evidence", "definitional": "By definition"}
-SPOTLIGHT_POSSIBLE = ("Possible links only. A link counts for a program that runs the model named here, which a "
-                      "person has to confirm; naming the goal earns no credit on its own.")
+SPOTLIGHT_POSSIBLE = ("These are possible links. One counts for a program only after someone confirms the program "
+                      "runs the model the study tested. Naming a goal is not enough.")
+SPOTLIGHT_NO_LINK = ("The research review found no study strong enough to link this goal to a SPOTlight indicator. "
+                     "The Board of Education counts goals like this one toward its guardrails: a well-rounded "
+                     "education and safe, welcoming schools.")
 # A short name for each recommended link's program model, for the District indicators map; the full
 # model text (modelMatch) is in the side panel. Written from each link's modelMatch, not from memory.
 SPOTLIGHT_MODEL_NAMES = {
@@ -907,7 +910,7 @@ def spotlight_panel_data(links: dict) -> dict:
     for link in links.get("links", []):
         for code in link["codes"]:
             goals.setdefault(code, []).append(spotlight_link_summary(link, names))
-    return {"goals": goals, "guardrail": links.get("guardrails", {}).get("summary", ""), "note": SPOTLIGHT_POSSIBLE,
+    return {"goals": goals, "guardrail": SPOTLIGHT_NO_LINK, "note": SPOTLIGHT_POSSIBLE,
             "reviewed": links.get("reviewedOn", ""), "year": links.get("spotlightYear", ""),
             "report": links.get("report", "")}
 
@@ -938,6 +941,27 @@ def spotlight_pick_codes(pick: Optional[dict], links: dict) -> list[str]:
     else:
         codes = set()
     return sorted(codes, key=subcategory_sort_key)
+
+
+def spotlight_scope_goals(rows: pd.DataFrame, counter=len, names_col: Optional[str] = None,
+                          samples: int = 0) -> dict[str, dict]:
+    """For the District indicators map's "Show for" view: each goal code named in `rows`, with what names it.
+
+    {"Y1.3": {"count": counter(rows naming it), "names": sorted distinct `names_col` values,
+    "samples": up to `samples` outcome statements}}. Goals nobody in `rows` names are left out.
+    """
+    codes = rows[COL_SUBCAT].map(lambda label: split_code(label)[0])
+    out = {}
+    for code, group in rows.groupby(codes):
+        if not code:
+            continue
+        entry = {"count": int(counter(group))}
+        if names_col:
+            entry["names"] = sorted(group[names_col].dropna().astype(str).unique(), key=str.casefold)
+        if samples:
+            entry["samples"] = [" ".join(str(t).split()) for t in group[COL_OUTCOME].dropna().unique()[:samples]]
+        out[code] = entry
+    return out
 
 
 def codebook_goal_names(path: Union[str, Path] = CODEBOOK_V3_PATH) -> dict[str, str]:

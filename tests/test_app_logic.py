@@ -711,8 +711,8 @@ def test_spotlight_panel_data_for_the_wheel():
             for field in ("pathway", "model", "size"):
                 assert not re.search(r"\b[YFA]\d+(\.\d+)?\b", link[field]), link[field]
     assert "Y8.1" not in panel["goals"]
-    assert panel["guardrail"].startswith("The review found no study")
-    assert "Possible links only" in panel["note"]
+    assert panel["guardrail"].startswith("The research review found no study")
+    assert "possible links" in panel["note"]
     assert spotlight_panel_data({}) == {}
 
 

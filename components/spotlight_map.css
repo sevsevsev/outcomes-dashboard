@@ -39,7 +39,7 @@
 .sm-row:hover, .sm-node:hover { background: var(--wash); }
 .sm-row:focus-visible, .sm-node:focus-visible { outline: 2px solid var(--ink-2); outline-offset: -2px; }
 .sm-name { font-size: 13px; line-height: 1.35; color: var(--ink-2); }
-.sm-goal .sm-name { padding-left: 18px; }
+.sm-goal .sm-line { padding-left: 18px; }
 .sm-goals .sm-dom { padding-left: 0; }
 .sm-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .sm-ind .sm-name { color: var(--ink); font-weight: 500; }
@@ -95,9 +95,38 @@
 .sm-muted { color: var(--muted); }
 .sm-sub { font-size: 12px; color: var(--muted); line-height: 1.4; }
 
-.sm-legend { display: flex; flex-wrap: wrap; gap: 6px 20px; align-items: center; margin-top: 18px; font-size: 12px; color: var(--muted); }
-.sm-key { display: inline-flex; align-items: center; gap: 6px; }
-.sm-key-note { flex-basis: 100%; }
+/* "How to read a link": the three line styles, each with a sentence on what it means. */
+.sm-legend { margin-top: 22px; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 28px;
+  font-size: 12.5px; line-height: 1.5; color: var(--ink-2); max-width: 1080px; }
+.sm-legend-head, .sm-switch-label {
+  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+}
+.sm-legend-head { grid-column: 1 / -1; }
+.sm-key { display: flex; gap: 10px; align-items: flex-start; }
+.sm-key svg { flex: none; margin-top: 5px; }
+.sm-key b { font-weight: 600; color: var(--ink); }
+.sm-key-note { grid-column: 1 / -1; margin: 0; color: var(--muted); }
+
+/* The "Line width" switch above the map: a quiet segmented control like the page's own. */
+.sm-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 14px; }
+.sm-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 8px; background: rgba(226, 232, 240, .6); }
+.sm-seg-btn {
+  all: unset; cursor: pointer; padding: 4px 10px; border-radius: 6px; font-size: 13px; color: #475569;
+}
+.sm-seg-btn[aria-checked="true"] { background: #fff; color: var(--ink); font-weight: 500;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .08), 0 0 0 1px rgba(15, 23, 42, .04); }
+.sm-seg-btn:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; }
+.sm-switch-note { font-size: 12px; color: var(--muted); }
+
+/* A scoped view (one program, one school): what is not named there goes pale but keeps its place. */
+.is-out { opacity: .42; }
+.sm-band.is-out { opacity: .22; }
+.sm-quotes { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.sm-quotes li { font-size: 13px; line-height: 1.45; color: var(--ink-2); background: #f8fafc; border-radius: 8px; padding: 6px 10px; }
+.sm-studies { margin-top: 16px; font-size: 12.5px; color: var(--ink-2); }
+.sm-studies summary { cursor: pointer; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sm-studies ol { padding-left: 18px; list-style: decimal; }
+.sm-studies li { font-size: 12px; }
 
 /* Narrow screens: the panel goes under the map, with its own height. */
 @media (max-width: 900px) {
