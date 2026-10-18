@@ -191,6 +191,13 @@
 .sb-def-link:hover { text-decoration-color: var(--ink-2); }
 .sb-def-link:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; border-radius: 2px; }
 .sb-def-version { margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+/* SPOTlight links under a picked goal. The panel keeps its height, so long link text scrolls inside it. */
+.sb-panel-inner { overflow-y: auto; scrollbar-width: thin; }
+.sb-spot-note { margin: 6px 0 0; }
+.sb-spot-link { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.sb-spot-ind { font-weight: 600; color: var(--ink-2); }
+.sb-spot-ev { margin-top: 2px; color: var(--muted); }
+.sb-spot-report { color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 2px; }
 
 /* Phones: the wheel and its panel first, the domain list after them; the wheel takes the full width. */
 @media (max-width: 640px) {

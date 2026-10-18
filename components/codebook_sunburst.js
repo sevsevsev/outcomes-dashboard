@@ -1426,7 +1426,47 @@ function definitionOf(sb, node, brief = false) {
   more.append(lines);
   if (defs.version) more.append(el('div', 'sb-def-version', `From codebook ${defs.version}`));
   out.push(more);
+  const spot = spotlightOf(sb, node);
+  if (spot) out.push(spot);
   return out;
+}
+
+/** "Connection to District indicators" for a picked 3.x goal: the SPOTlight links the review recommends, each with
+ *  its evidence and the program model it needs, or the guardrail note when the goal has none (never a blank). */
+function spotlightOf(sb, node) {
+  const spot = sb.model.data.spotlight;
+  if (!spot || !spot.goals || !/^[YFA]\d+\.\d+$/.test(node.label)) return null;
+  const links = spot.goals[node.label] || [];
+  const box = el('details', 'sb-def-more sb-spot');
+  box.open = !!sb.spotOpen;
+  box.addEventListener('toggle', () => { sb.spotOpen = box.open; });
+  box.append(el('summary', '', 'Connection to District indicators'));
+  if (!links.length) {
+    box.append(el('p', 'sb-spot-note', spot.guardrail));
+  } else {
+    box.append(el('p', 'sb-spot-note', spot.note));
+    for (const l of links) {
+      const item = el('div', 'sb-spot-link');
+      item.append(el('div', 'sb-spot-ind', l.indicators.join('; ')),
+        el('div', 'sb-spot-ev', l.predicts ? `${l.evidence}. Predicts the indicator; not shown to cause it.` : l.evidence));
+      const lines = el('dl');
+      lines.append(el('dt', '', 'The program must run'), el('dd', '', l.model));
+      if (l.size) lines.append(el('dt', '', 'What it could mean for a school'), el('dd', '', l.size));
+      item.append(lines);
+      box.append(item);
+    }
+  }
+  const from = el('div', 'sb-def-version');
+  from.append(document.createTextNode(`From the ${spot.year ? spot.year + ' ' : ''}SPOTlight review of ${spot.reviewed}`));
+  if (spot.report) {
+    const a = el('a', 'sb-spot-report', 'Read the report');
+    a.href = spot.report;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    from.append(document.createTextNode('. '), a);
+  }
+  box.append(from);
+  return box;
 }
 
 /** What the search found in one slice, for the centre (short) or the side panel. */
