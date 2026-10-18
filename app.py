@@ -303,7 +303,7 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 .ind-wording {{ color: {MUTED}; font-size: 0.8125rem !important; margin: 0.1rem 0 0.4rem 0; }}
 .ind-link {{ border-left: 2px solid {HAIRLINE}; padding: 0.1rem 0 0.1rem 0.85rem; margin: 0.5rem 0 0 0; }}
 .ind-goals {{ list-style: none; margin: 0 !important; padding: 0; font-size: 0.875rem; line-height: 1.55; color: {INK_2}; }}
-.ind-goals li {{ margin: 0; }}
+.ind-goals li {{ margin: 0 !important; padding: 0 !important; }}
 .ind-goals b {{ color: {INK}; font-weight: 600; }}
 .ind-goals .n {{ color: {MUTED}; }}
 .ind-ev {{ font-size: 0.8125rem !important; color: {INK_2}; margin: 0.15rem 0 0 0; font-weight: 500; }}
@@ -1263,7 +1263,63 @@ def page_schools(df: pd.DataFrame, everything: pd.DataFrame) -> None:
     coded = portfolio[portfolio["status"] != schools.NOT_CODED]
     if not coded.empty:
         school_dots(rows, portfolio, ulcs)
+        # The whole file, not the filtered rows: a filter must not make an indicator look unreached.
+        school_indicators(schools.school_outcomes(coded_all, relationships, ulcs, labels))
     school_partner_list(portfolio, school_name, ulcs)
+
+
+def school_indicators(rows: pd.DataFrame) -> None:
+    """Which District indicators the goals partners here name may reach, and which no partner goal reaches.
+
+    Gaps for the school, never scores for partners: nothing is totalled or ranked per partner.
+    """
+    links = cached_spotlight()
+    if not links or "3.x" not in codebook_scheme(rows[COL_DOMAIN].dropna().unique()):
+        return
+    reach = spotlight_indicator_reach(rows, links, cached_goal_names(),
+                                      counter=lambda d: d[schools.COL_PARTNER].nunique())
+    reached = [r for r in reach if any(g["programs"] for g in r["goals"])]
+    missing = [r for r in reach if r["goals"] and not any(g["programs"] for g in r["goals"])]
+    no_study = [r["name"] for r in reach if not r["goals"]]
+    e = html.escape
+    with section("District indicators at this school",
+                 "Which SPOTlight indicators the goals named by partners here may reach. A goal says what a partner "
+                 "works toward; whether it runs the model the studies tested is not confirmed. These are gaps for "
+                 "the school, not scores for partners. Counts use every coded outcome here, whatever the filters.",
+                 key="school_indicators"):
+        left, right = st.columns(2, gap="large")
+        with left:
+            subhead("A partner goal here may reach", f"{len(reached)} of {len(reach)}")
+            if not reached:
+                st.markdown("<p class='none'>No partner here names a goal linked to an indicator.</p>",
+                            unsafe_allow_html=True)
+            for r in reached:
+                named = [g for g in r["goals"] if g["programs"]]
+                goals = "; ".join(f"{e(g['name'])} <span class='n'>({g['programs']} "
+                                  f"{'partner' if g['programs'] == 1 else 'partners'})</span>" for g in named)
+                # A link none of whose goals a partner here names is a gap too, even when another link reaches
+                # the indicator (social and emotional goals reach the math test, but nobody here names math).
+                count = {g["code"]: g["programs"] for g in r["goals"]}
+                unnamed = [g["name"] for g in r["goals"]
+                           if any(g["code"] in link["codes"] and not any(count[c] for c in link["codes"])
+                                  for link in r["links"])]
+                gap = f"<p class='ind-model'>No partner here names {e(', '.join(unnamed))}.</p>" if unnamed else ""
+                st.markdown(f"<div class='ind'><p class='ind-name'>{e(r['name'])}</p>"
+                            f"<ul class='ind-goals'><li>{goals}</li></ul>{gap}</div>", unsafe_allow_html=True)
+        with right:
+            subhead("No partner goal here reaches", f"{len(missing)} of {len(reach)}")
+            if not missing:
+                st.markdown("<p class='none'>Every indicator with a linked goal has a partner here naming one.</p>",
+                            unsafe_allow_html=True)
+            for r in missing:
+                goals = ", ".join(e(g["name"]) for g in r["goals"])
+                st.markdown(f"<div class='ind'><p class='ind-name'>{e(r['name'])}</p>"
+                            f"<p class='ind-model'>No partner here names {goals}.</p></div>",
+                            unsafe_allow_html=True)
+            if no_study:
+                st.markdown(f"<p class='ind-model'>No study the review checked reaches {len(no_study)} more: "
+                            f"{e('; '.join(no_study))}. See the District indicators page.</p>",
+                            unsafe_allow_html=True)
 
 
 def school_dots(rows: pd.DataFrame, portfolio: pd.DataFrame, ulcs: str) -> None:

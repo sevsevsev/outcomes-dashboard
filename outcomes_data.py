@@ -904,25 +904,28 @@ def codebook_goal_names(path: Union[str, Path] = CODEBOOK_V3_PATH) -> dict[str, 
     return {split_code(label)[0]: goal_name(label) for label in codebook[COL_SUBCAT]}
 
 
-def spotlight_indicator_reach(df: pd.DataFrame, links: dict, goal_names: Optional[dict[str, str]] = None) -> list[dict]:
+def spotlight_indicator_reach(df: pd.DataFrame, links: dict, goal_names: Optional[dict[str, str]] = None,
+                              counter=None) -> list[dict]:
     """Each SPOTlight indicator, the goals that may reach it, and how many programs in `df` name those goals.
 
     One dict per indicator in the file's order: id, group, name, wording, value, "goals" ([{code, name,
     programs}] in codebook order) and "links" (link summaries, each with the goal codes it covers). An
     indicator no recommended link reaches has empty goals and links. Counts say a program names the goal,
     not that it runs the model a link needs, which still has to be confirmed; they are never totalled
-    per indicator, since one program can name several of its goals.
+    per indicator, since one program can name several of its goals. `counter` counts something else
+    under "programs" (the school page counts partners).
     """
     if not links:
         return []
     names = spotlight_indicator_names(links)
     goal_names = goal_names or {}
+    counter = counter or count_programs
     codes = df[COL_SUBCAT].map(lambda label: split_code(label)[0])
     out = []
     for indicator in links.get("indicators", []):
         reaching = [link for link in links.get("links", []) if indicator["id"] in link["indicators"]]
         goal_codes = sorted({c for link in reaching for c in link["codes"]}, key=subcategory_sort_key)
-        goals = [{"code": c, "name": goal_names.get(c, c), "programs": count_programs(df[codes == c])}
+        goals = [{"code": c, "name": goal_names.get(c, c), "programs": int(counter(df[codes == c]))}
                  for c in goal_codes]
         out.append({
             "id": indicator["id"], "group": indicator.get("group", ""), "name": indicator["name"],
