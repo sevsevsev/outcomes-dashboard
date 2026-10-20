@@ -35,8 +35,10 @@ Code layout:
 
 from __future__ import annotations
 
+import hashlib
 import html
 import io
+import json
 import re
 from functools import partial
 from pathlib import Path
@@ -47,6 +49,7 @@ import streamlit as st
 
 import charts
 import schools
+from priority_component import priority_grid
 from spotlight_component import spotlight_map
 from sunburst_component import codebook_sunburst
 from outcomes_data import (
@@ -102,6 +105,8 @@ from outcomes_data import (
     load_spotlight_links,
     load_crosswalk,
     lane_program_counts,
+    priority_grid_data,
+    priority_pick_codes,
     codebook_domain_names,
     codebook_goal_names,
     codebook_scheme,
@@ -319,13 +324,6 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 
 /* District indicators: one block per indicator, each link's goals with how many programs name them. */
 .ind {{ margin: 0 0 1.4rem 0; max-width: 52rem; }}
-.dp {{ margin: 0.25rem 0 1rem 0; max-width: 1080px; }}
-.dp-title {{ font-size: 0.75rem !important; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: {MUTED}; margin: 0 0 0.25rem 0; }}
-.dp-list {{ list-style: none; margin: 0 !important; padding: 0; columns: 2 420px; column-gap: 2.5rem; }}
-.dp-list li {{ display: flex; justify-content: space-between; gap: 1rem; break-inside: avoid; margin: 0 !important; padding: 0.2rem 0 !important; border-bottom: 1px solid {HAIRLINE}; font-size: 0.8125rem; line-height: 1.4; }}
-.dp-name {{ color: {INK_2}; }}
-.dp-n {{ color: {MUTED}; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }}
-.dp-note {{ color: {MUTED}; font-size: 0.75rem !important; margin: 0.4rem 0 0 0; max-width: 760px; }}
 .ind-name {{ font-weight: 600; font-size: 1rem !important; color: {INK}; margin: 0; }}
 .ind-value {{ font-weight: 400; font-size: 0.8125rem; color: {MUTED}; font-variant-numeric: tabular-nums; margin-left: 0.5rem; }}
 .ind-wording {{ color: {MUTED}; font-size: 0.8125rem !important; margin: 0.1rem 0 0.4rem 0; }}
@@ -1428,9 +1426,12 @@ def page_indicators(df: pd.DataFrame, everything: pd.DataFrame) -> None:
         lines.append(f"For **{len(unreached)}**, the review found no study strong enough to link a goal: "
                      f"{'; '.join(unreached)}.")
     findings(lines)
-    district_priorities(df)
+    grid_pick = district_priorities(df)
     scope, rows = indicator_scope(df, everything)
     pick = indicator_map(reach, links, scope)
+    # The grid and the map both narrow the table; the one picked last decides it.
+    if grid_pick and (not pick or st.session_state.get("ind_focus") == "grid"):
+        pick = {**grid_pick, "grid": True}
     guard = links.get("guardrails", {})
     if guard and not cached_crosswalk():
         st.markdown(
@@ -1444,7 +1445,8 @@ def page_indicators(df: pd.DataFrame, everything: pd.DataFrame) -> None:
                     "rel='noopener noreferrer'>Read the full research review</a>.</p>", unsafe_allow_html=True)
 
     crosswalk = cached_crosswalk()
-    codes = spotlight_pick_codes(pick, links, crosswalk)
+    codes = (priority_pick_codes(pick, crosswalk) if pick and pick.get("grid")
+             else spotlight_pick_codes(pick, links, crosswalk))
     goal_codes = rows[COL_SUBCAT].map(lambda label: split_code(label)[0])
     rows = rows[goal_codes.isin(codes)] if pick else rows[goal_codes.isin(
         {c for link in spotlight_all_links(links) for c in link["codes"]})]
@@ -1452,11 +1454,16 @@ def page_indicators(df: pd.DataFrame, everything: pd.DataFrame) -> None:
     if pick:
         e = html.escape
         lane_names = {lane["id"]: lane["name"] for lane in crosswalk.get("lanes", [])}
+        lane_id, _, domain = pick["id"].partition("|")
         name = {"goal": lambda: cached_goal_names().get(pick["id"], pick["id"]),
+                "cell": lambda: lane_names.get(lane_id, lane_id),
                 "lane": lambda: lane_names.get(pick["id"], pick["id"]),
                 "link": lambda: SPOTLIGHT_MODEL_NAMES.get(pick["id"]) or SPOTLIGHT_ASSOCIATED_NAMES.get(pick["id"], pick["id"]),
                 "indicator": lambda: spotlight_indicator_names(links).get(pick["id"], pick["id"])}.get(pick["kind"])
         where = (f" naming <b>{e(name())}</b>" if pick["kind"] == "goal"
+                 else f" naming a goal in <b>{e(name())}</b>" if pick.get("grid") and pick["kind"] == "lane"
+                 else (f" naming a goal from <b>{e(cached_domain_names().get(domain, domain))}</b> in "
+                       f"<b>{e(name())}</b>") if pick["kind"] == "cell"
                  else f" naming a goal with no indicator link in <b>{e(name())}</b>" if pick["kind"] == "lane"
                  else f" naming a goal in <b>{e(name())}</b>" if pick["kind"] == "link"
                  else f" naming a goal that could help move <b>{e(name())}</b>" if codes
@@ -1478,29 +1485,23 @@ def page_indicators(df: pd.DataFrame, everything: pd.DataFrame) -> None:
                                 for r in indicators), unsafe_allow_html=True)
 
 
-def district_priorities(df: pd.DataFrame) -> None:
-    """A small, quiet list: for each District priority (lane), how many programs name a goal in it.
+def district_priorities(df: pd.DataFrame) -> Optional[dict]:
+    """The District priorities grid: lanes under the Board's headings by domain; returns the pick, if any.
 
     Programs that share one logic model count once. The counts follow the filter bar. They are never totalled,
-    ranked or colored: a program can name goals in several lanes, and a lane says what programs work toward.
+    ranked or colored by size: a program can name goals in several lanes, and a lane says what programs work
+    toward. The Clear selection button under the table resets the grid along with the map.
     """
-    crosswalk = cached_crosswalk()
-    lanes = lane_program_counts(df, crosswalk)
-    if not lanes:
-        return
-    e = html.escape
-    rows = "".join(
-        f"<li><span class='dp-name'>{e(lane['name'])}</span><span class='dp-n'>{lane['programs']:,} "
-        f"{'program' if lane['programs'] == 1 else 'programs'} naming a goal in this lane</span></li>"
-        for lane in lanes)
-    source = crosswalk.get("source") or {}
-    bylaw = (f" The goals and guardrails are the Board of Education's (<a href='{e(source['url'])}' target='_blank' "
-             "rel='noopener noreferrer'>Bylaw 003.1</a>)." if source.get("url") else "")
-    st.markdown(
-        f"<div class='dp'><p class='dp-title'>District priorities</p><ul class='dp-list'>{rows}</ul>"
-        "<p class='dp-note'>Each goal belongs to one District priority. A program counts in every lane where it "
-        "names a goal, so the counts don't add up, and they say what programs work toward, not what they achieve. "
-        f"Programs that share one logic model count once.{bylaw}</p></div>", unsafe_allow_html=True)
+    data = priority_grid_data(df, cached_crosswalk(), cached_domain_names())
+    if not data:
+        return None
+    key = f"ind_grid_{st.session_state.get('ind_nonce', 0)}"
+    last_key = f"{key}_last"
+    data["selected"] = st.session_state.get(last_key)
+    data["sig"] = hashlib.sha1(json.dumps([data["lanes"], data["cells"]], sort_keys=True).encode()).hexdigest()[:16]
+    pick = priority_grid(data, key=key, on_change=lambda: st.session_state.update(ind_focus="grid"))
+    st.session_state[last_key] = pick
+    return pick
 
 
 SCOPE_ALL, SCOPE_PROGRAM, SCOPE_SCHOOL = "All partners", "One program", "Partners at a school"
@@ -1573,7 +1574,7 @@ def indicator_map(reach: list[dict], links: dict, scope: Optional[dict] = None, 
     data = charts.spotlight_map_data(reach, links, cached_domain_names(), cached_definitions(),
                                      n_goals=len(cached_goal_names()), selected=st.session_state.get(last_key),
                                      scope=scope, crosswalk=cached_crosswalk(), goal_names=cached_goal_names())
-    pick = spotlight_map(data, key=key)
+    pick = spotlight_map(data, key=key, on_change=lambda: st.session_state.update(ind_focus="map"))
     st.session_state[last_key] = pick
     return pick
 
