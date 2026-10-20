@@ -11,7 +11,7 @@ a pick comes back to Python, to filter the table below.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import streamlit as st
 
@@ -24,12 +24,12 @@ _map = st.components.v2.component(
 )
 
 
-def spotlight_map(data: dict, key: str) -> Optional[dict]:
+def spotlight_map(data: dict, key: str, on_change: Optional[Callable[[], None]] = None) -> Optional[dict]:
     """Draw the map; return the pick as {"kind": "goal" | "link" | "indicator" | "other", "id"}, or None.
 
     `data` comes from charts.spotlight_map_data. A new `key` starts the map afresh, with nothing picked.
     """
     result = _map(key=key, data=data, default={"selection": data.get("selected")},
-                  on_selection_change=lambda: None)
+                  on_selection_change=on_change or (lambda: None))
     selection = result.get("selection") if result else None
     return selection if isinstance(selection, dict) and selection.get("kind") else None

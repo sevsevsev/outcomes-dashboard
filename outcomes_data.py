@@ -1030,6 +1030,63 @@ def lane_program_counts(df: pd.DataFrame, crosswalk: dict) -> list[dict]:
     return [{**lane, "programs": int(per_lane.get(lane["id"], 0))} for lane in lanes]
 
 
+# The Board's three headings over the District priority lanes, in the crosswalk's order. A lane the file adds
+# later and this list does not know sits under the last heading, so nothing drops out of the grid.
+PRIORITY_GROUPS = [
+    ("Board goals and SPOTlight indicators", ("names-indicator", "step-toward-indicator", "college-career-goal")),
+    ("Board guardrails", ("guardrail-safe-welcoming", "guardrail-well-rounded", "guardrail-family-partners")),
+    ("Valued on their own terms", ("family-outcome", "quality-condition")),
+]
+
+
+def priority_grid_data(df: pd.DataFrame, crosswalk: dict, domain_names: dict[str, str]) -> dict:
+    """The District priorities grid: lanes as rows under the Board's headings, domains as columns.
+
+    A cell exists only where the crosswalk puts a goal (or the domain itself) of that domain in that lane, and
+    counts the programs naming one of those goals; each goal carries its own program count. Programs that share
+    one logic model count once, as in `lane_program_counts`, whose numbers the rows end with. Nothing is totalled:
+    a program can name goals in several cells and several lanes.
+    """
+    lanes = lane_program_counts(df, crosswalk)
+    if not lanes:
+        return {}
+    known = {lane_id: name for name, ids in PRIORITY_GROUPS for lane_id in ids}
+    last = PRIORITY_GROUPS[-1][0]
+    for lane in lanes:
+        lane["group"] = known.get(lane["id"], last)
+    entries = crosswalk.get("codes", [])
+    domain_of = lambda code: code.split(".")[0]
+    used = {domain_of(c["code"]) for c in entries}
+    domains = sorted(used, key=lambda d: subcategory_sort_key(f"{d} x"))
+    codes = df[COL_SUBCAT].map(lambda label: split_code(label)[0])
+    programs = logic_model_programs(df)
+    per_code = programs.groupby(codes).nunique()
+    goals: dict[tuple[str, str], list[dict]] = {}
+    for c in sorted(entries, key=lambda c: subcategory_sort_key(f"{c['code']} x")):
+        name = c["name"] if "." in c["code"] else f"{domain_names.get(c['code'], c['name'])}{DOMAIN_ONLY_SUFFIX}"
+        goals.setdefault((c["lane"], domain_of(c["code"])), []).append(
+            {"code": c["code"], "name": name, "programs": int(per_code.get(c["code"], 0))})
+    cell_codes = {key: {g["code"] for g in gs} for key, gs in goals.items()}
+    cells = []
+    for (lane_id, domain), gs in goals.items():
+        named = programs[codes.isin(cell_codes[(lane_id, domain)])].nunique()
+        cells.append({"lane": lane_id, "domain": domain, "programs": int(named), "goals": gs})
+    source = crosswalk.get("source") or {}
+    return {"lanes": lanes, "groups": list(dict.fromkeys(lane["group"] for lane in lanes)),
+            "domains": [{"code": d, "name": domain_names.get(d, d)} for d in domains],
+            "cells": cells, "bylaw": source.get("url", "")}
+
+
+def priority_pick_codes(pick: Optional[dict], crosswalk: dict) -> list[str]:
+    """The goal and domain codes a grid pick stands for: a whole lane, or one lane-and-domain cell."""
+    if not pick:
+        return []
+    lane_id, _, domain = str(pick.get("id", "")).partition("|")
+    return sorted((c["code"] for c in crosswalk.get("codes", [])
+                   if c["lane"] == lane_id and (not domain or c["code"].split(".")[0] == domain)),
+                  key=lambda code: subcategory_sort_key(f"{code} x"))
+
+
 def codebook_domain_names(path: Union[str, Path] = CODEBOOK_V3_PATH) -> dict[str, str]:
     """3.x domain code ("Y1") -> its plain name ("Academic Learning & Achievement"); {} if missing."""
     codebook = load_codebook(path)

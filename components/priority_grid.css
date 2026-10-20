@@ -1,0 +1,70 @@
+/* The District priorities grid (see priority_component.py). Same type and greys as the indicators map:
+   slate greys, Inter, one blue for what is pointed at or picked, no colour by lane or by size. */
+
+:host, .pg {
+  --ink: #0f172a;        /* slate-900 */
+  --ink-2: #334155;      /* slate-700 */
+  --muted: #64748b;      /* slate-500 */
+  --faint: #cbd5e1;      /* slate-300 */
+  --line: #e2e8f0;       /* slate-200 */
+  --wash: #f1f5f9;       /* slate-100 */
+  --dot: #64748b;
+  --pick: #2a78d6;
+  --pick-wash: #e8f1fb;
+  font-family: "Inter", "Source Sans", -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+}
+
+.pg-sub { margin: 0 0 4px; font-size: 13px; color: var(--muted); max-width: 720px; }
+.pg-title {
+  margin: 0 0 2px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The grid and its panel share one height, so a new readout never moves the grid. */
+.pg-body { display: flex; gap: 24px; align-items: stretch; }
+.pg-chart { flex: 1 1 auto; min-width: 0; overflow-x: auto; }   /* a narrow screen scrolls the grid, not the page */
+.pg-chart svg { display: block; }
+.pg-panel {
+  flex: 0 0 270px; border-left: 1px solid var(--line); padding-left: 20px; font-size: 13px; line-height: 1.5;
+  color: var(--ink-2); max-height: 520px; overflow-y: auto;
+}
+.pg-panel p { margin: 0 0 8px; }
+.pg-panel h4 { margin: 0 0 8px; font-size: 17px; font-weight: 600; line-height: 1.3; color: var(--ink); }
+.pg-panel a { color: var(--ink-2); }
+.pg-k { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.pg-muted { color: var(--muted); }
+.pg-quote { font-style: italic; color: var(--muted); }
+.pg-strong { font-weight: 600; color: var(--ink); }
+.pg-goals { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.pg-goals li { display: flex; justify-content: space-between; gap: 12px; }
+.pg-n { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pg-none { color: var(--muted); }
+
+@media (max-width: 760px) {
+  .pg-body { flex-direction: column; }
+  .pg-panel { flex: none; max-height: none; border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 12px; }
+}
+
+/* SVG text and marks. Hover and pin change colour and weight only, never size. */
+.pg svg text { font-family: inherit; }
+.pg-dom { font-size: 12px; fill: var(--muted); }
+.pg-note { font-size: 11px; fill: var(--muted); }
+.pg-group { font-size: 11px; font-weight: 600; letter-spacing: .08em; fill: var(--muted); }
+.pg-rule { stroke: var(--line); }
+.pg-name { font-size: 13px; fill: var(--ink-2); }
+.pg-count { font-size: 13px; fill: var(--ink); font-variant-numeric: tabular-nums; }
+.pg-empty { fill: var(--faint); }
+.pg-dot { fill: var(--dot); transition: fill .2s ease; }
+.pg-zero { fill: none; stroke: var(--faint); stroke-width: 1.5; }
+.pg-in { font-size: 11px; font-weight: 600; fill: #fff; pointer-events: none; }
+.pg-out { font-size: 10px; fill: var(--muted); pointer-events: none; }
+.pg-hit { fill: transparent; transition: fill .2s ease; }
+.pg-target { cursor: pointer; outline: none; }
+.pg-target:hover .pg-hit { fill: var(--wash); }
+.pg-target:focus-visible .pg-hit { stroke: var(--ink-2); stroke-width: 2; }
+.pg-target.is-on .pg-dot:not(.pg-zero) { fill: var(--pick); }
+.pg-target.is-on .pg-name { fill: var(--ink); font-weight: 600; }
+.pg-target.is-pinned .pg-hit { fill: var(--pick-wash); }
+
+@media (prefers-reduced-motion: reduce) { .pg-dot, .pg-hit { transition: none; } }
