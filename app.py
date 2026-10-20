@@ -122,7 +122,9 @@ from outcomes_data import (
     spotlight_pick_codes,
     spotlight_scope_goals,
     spotlight_indicator_names,
+    SPOTLIGHT_ASSOCIATED_NAMES,
     SPOTLIGHT_MODEL_NAMES,
+    spotlight_all_links,
     split_code,
     subcategory_coverage,
     sunburst_nodes,
@@ -328,6 +330,7 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 .ind-value {{ font-weight: 400; font-size: 0.8125rem; color: {MUTED}; font-variant-numeric: tabular-nums; margin-left: 0.5rem; }}
 .ind-wording {{ color: {MUTED}; font-size: 0.8125rem !important; margin: 0.1rem 0 0.4rem 0; }}
 .ind-link {{ border-left: 2px solid {HAIRLINE}; padding: 0.1rem 0 0.1rem 0.85rem; margin: 0.5rem 0 0 0; }}
+.ind-assoc {{ border-left-style: dashed; }}
 .ind-goals {{ list-style: none; margin: 0 !important; padding: 0; font-size: 0.875rem; line-height: 1.55; color: {INK_2}; }}
 .ind-goals li {{ margin: 0 !important; padding: 0 !important; }}
 .ind-goals b {{ color: {INK}; font-weight: 600; }}
@@ -1407,14 +1410,24 @@ def page_indicators(df: pd.DataFrame, everything: pd.DataFrame) -> None:
         st.caption("The links use codebook 3.x goals, and the loaded file uses older codes, so no program counts "
                    "show here.")
     reach = cached_indicator_reach(df)
-    unreached = [r["name"] for r in reach if not r["goals"]]
-    findings([
-        f"The research review links partner goals to **{len(reach) - len(unreached)} of {len(reach)}** SPOTlight "
-        "indicators. No program's model has been confirmed yet, so the counts beside the map show only how many "
-        "programs name each goal.",
-        f"For the other **{len(unreached)}**, the review found no study strong enough to link a goal: "
-        f"{'; '.join(unreached)}.",
-    ])
+    tested = [r for r in reach if r["links"]]
+    associated_only = [r["name"] for r in reach if not r["links"] and r.get("associated")]
+    unreached = [r["name"] for r in reach if not r["links"] and not r.get("associated")]
+    lines = [
+        f"Tested program models link partner goals to **{len(tested)} of {len(reach)}** SPOTlight indicators. "
+        "No program's model has been confirmed yet, so the counts beside the map show only how many programs "
+        "name each goal.",
+    ]
+    if links.get("associated"):
+        lines.append(
+            f"Separately, research associates partner goals with **{sum(bool(r.get('associated')) for r in reach)}** "
+            "indicators. An association never earns credit: " + links.get("associatedCaution", "").rstrip(".") + ".")
+    if associated_only:
+        lines.append(f"These have research associations but no tested program model yet: {'; '.join(associated_only)}.")
+    if unreached:
+        lines.append(f"For **{len(unreached)}**, the review found no study strong enough to link a goal: "
+                     f"{'; '.join(unreached)}.")
+    findings(lines)
     district_priorities(df)
     scope, rows = indicator_scope(df, everything)
     pick = indicator_map(reach, links, scope)
@@ -1434,14 +1447,14 @@ def page_indicators(df: pd.DataFrame, everything: pd.DataFrame) -> None:
     codes = spotlight_pick_codes(pick, links, crosswalk)
     goal_codes = rows[COL_SUBCAT].map(lambda label: split_code(label)[0])
     rows = rows[goal_codes.isin(codes)] if pick else rows[goal_codes.isin(
-        {c for link in links.get("links", []) for c in link["codes"]})]
-    where = " naming a goal with an indicator link"
+        {c for link in spotlight_all_links(links) for c in link["codes"]})]
+    where = " naming a goal with a tested or research-associated link"
     if pick:
         e = html.escape
         lane_names = {lane["id"]: lane["name"] for lane in crosswalk.get("lanes", [])}
         name = {"goal": lambda: cached_goal_names().get(pick["id"], pick["id"]),
                 "lane": lambda: lane_names.get(pick["id"], pick["id"]),
-                "link": lambda: SPOTLIGHT_MODEL_NAMES.get(pick["id"], pick["id"]),
+                "link": lambda: SPOTLIGHT_MODEL_NAMES.get(pick["id"]) or SPOTLIGHT_ASSOCIATED_NAMES.get(pick["id"], pick["id"]),
                 "indicator": lambda: spotlight_indicator_names(links).get(pick["id"], pick["id"])}.get(pick["kind"])
         where = (f" naming <b>{e(name())}</b>" if pick["kind"] == "goal"
                  else f" naming a goal with no indicator link in <b>{e(name())}</b>" if pick["kind"] == "lane"
@@ -1461,7 +1474,8 @@ def page_indicators(df: pd.DataFrame, everything: pd.DataFrame) -> None:
     with st.expander("Every link as text"):
         for group, indicators in groups.items():
             st.markdown(f"<p class='sec-title'>{html.escape(group)}</p>"
-                        + "".join(indicator_block(r, by_code, year) for r in indicators), unsafe_allow_html=True)
+                        + "".join(indicator_block(r, by_code, year, links.get("associatedCaution", ""))
+                                for r in indicators), unsafe_allow_html=True)
 
 
 def district_priorities(df: pd.DataFrame) -> None:
@@ -1564,14 +1578,16 @@ def indicator_map(reach: list[dict], links: dict, scope: Optional[dict] = None, 
     return pick
 
 
-def indicator_block(r: dict, goals: dict, year: str) -> str:
+def indicator_block(r: dict, goals: dict, year: str, caution: str = "") -> str:
     """One indicator as HTML: its name and value, then each recommended link's goals, evidence and model."""
     e = html.escape
     out = [f"<div class='ind'><p class='ind-name'>{e(r['name'])}<span class='ind-value'>{e(year)}: "
            f"{e(r['value'])}</span></p><p class='ind-wording'>{e(r['wording'])}</p>"]
-    if not r["links"]:
+    if not r["links"] and not r.get("associated"):
         out.append("<p class='none'>The review found no study strong enough to link a partner goal to this "
                    "indicator.</p>")
+    elif not r["links"]:
+        out.append("<p class='none'>No tested program model yet.</p>")
     for link in r["links"]:
         items = []
         for code in link["codes"]:
@@ -1584,6 +1600,16 @@ def indicator_block(r: dict, goals: dict, year: str) -> str:
         out.append(f"<div class='ind-link'><ul class='ind-goals'>{''.join(items)}</ul>"
                    f"<p class='ind-ev'>{e(evidence)}</p>"
                    f"<p class='ind-model'><span>The program must run:</span> {e(link['model'])}</p></div>")
+    if r.get("associated"):
+        # Research associations: their own list beside the tested links, worded as associations, caution every time.
+        out.append("<p class='ind-ev'>Research associations (never credit)</p>")
+        for link in r["associated"]:
+            names = "; ".join(goals[code]["name"] for code in link["codes"] if code in goals)
+            out.append(f"<div class='ind-link ind-assoc'><ul class='ind-goals'><li><b>{e(names)}</b> "
+                       f"<span class='n'>· is associated with this indicator</span></li></ul>"
+                       f"<p class='ind-model'>{e(link['pathway'])}</p></div>")
+        if caution:
+            out.append(f"<p class='ind-model'><i>{e(caution)}</i></p>")
     out.append("</div>")
     return "".join(out)
 

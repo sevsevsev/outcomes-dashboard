@@ -28,7 +28,7 @@
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const NODE_GAP = 10;        // least space between two model nodes
 const STUB = 34;            // length of the dotted stub beside a row with no link
-const DASH = { cause: null, correlation: '6 4', definition: '1.5 4' };
+const DASH = { cause: null, correlation: '6 4', definition: '1.5 4', associated: '9 3 2 3' };
 const KIND = {
   cause: {
     word: 'Cause shown',
@@ -39,6 +39,11 @@ const KIND = {
     word: 'Correlation only',
     explain: 'Students who do well on this goal tend to do well on the indicator, but no study shows that a ' +
       'program causes the change. It is a warning sign worth watching, not proof of an effect.',
+  },
+  associated: {
+    word: 'Research-associated',
+    explain: 'Long-term studies find that this outcome is associated with the indicator. They do not show that a ' +
+      'program building it moves the indicator, so it never earns credit.',
   },
   definition: {
     word: 'By definition',
@@ -69,7 +74,8 @@ function svgEl(tag, attrs) {
 const plural = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 const programs = n => (n ? `${plural(n, 'program names', 'programs name')} this goal; model not confirmed`
   : 'No program names this goal');
-const kindLine = l => (l.kind === 'definition' ? KIND.definition.word : `${KIND[l.kind].word} · ${l.evidenceLabel}`);
+const kindLine = l => (l.kind === 'definition' ? KIND.definition.word
+  : l.kind === 'associated' ? `${KIND.associated.word} · no credit` : `${KIND[l.kind].word} · ${l.evidenceLabel}`);
 
 export default function (component) {
   const { data, parentElement, setStateValue } = component;
@@ -208,13 +214,14 @@ function mount(root, sm, data) {
 
   // Program models: one node per recommended link, placed beside what it joins (see place).
   const linkCol = el('div', 'sm-col sm-links');
-  linkCol.append(el('div', 'sm-head', 'Program model studied'));
+  linkCol.append(el('div', 'sm-head', 'Model or association'));
   const stack = el('div', 'sm-stack');
   linkCol.append(stack);
   sm.stack = stack;
   for (const l of data.links) {
-    const node = button(`sm-node${model.linkIn(l) ? '' : ' is-out'}`, { kind: 'link', id: l.id }, sm,
-      `${l.name}. ${kindLine(l)}. A possible link only.`);
+    const node = button(`sm-node${l.associated ? ' sm-node-assoc' : ''}${model.linkIn(l) ? '' : ' is-out'}`,
+      { kind: 'link', id: l.id }, sm,
+      `${l.name}. ${kindLine(l)}. ${l.associated ? 'Associated only, never credit.' : 'A possible link only.'}`);
     node.style.setProperty('--hue-pale', pale(l.hue));
     node.style.setProperty('--hue-full', full(l.hue));
     node.append(el('span', 'sm-name', l.name), el('span', 'sm-ev', kindLine(l)));
@@ -232,16 +239,17 @@ function mount(root, sm, data) {
       indCol.append(el('div', 'sm-group', group));
     }
     const out = !model.indIn(i.id);   // in a scoped view, unreached indicators go pale too
-    const row = button(`sm-row sm-ind${i.reached ? '' : ' is-unreached'}${out ? ' is-out' : ''}`,
-      { kind: 'indicator', id: i.id }, sm,
-      `${i.name}, ${data.year}: ${i.value}.${i.reached ? '' : ' No strong study links a partner goal to this yet.'}`);
+    const note = i.reached ? '' : i.associated ? 'No tested program model yet; some goals are associated with it.'
+      : 'No strong study links a partner goal to this yet.';
+    const row = button(`sm-row sm-ind${i.reached || i.associated ? '' : ' is-unreached'}${out ? ' is-out' : ''}`,
+      { kind: 'indicator', id: i.id }, sm, `${i.name}, ${data.year}: ${i.value}.${note ? ` ${note}` : ''}`);
     const line = el('span', 'sm-line');
     const short = i.value.length <= 8;
     line.append(el('span', 'sm-name', i.name));
     if (short) line.append(el('span', 'sm-value', i.value));
     row.append(line);
     if (!short) row.append(el('span', 'sm-value sm-value-long', i.value));
-    if (!i.reached) row.append(el('span', 'sm-note', 'No strong study links a partner goal to this yet.'));
+    if (note) row.append(el('span', 'sm-note', note));
     sm.rows.indicator.set(i.id, row);
     indCol.append(row);
   }
@@ -306,7 +314,7 @@ function widthSwitch(sm, scope) {
 function howToRead() {
   const box = el('div', 'sm-legend');
   box.append(el('div', 'sm-legend-head', 'How to read a link'));
-  for (const kind of ['cause', 'correlation', 'definition']) {
+  for (const kind of ['cause', 'correlation', 'definition', 'associated']) {
     const item = el('div', 'sm-key');
     const s = svgEl('svg', { width: 30, height: 10, 'aria-hidden': 'true' });
     s.append(svgEl('line', { x1: 1, y1: 5, x2: 29, y2: 5, stroke: '#64748b', 'stroke-width': 2, 'stroke-dasharray': DASH[kind], 'stroke-linecap': 'round' }));
@@ -315,7 +323,7 @@ function howToRead() {
     item.append(s, text);
     box.append(item);
   }
-  box.append(el('p', 'sm-key-note', 'Every line is a possible link. It holds for a program only after someone confirms the program runs the model the study tested.'));
+  box.append(el('p', 'sm-key-note', 'Every tested line is a possible link. It holds for a program only after someone confirms the program runs the model the study tested. A research-associated line never earns credit.'));
   return box;
 }
 
@@ -370,7 +378,8 @@ function place(sm) {
     .map(r => rel(r.getBoundingClientRect(), base).bottom));
   let y = 0;
   for (const n of nodes) { n.top = Math.max(n.want - n.h / 2, y); y = n.top + n.h + NODE_GAP; }
-  let limit = colH;
+  // When the nodes need more room than the rows, the column grows rather than letting nodes overlap.
+  let limit = Math.max(colH, nodes.reduce((s, n) => s + n.h + NODE_GAP, -NODE_GAP));
   for (let k = nodes.length - 1; k >= 0; k--) {
     const n = nodes[k];
     n.top = Math.max(0, Math.min(n.top, limit - n.h));
@@ -436,7 +445,7 @@ function draw(sm) {
   // A short dotted stub beside each row with no link, so the gap is drawn, not left blank.
   const stubs = svgEl('g', { class: 'sm-stubs' });
   for (const i of model.data.indicators) {
-    if (i.reached) continue;
+    if (i.reached || i.associated) continue;
     const r = box(sm.rows.indicator.get(i.id));
     stubs.append(svgEl('line', { x1: r.left - 3 - STUB, y1: mid(r), x2: r.left - 3, y2: mid(r), class: 'sm-stub' }));
   }
@@ -536,6 +545,14 @@ function readout(sm, item) {
     return div;
   };
   const who = scope ? (scope.kind === 'school' ? 'No partner there' : scope.label) : '';
+  const tested = data.links.filter(l => !l.associated);
+  const assoc = data.links.filter(l => l.associated);
+  // Research associations always come with the review's caution, and in a list of their own.
+  const assocSection = (title, ls, line) => {
+    const list = el('ul', 'sm-list');
+    for (const l of ls) list.append(line(l));
+    return section(title, list, text(data.associatedCaution, 'sm-caution'), text(data.associatedNote, 'sm-caution'));
+  };
 
   if (!item) {
     if (scope) {
@@ -546,14 +563,19 @@ function readout(sm, item) {
     } else {
       inner.append(eyebrow('District indicators'),
         el('div', 'sm-title', 'Which partner goals could help move the District’s indicators'),
-        text(`${data.goals.length} partner goals link to ${data.indicators.filter(i => i.reached).length} of the ${data.indicators.length} indicators through ${data.links.length} program models that studies tested.`),
+        text(`Tested program models: ${plural(tested.length, 'model links', 'models link')} partner goals to ${data.indicators.filter(i => i.reached).length} of the ${data.indicators.length} indicators.`),
+        text(`Research associations, counted apart: ${plural(assoc.length, 'association ties', 'associations tie')} partner goals to ${data.indicators.filter(i => i.associated).length} indicators. These never earn credit.`),
         text(data.possible, 'sm-caution'));
     }
     if (model.lanes.size) inner.append(el('p', 'sm-hint', 'Goals are grouped by the District priority they serve. Pick a priority’s other goals to see what they serve.'));
     inner.append(el('p', 'sm-hint', 'Point at or pick a goal, a program model or an indicator to see why it is linked and what a program would have to run.'));
   } else if (item.kind === 'goal') {
     const g = model.goals.get(item.id);
-    const ls = model.linksOfGoal.get(item.id) || [];
+    const all = model.linksOfGoal.get(item.id) || [];
+    const ls = all.filter(l => !l.associated);
+    const assocLs = all.filter(l => l.associated);
+    // "Model not confirmed" belongs to tested links only; a research association has no model to confirm.
+    const fit = s => (ls.length ? s : s.replace(/; model not confirmed/, ''));
     const list = el('ul', 'sm-list');
     for (const l of ls) {
       const li = linkLine(l);
@@ -566,12 +588,12 @@ function readout(sm, item) {
     if (scope) {
       if (scope.kind === 'school') {
         inner.append(el('p', 'sm-count', g.here
-          ? `${plural(g.here, 'partner here names', 'partners here name')} this goal; model not confirmed`
+          ? fit(`${plural(g.here, 'partner here names', 'partners here name')} this goal; model not confirmed`)
           : `${who} names this goal.`));
         if (g.hereNames?.length) inner.append(el('p', 'sm-sub', g.hereNames.join('; ')));
       } else {
         inner.append(el('p', 'sm-count', g.here
-          ? `${scope.label} names this goal in ${plural(g.here, 'statement', 'statements')}; model not confirmed`
+          ? fit(`${scope.label} names this goal in ${plural(g.here, 'statement', 'statements')}; model not confirmed`)
           : `${scope.label} does not name this goal.`));
         if (g.hereSamples?.length) {
           const quotes = el('ul', 'sm-quotes');
@@ -579,12 +601,56 @@ function readout(sm, item) {
           inner.append(quotes);
         }
       }
-      inner.append(el('p', 'sm-sub', `Across all partners: ${programs(g.programs).toLowerCase()}.`));
+      inner.append(el('p', 'sm-sub', `Across all partners: ${fit(programs(g.programs)).toLowerCase()}.`));
     } else {
-      inner.append(el('p', 'sm-count', programs(g.programs)));
+      inner.append(el('p', 'sm-count', fit(programs(g.programs))));
     }
-    inner.append(section(ls.length === 1 ? 'Program model that could connect it' : 'Program models that could connect it', list),
-      text('Naming this goal earns no credit on its own. A link holds for a program only once someone confirms it runs the model.', 'sm-caution'));
+    if (ls.length) {
+      inner.append(section(ls.length === 1 ? 'Program model that could connect it' : 'Program models that could connect it', list),
+        text('Naming this goal earns no credit on its own. A link holds for a program only once someone confirms it runs the model.', 'sm-caution'));
+    }
+    if (assocLs.length) {
+      inner.append(assocSection('Research associations', assocLs, l => {
+        const li = el('li');
+        li.append(el('b', null, l.name), el('div', 'sm-sub', l.pathway));
+        return li;
+      }));
+    }
+  } else if (item.kind === 'link' && model.links.get(item.id)?.associated) {
+    const l = model.links.get(item.id);
+    const goals = el('ul', 'sm-list');
+    for (const id of l.goals) {
+      const g = model.goals.get(id);
+      if (!g) continue;
+      const li = el('li');
+      li.append(el('b', null, g.name), el('div', 'sm-sub', scope
+        ? (g.here ? `${hereWords(scope, g.here)} here` : 'Not named here') : programs(g.programs).replace(/; model not confirmed$/, '')));
+      goals.append(li);
+    }
+    const inds = el('ul', 'sm-list');
+    for (const id of l.indicators) {
+      const i = model.indicators.get(id);
+      const li = el('li');
+      li.append(el('b', null, i.name), el('span', 'sm-muted', ` · ${data.year}: ${i.value}`));
+      inds.append(li);
+    }
+    inner.append(eyebrow('Research association · never credit', l.hue), el('div', 'sm-title', l.name),
+      section('What the research says', text(l.pathway, 'sm-strong')),
+      text(data.associatedCaution, 'sm-caution'), text(data.associatedNote, 'sm-caution'),
+      section('What kind of link: research-associated', text(data.associatedRule || KIND.associated.explain)));
+    if (l.basis) inner.append(section('The studies behind it', text(l.basis)));
+    if (l.effect) inner.append(section('What the studies found', text(l.effect)));
+    if (l.caveats) inner.append(section('Limits of the evidence', text(l.caveats)));
+    if (l.philadelphia) inner.append(section('In Philadelphia', text(l.philadelphia)));
+    inner.append(section('Goals it is about', goals), section('Indicators it is associated with', inds));
+    if (l.studies?.length) {
+      const details = el('details', 'sm-studies');
+      details.append(el('summary', null, `The ${plural(l.studies.length, 'study', 'studies')} behind it`));
+      const ol = el('ol', 'sm-list');
+      for (const c of l.studies) ol.append(el('li', null, c));
+      details.append(ol);
+      inner.append(details);
+    }
   } else if (item.kind === 'link') {
     const l = model.links.get(item.id);
     const inds = el('ul', 'sm-list');
@@ -625,11 +691,15 @@ function readout(sm, item) {
     }
   } else if (item.kind === 'indicator') {
     const i = model.indicators.get(item.id);
-    const ls = model.linksOfInd.get(item.id) || [];
+    const all = model.linksOfInd.get(item.id) || [];
+    const ls = all.filter(l => !l.associated);
+    const assocLs = all.filter(l => l.associated);
     inner.append(eyebrow(`District indicator · ${i.group}`), el('div', 'sm-title', i.name), text(i.wording),
       el('p', 'sm-count', `${data.year}: ${i.value}`));
-    if (!ls.length) {
+    if (!ls.length && !assocLs.length) {
       inner.append(section('No link yet', text('The research review found no study strong enough to link a partner goal to this indicator.')));
+    } else if (!ls.length) {
+      inner.append(section('No tested program model yet', text('No study has tested a program model that moves this indicator.')));
     } else {
       const list = el('ul', 'sm-list');
       for (const l of ls) {
@@ -639,6 +709,13 @@ function readout(sm, item) {
       }
       inner.append(section('Program models that could help move it, and the goals they join', list),
         text('Counts are per goal and never add up per indicator: one program can name several of these goals.', 'sm-caution'));
+    }
+    if (assocLs.length) {
+      inner.append(assocSection('Goals research associates with it', assocLs, l => {
+        const li = el('li');
+        li.append(el('b', null, l.name), el('span', 'sm-muted', ' · is associated with this indicator'), joined(l.goals));
+        return li;
+      }));
     }
   } else if (item.kind === 'lane') {
     const lane = model.lanes.get(item.id);
@@ -658,7 +735,7 @@ function readout(sm, item) {
     if (lane.quote) inner.append(el('p', 'sm-quote', `“${lane.quote}”`));
     if (lane.quote && data.bylaw) inner.append(bylaw());
     if (shared) inner.append(laneLines(null, shared));
-    inner.append(section(lane.linked ? 'Its goals with no link to an indicator' : 'Its goals', list));
+    inner.append(section(lane.linked ? 'Its goals with no link of either kind' : 'Its goals', list));
     if (lane.id === 'names-indicator' || lane.id === 'step-toward-indicator') {
       inner.append(text('The research review has not tied these goals to an indicator through a program model that studies tested.', 'sm-caution'));
     }

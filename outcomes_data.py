@@ -854,7 +854,6 @@ SPOTLIGHT_MODEL_NAMES = {
     "L-02": "School-day math tutoring",
     "L-03": "Daily high school math tutoring",
     "L-13": "School-day social and emotional learning curriculum",
-    "L-17": "Middle school belonging exercises",
     "L-27": "Attendance gains, counted by definition",
     "L-28": "Personal absence messages to families",
     "L-36": "Community school lead agency",
@@ -862,7 +861,30 @@ SPOTLIGHT_MODEL_NAMES = {
     "L-81": "Ninth-grade course and credit tracking",
     "L-82": "Attendance gains in school records",
     "L-83": "Attendance gains in school records",
+    "L-103": "On-time graduation, counted by definition",
+    "L-109": "Check and Connect, grades 5 to 7",
+    "L-111": "Education specialist for youth in foster care",
+    "L-113": "SPARK tutoring with family engagement",
+    "L-114": "Multi-summer programs",
+    "L-115": "School clinic, on site or by telehealth",
+    "L-150": "Free books every year for three years",
 }
+# A short name for each research-associated link, written from its pathway. These are not program models: the
+# studies show the outcome goes with the indicator, not that a program building it moves the indicator.
+SPOTLIGHT_ASSOCIATED_NAMES = {
+    "L-44": "Regular after-school center participation",
+    "L-57": "Playing on a school sports team",
+    "L-87": "Homelessness and eviction",
+    "L-91": "Academic self-concept",
+    "L-100": "Course failures in the middle grades and ninth grade",
+    "L-101": "Low attendance in the middle grades and ninth grade",
+    "L-102": "School absences",
+    "L-104": "Attention and persistence at school entry",
+    "L-105": "Relationships with teachers",
+    "L-106": "Class participation and homework",
+}
+SPOTLIGHT_ASSOCIATED_NOTE = ("A research-associated link never earns credit: the outcome is associated with the "
+                             "indicator, but no study shows that a program building it moves the indicator.")
 _CODE_IN_PARENS = re.compile(r"\s*\((?:[YFA]\d+(?:\.\d+)?)\)|,\s*[YFA]\d+(?:\.\d+)?(?=\))")
 
 
@@ -899,10 +921,26 @@ def spotlight_link_summary(link: dict, names: dict[str, str]) -> dict:
     }
 
 
+def spotlight_associated_summary(link: dict, names: dict[str, str]) -> dict:
+    """What the dashboard shows of one research-associated link, with codes taken out of its text."""
+    return {
+        "id": link["id"],
+        "indicators": [names.get(i, i) for i in link["indicators"]],
+        "pathway": _without_codes(link.get("pathway")),
+        "basis": _without_codes(link.get("basis")),
+    }
+
+
+def spotlight_all_links(links: dict) -> list[dict]:
+    """The tested links and the research-associated ones, for lookups by id or code only; never one list on screen."""
+    return list(links.get("links", [])) + list(links.get("associated", []))
+
+
 def spotlight_panel_data(links: dict, crosswalk: Optional[dict] = None) -> dict:
     """What the wheel's side panel shows under a picked goal's "Connection to District indicators".
 
-    {"goals": {"Y1.1": [link summaries]}, "lanes": {"Y1.1": {lane, laneName, serves, quote}} from the
+    {"goals": {"Y1.1": [tested link summaries]}, "associated": {"Y1.13": [research-associated summaries]},
+    "associatedCaution" (shown with every association), "lanes": {"Y1.1": {lane, laneName, serves, quote}} from the
     crosswalk, "guardrail": the note for a goal with no link and no lane, "note": the possible-only caution,
     "reviewed", "year", "report", "bylaw" (the Board bylaw's link)}; {} when the links file is missing.
     """
@@ -913,10 +951,16 @@ def spotlight_panel_data(links: dict, crosswalk: Optional[dict] = None) -> dict:
     for link in links.get("links", []):
         for code in link["codes"]:
             goals.setdefault(code, []).append(spotlight_link_summary(link, names))
+    associated: dict[str, list[dict]] = {}
+    for link in links.get("associated", []):
+        for code in link["codes"]:
+            associated.setdefault(code, []).append(spotlight_associated_summary(link, names))
     quotes = {lane["id"]: lane["quote"] for lane in crosswalk_lanes(crosswalk or {})}
     lanes = {code: {**entry, "quote": quotes.get(entry["lane"], "")}
              for code, entry in crosswalk_code_lanes(crosswalk or {}).items()}
-    return {"goals": goals, "lanes": lanes, "guardrail": SPOTLIGHT_NO_LINK, "note": SPOTLIGHT_POSSIBLE,
+    return {"goals": goals, "associated": associated, "associatedCaution": links.get("associatedCaution", ""),
+            "associatedNote": SPOTLIGHT_ASSOCIATED_NOTE,
+            "lanes": lanes, "guardrail": SPOTLIGHT_NO_LINK, "note": SPOTLIGHT_POSSIBLE,
             "reviewed": links.get("reviewedOn", ""), "year": links.get("spotlightYear", ""),
             "report": links.get("report", ""), "bylaw": ((crosswalk or {}).get("source") or {}).get("url", "")}
 
@@ -997,23 +1041,24 @@ def codebook_domain_names(path: Union[str, Path] = CODEBOOK_V3_PATH) -> dict[str
 def spotlight_pick_codes(pick: Optional[dict], links: dict, crosswalk: Optional[dict] = None) -> list[str]:
     """The goal codes a pick on the District indicators map stands for, in codebook order.
 
-    A goal stands for itself, a link for its goals, an indicator for the goals of every link that
-    reaches it, and a lane row for the lane's goals and domain with no link (from the `crosswalk`);
+    A goal stands for itself, a link (tested or research-associated) for its goals, an indicator for the
+    goals of every link that reaches it, and a lane row for the lane's goals and domain with no link (from the `crosswalk`);
     an indicator no link reaches, or the "other goals" row, stands for none.
     """
     if not pick or not links:
         return []
     kind, pid = pick.get("kind"), pick.get("id")
+    every = spotlight_all_links(links)
     if kind == "lane":
-        linked = {c for link in links.get("links", []) for c in link["codes"]}
+        linked = {c for link in every for c in link["codes"]}
         codes = {c for c, entry in crosswalk_code_lanes(crosswalk or {}).items()
                  if entry["lane"] == pid and c not in linked}
     elif kind == "goal":
         codes = {pid}
     elif kind == "link":
-        codes = {c for link in links.get("links", []) if link["id"] == pid for c in link["codes"]}
+        codes = {c for link in every if link["id"] == pid for c in link["codes"]}
     elif kind == "indicator":
-        codes = {c for link in links.get("links", []) if pid in link["indicators"] for c in link["codes"]}
+        codes = {c for link in every if pid in link["indicators"] for c in link["codes"]}
     else:
         codes = set()
     return sorted(codes, key=subcategory_sort_key)
@@ -1053,8 +1098,9 @@ def spotlight_indicator_reach(df: pd.DataFrame, links: dict, goal_names: Optiona
     """Each SPOTlight indicator, the goals that may reach it, and how many programs in `df` name those goals.
 
     One dict per indicator in the file's order: id, group, name, wording, value, "goals" ([{code, name,
-    programs}] in codebook order) and "links" (link summaries, each with the goal codes it covers). An
-    indicator no recommended link reaches has empty goals and links. Counts say a program names the goal,
+    programs}] in codebook order, for tested and research-associated links alike), "links" (tested link
+    summaries, each with the goal codes it covers) and "associated" (research-associated summaries, kept
+    apart). An indicator no link of either kind reaches has empty goals, links and associated. Counts say a program names the goal,
     not that it runs the model a link needs, which still has to be confirmed; they are never totalled
     per indicator, since one program can name several of its goals. `counter` counts something else
     under "programs" (the school page counts partners).
@@ -1068,13 +1114,15 @@ def spotlight_indicator_reach(df: pd.DataFrame, links: dict, goal_names: Optiona
     out = []
     for indicator in links.get("indicators", []):
         reaching = [link for link in links.get("links", []) if indicator["id"] in link["indicators"]]
-        goal_codes = sorted({c for link in reaching for c in link["codes"]}, key=subcategory_sort_key)
+        associated = [link for link in links.get("associated", []) if indicator["id"] in link["indicators"]]
+        goal_codes = sorted({c for link in reaching + associated for c in link["codes"]}, key=subcategory_sort_key)
         goals = [{"code": c, "name": goal_names.get(c, c), "programs": int(counter(df[codes == c]))}
                  for c in goal_codes]
         out.append({
             "id": indicator["id"], "group": indicator.get("group", ""), "name": indicator["name"],
             "wording": indicator.get("spotlightWording", ""), "value": indicator.get("value2024_25", ""),
             "goals": goals, "links": [{**spotlight_link_summary(link, names), "codes": link["codes"]} for link in reaching],
+            "associated": [{**spotlight_associated_summary(link, names), "codes": link["codes"]} for link in associated],
         })
     return out
 

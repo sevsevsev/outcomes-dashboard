@@ -704,13 +704,18 @@ def test_spotlight_panel_data_for_the_wheel():
     maths = panel["goals"]["Y1.3"]
     assert [link["id"] for link in maths] == ["L-02", "L-03"]
     assert maths[0]["indicators"] == ["Math test, grade 3", "Math test, grades 3 to 8"]
-    assert maths[0]["evidence"] == "Strong evidence, for the tutoring model only"
-    assert "A partner coded Mathematics that" in maths[0]["model"]
+    assert maths[0]["evidence"].startswith("Good evidence")
+    assert "Tutoring by trained, paid tutors" in maths[0]["model"]
     for links in panel["goals"].values():
         for link in links:
             for field in ("pathway", "model", "size"):
                 assert not re.search(r"\b[YFA]\d+(\.\d+)?\b", link[field]), link[field]
     assert "Y8.1" not in panel["goals"]
+    # Research associations are kept apart from the tested links, with the review's caution.
+    assert [a["id"] for a in panel["associated"]["F2.3"]] == ["L-87"]
+    assert "associated with" in panel["associated"]["F2.3"][0]["pathway"]
+    assert "F2.3" not in panel["goals"]
+    assert panel["associatedCaution"] and "never earns credit" in panel["associatedNote"]
     assert panel["guardrail"].startswith("The research review found no study")
     assert "possible links" in panel["note"]
     assert spotlight_panel_data({}) == {}
@@ -739,7 +744,8 @@ def test_spotlight_indicator_reach_counts_programs_per_goal():
 
 def test_spotlight_map_data_draws_each_link_once_and_never_totals():
     """The District indicators map: one node per link, goals in codebook order, counts per goal only."""
-    from outcomes_data import (SPOTLIGHT_MODEL_NAMES, codebook_domain_names, codebook_goal_names,
+    from outcomes_data import (SPOTLIGHT_ASSOCIATED_NAMES, SPOTLIGHT_MODEL_NAMES, codebook_domain_names,
+                               codebook_goal_names,
                                load_spotlight_links, spotlight_indicator_reach)
     links = load_spotlight_links()
     rows = pd.DataFrame({
@@ -750,11 +756,17 @@ def test_spotlight_map_data_draws_each_link_once_and_never_totals():
     reach = spotlight_indicator_reach(rows, links, codebook_goal_names())
     goal_names = codebook_goal_names()
     data = charts.spotlight_map_data(reach, links, codebook_domain_names(), {}, n_goals=len(goal_names))
-    assert [l["id"] for l in data["links"]] == [l["id"] for l in links["links"]]
+    tested = [l for l in data["links"] if not l.get("associated")]
+    assoc = [l for l in data["links"] if l.get("associated")]
+    assert [l["id"] for l in tested] == [l["id"] for l in links["links"]]
+    assert [l["id"] for l in assoc] == [l["id"] for l in links["associated"]]
+    assert all(l["kind"] == "associated" and not l["model"] for l in assoc)
     assert set(SPOTLIGHT_MODEL_NAMES) == {l["id"] for l in links["links"]}   # every node has a plain name
+    assert set(SPOTLIGHT_ASSOCIATED_NAMES) == {l["id"] for l in links["associated"]}
+    assert "L-17" not in SPOTLIGHT_MODEL_NAMES   # dropped: its preregistered replication failed
     codes = [g["id"] for g in data["goals"]]
     assert codes == sorted(codes, key=app.subcategory_sort_key)
-    assert {c for l in links["links"] for c in l["codes"]} == set(codes)
+    assert {c for l in links["links"] + links["associated"] for c in l["codes"]} == set(codes)
     assert next(g for g in data["goals"] if g["id"] == "Y1.3")["programs"] == 2
     assert next(g for g in data["goals"] if g["id"] == "Y1.3")["domainName"].startswith("Academic")
     assert data["otherGoals"] == len(goal_names) - len(codes)

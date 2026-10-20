@@ -2,9 +2,11 @@
  "codebook": "youth_outcomes_v3",
  "codebookVersion": "3.3.0",
  "spotlightYear": "2024-25",
- "reviewedOn": "2026-10-18",
+ "reviewedOn": "2026-10-20",
  "report": "https://claude.ai/code/artifact/4454bf45-2669-4a9f-bfdd-910ed96ac76f",
- "rule": "A link is recommended only on good or strong checked evidence, and only when the program runs the studied model. A code alone never earns credit: a code says what a program works toward, and the evidence is about specific program models.",
+ "rule": "A tested link is recommended only on checked causal evidence (strong or good, or suggestive when it rests on a single clean trial), and only when the program runs the studied model. A code alone never earns credit: a code says what a program works toward, and the evidence is about specific program models.",
+ "associatedRule": "A research-associated link rests on consistent correlational evidence: a meta-analysis, or several long-term studies that point the same way and adjust for prior achievement or attendance. A single survey at one point in time does not count. These outcomes are associated with the indicator; the studies do not show that a program building them moves it.",
+ "associatedCaution": "Programs often attract students who are already more engaged, so an association can overstate what the program itself does.",
  "indicators": [
   {
    "id": "S1",
@@ -115,22 +117,34 @@
     "S6"
    ],
    "contribution": "direct",
-   "pathway": "Tutoring programs that build children's reading skills raise scores on standardized reading tests, the skill the state English language arts test measures.",
+   "pathway": "Tutoring programs that build children's reading skills raise scores on standardized reading tests, and partner-run versions using trained, paid tutors (including national service members) work too, though effects are smaller at scale.",
    "evidence": "strong",
-   "evidenceScope": "for the tutoring model only",
-   "modelMatch": "Tutoring during the school day by paid, trained tutors (teachers or paraprofessionals), at least three sessions a week, one-to-one or small groups, with reading as the content. A partner coded Literacy: Reading and Writing (Y1.1) that does not run this model gets no evidence level from this link. Volunteer tutoring counts only at the smaller volunteer-trial size.",
-   "conditions": "Tutoring by trained teachers or paraprofessionals, during the school day, at least three sessions a week, one-to-one or in small groups; volunteer tutoring counts only with a smaller expected gain; plan on the at-scale size, not the pooled size.",
-   "typicalEffect": "Pooled gain of 0.29 standard deviations on literacy tests across randomized trials (0.37 for all outcomes in the 2020 working paper); large United States programs (1,000 or more students) about 0.16 standard deviations; volunteer reading tutoring trials 0.10 (Reading Partners) and 0.13 (Experience Corps) standard deviations on reading comprehension. Plan on the at-scale 0.16 standard deviations, not the pooled size.",
+   "modelMatch": "Tutoring during the school day by trained, paid tutors (teachers, paraprofessionals or national service members such as AmeriCorps), at least three sessions a week, one-to-one or small groups, using a structured reading curriculum, in kindergarten to grade 3. Volunteer and virtual tutoring count only at the lower sizes below. Homework help or general after-school time does not qualify.",
+   "conditions": "Tutoring during the school day by trained, paid tutors (teachers, paraprofessionals or national service members such as AmeriCorps), at least three sessions a week, one-to-one or small groups, using a structured reading curriculum, in kindergarten to grade 3. Volunteer and virtual tutoring count only at the lower sizes below. Homework help or general after-school time does not qualify.",
+   "typicalEffect": "SPARK (Milwaukee) randomized trial: 0.12 standard deviations on a national reading test. A one-year follow-on trial of the same model: significant gains on two reading tests. Education Corps randomized trial: 0.17 at mid-year. Push-in kindergarten tutoring: oral reading 0.23, district reading level 0.11. Paraeducator tutoring in grade 1: better on 5 of 6 tests. Reading Corps: significant gains in kindergarten to grade 3. Recovery-era study: one tutoring program 0.22 and small-group reading 0.33 on state tests. Nashville at scale: 0.04 to 0.09. Volunteer tutoring meta-analysis: 0.23. Virtual tutoring: 0.05 to 0.08 (one-to-one 0.07 to 0.12). Meta-analysis of small-group instruction by adults: about 0.35 to 0.45 on mixed measures. Plan on 0.05 to 0.15 on the state test.",
    "magnitude": "At 0.16 standard deviations, about 6 more participants in 100 reach proficient, assuming participants resemble the District's tested students (base rate about 31 to 33 percent). If the partner tutors 10 percent of a school's tested students, the school rate rises about 0.6 percentage points. Volunteer-trial sizes (0.10 to 0.13) give about 4 to 5 more in 100 participants.",
-   "caveats": "Outcomes were study-administered or national standardized reading tests, not the Pennsylvania test. At scale, effects are a third to a half of the full-sample size. Effects were larger for teacher and paraprofessional tutors, earlier grades and school-day delivery, and smaller after school. The scale meta-analysis covers kindergarten to grade 12 in wealthy (OECD) countries, not only the United States. Volunteer programs often assign two or more tutors per child by design. Bounded by the after-school reading null and negative results (structured after-school reading row) and the 21st Century Community Learning Centers null.",
+   "caveats": "Most effects are on national or researcher tests, not the Pennsylvania test. Philadelphia's Experience Corps volunteer program (2016-17 only) showed no overall difference in kindergarten to grade 3, and the grade 3 comparison group scored slightly higher. Effects shrink as programs scale.",
    "philadelphia": {
-    "found": false
+    "found": true,
+    "note": "School District of Philadelphia, Office of Research and Evaluation (2018): the AARP Experience Corps volunteer tutoring program showed no significant reading difference against a matched comparison group (a volunteer model, not the tested one)"
    },
    "studies": [
     "Nickow, A., Oreopoulos, P., & Quan, V. (2020). The Impressive Effects of Tutoring on PreK-12 Learning: A Systematic Review and Meta-Analysis of the Experimental Evidence. NBER Working Paper 27476. Published as Nickow, Oreopoulos & Quan (2024), The Promise of Tutoring for PreK-12 Learning: A Systematic Review and Meta-Analysis of the Experimental Evidence, American Educational Research Journal, doi:10.3102/00028312231208687",
     "Kraft, M. A., Schueler, B. E., & Falken, G. T. (2024). What Impacts Should We Expect from Tutoring at Scale? Exploring Meta-Analytic Generalizability. EdWorkingPaper No. 24-1031, Annenberg Institute at Brown University. https://doi.org/10.26300/zygj-m525",
     "Jacob, R. T., Armstrong, C., & Willard, J. A. (2015, March). Mobilizing Volunteer Tutors to Improve Student Literacy: Implementation, Impacts, and Costs of the Reading Partners Program. New York: MDRC. (Earlier brief: Jacob, R. T., Smith, T. J., Willard, J. A., & Rifkin, R. E., June 2014, \"Reading Partners: The Implementation and Effectiveness of a One-on-One Tutoring Program Delivered by Community Volunteers,\" MDRC Policy Brief.)",
-    "Morrow-Howell, N., Jonson-Reid, M., McCrary, S., Lee, Y., & Spitznagel, E. (2009). Evaluation of Experience Corps: Student reading outcomes (CSD Research Report 09-01). St. Louis: Washington University, Center for Social Development. Reviewed in WWC Quick Review, February 2010."
+    "Morrow-Howell, N., Jonson-Reid, M., McCrary, S., Lee, Y., & Spitznagel, E. (2009). Evaluation of Experience Corps: Student reading outcomes (CSD Research Report 09-01). St. Louis: Washington University, Center for Social Development. Reviewed in WWC Quick Review, February 2010.",
+    "Markovitz, C. E., Hernandez, M. W., Hedberg, E. C., & Whitmore, H. W. (2022). AERJ, 59(4), 788-819. doi:10.3102/00028312211066848",
+    "Jones, C. (2018). SPARK Early Literacy: Testing the Impact of a Family-School-Community Partnership Literacy Intervention. School Community Journal, 28(2). ERIC EJ1201942",
+    "Jones, C. J., Reeves, M., & Li, D. (2025). JESPAR, 31(2), 113-132. doi:10.1080/10824669.2025.2547228 (earlier version: Jones & Li 2023, ERIC ED629657)",
+    "Asher, C., Jacob, R., & Jiang, Z. (2025). Recruitment, Training, & Support: Impacts of a District-Partnership Tutoring Model to Support Elementary Literacy Skills. SREE abstract, ERIC ED677790",
+    "Cortes, K., Kortecamp, K., Loeb, S., & Robinson, C. (2024). A Scalable Approach to High-Impact Tutoring for Young Readers: Results of a Randomized Controlled Trial. NBER Working Paper 32039 (ERIC ED648239). Second trial: Kortecamp & Peters (2023), JESPAR 29(3), doi:10.1080/10824669.2023.2179056",
+    "Kraft, M. A., Edwards, D. S., & Cannata, M. (2024). The Scaling Dynamics and Causal Effects of a District-Operated Tutoring Program. EdWorkingPaper 24-1030. ERIC ED672280",
+    "Vadasy, P. F., & Sanders, E. A. (2011). Scientific Studies of Reading, 15(6), 471-497. doi:10.1080/10888438.2010.501091",
+    "Dietrichson, J., Filges, T., Seerup, J. K., Klokker, R. H., Viinholt, B. C. A., Bog, M., & Eiberg, M. (2021). Campbell Systematic Reviews, 17(2), e1152. doi:10.1002/cl2.1152",
+    "Carbonari, M. V., et al. (2026). Educational Evaluation and Policy Analysis, 48(3), 1045-1072. doi:10.3102/01623737251400377 (working paper: CALDER WP 303-0724, ERIC ED662872)",
+    "Ritter, G. W., Barnett, J. H., Denny, G. S., & Albin, G. R. (2009). Review of Educational Research, 79(1), 3-38. doi:10.3102/0034654308325690; Campbell version: Ritter et al. (2006), doi:10.4073/csr.2006.7",
+    "School District of Philadelphia, Office of Research and Evaluation (2018, March). AARP Foundation Experience Corps (AARP EC) 2016-2017 Evaluation Report Summary.",
+    "Robinson, C. D., Pollard, C., Novicoff, S., White, S., & Loeb, S. (2024). EdWorkingPaper 24-955. ERIC ED652100"
    ],
    "links": [
     {
@@ -156,13 +170,61 @@
     },
     {
      "url": "https://www.atlanticphilanthropies.org/wp-content/uploads/2015/09/ExperienceCorps_WAU_RP09-01.pdf"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ1343505"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/EJ1201942.pdf"
+    },
+    {
+     "url": "https://api.openalex.org/works/doi:10.1080/10824669.2025.2547228"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:ED677790"
+    },
+    {
+     "url": "https://www.nber.org/system/files/working_papers/w32039/w32039.pdf"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED672280.pdf"
+    },
+    {
+     "url": "https://api.openalex.org/works/doi:10.1080/10888438.2010.501091"
+    },
+    {
+     "url": "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC8356298/fullTextXML"
+    },
+    {
+     "url": "https://api.crossref.org/works/10.3102/01623737251400377"
+    },
+    {
+     "url": "https://api.crossref.org/works/10.3102/0034654308325690"
+    },
+    {
+     "url": "https://www.philasd.org/research/wp-content/uploads/sites/90/2018/04/AARP-Study-Summary-March-2018.pdf"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:ED652100"
     }
    ],
    "claims": [
     "V-001",
     "V-002",
     "V-005",
-    "V-006"
+    "V-006",
+    "R-001",
+    "R-002",
+    "R-003",
+    "R-004",
+    "R-005",
+    "R-006",
+    "R-007",
+    "R-008",
+    "R-009",
+    "R-010",
+    "R-011",
+    "R-012"
    ]
   },
   {
@@ -175,20 +237,33 @@
     "S8"
    ],
    "contribution": "direct",
-   "pathway": "Tutoring programs that build children's math skills raise scores on standardized math tests, the skill the state math test measures.",
-   "evidence": "strong",
-   "evidenceScope": "for the tutoring model only",
-   "modelMatch": "Tutoring during the school day by paid, trained tutors (teachers or paraprofessionals), at least three sessions a week, one-to-one or small groups, with math as the content. A partner coded Mathematics (Y1.3) that does not run this model gets no evidence level from this link.",
-   "conditions": "Tutoring by trained teachers or paraprofessionals, during the school day, at least three sessions a week, one-to-one or in small groups; volunteer tutoring counts only with a smaller expected gain; plan on the at-scale size, not the pooled size.",
-   "typicalEffect": "Pooled gain of 0.27 standard deviations on math tests across randomized trials; large United States programs about 0.16 to 0.21 standard deviations.",
+   "pathway": "Tutoring programs that build children's math skills raise scores on math tests, but at scale the gain on state tests is small or not detectable.",
+   "evidence": "good",
+   "modelMatch": "Tutoring by trained, paid tutors (teachers, paraprofessionals or national service members such as Math Corps), during the school day, at least three sessions a week, one-to-one or small groups, using a structured math curriculum. Volunteer tutoring and tutoring offered only before or after school do not qualify.",
+   "conditions": "Tutoring by trained, paid tutors (teachers, paraprofessionals or national service members such as Math Corps), during the school day, at least three sessions a week, one-to-one or small groups, using a structured math curriculum. Volunteer tutoring and tutoring offered only before or after school do not qualify.",
+   "typicalEffect": "Math Corps randomized trials: 0.17 (0.24 at intended dosage) and about 0.18 on broad math tests; the state test was not significantly different in the grades 4 to 8 and statewide trials. A matched study of another tutoring corps: 0.10. Early-grade protocols: Number Rockets 0.34, Pirate Math 0.37, fractions tutoring 0.51, small-group early math 0.19 (researcher or national tests). Tutoring meta-analysis 0.36. Recovery-era study: one tutoring program 0.22 on state math. Nashville at scale: no average math effect. Volunteer tutoring: math not significant. Plan on 0 to 0.10 on the state test.",
    "magnitude": "At 0.16 to 0.21 standard deviations, about 5 to 7 more participants in 100 reach proficient on the grades 3-8 math test (base rate about 25 percent) and about 6 to 8 in 100 in grade 3 (base rate about 34 percent). If the partner tutors 10 percent of a school's tested students, the school rate rises about 0.5 to 0.8 percentage points.",
-   "caveats": "Outcomes were not the Pennsylvania test. At scale, effects are a third to a half of the full-sample size. Smaller for after-school and nonprofessional tutors. Bounded by the structured after-school math result that faded and the 21st Century Community Learning Centers null.",
+   "caveats": "Most gains are on non-state tests; the two Math Corps trials that used the state test found no significant difference.",
    "philadelphia": {
     "found": false
    },
    "studies": [
     "Nickow, A., Oreopoulos, P., & Quan, V. (2020). The Impressive Effects of Tutoring on PreK-12 Learning: A Systematic Review and Meta-Analysis of the Experimental Evidence. NBER Working Paper 27476. Published as Nickow, Oreopoulos & Quan (2024), The Promise of Tutoring for PreK-12 Learning: A Systematic Review and Meta-Analysis of the Experimental Evidence, American Educational Research Journal, doi:10.3102/00028312231208687",
-    "Kraft, M. A., Schueler, B. E., & Falken, G. T. (2024). What Impacts Should We Expect from Tutoring at Scale? Exploring Meta-Analytic Generalizability. EdWorkingPaper No. 24-1031, Annenberg Institute at Brown University. https://doi.org/10.26300/zygj-m525"
+    "Kraft, M. A., Schueler, B. E., & Falken, G. T. (2024). What Impacts Should We Expect from Tutoring at Scale? Exploring Meta-Analytic Generalizability. EdWorkingPaper No. 24-1031, Annenberg Institute at Brown University. https://doi.org/10.26300/zygj-m525",
+    "Kraft, M. A., Edwards, D. S., & Cannata, M. (2024). The Scaling Dynamics and Causal Effects of a District-Operated Tutoring Program. EdWorkingPaper No. 24-1030. Annenberg Institute, Brown University (ERIC ED672280).",
+    "Carbonari, M. V., DeArmond, M., Dewey, D., Dizon-Ross, E., Goldhaber, D., Kane, T. J., McDonald, A., McEachin, A., Morton, E., Muroga, A., Salazar, A., & Staiger, D. O. (2026). Impacts of Academic Recovery Interventions on Student Achievement in 2022 to 2023. Educational Evaluation and Policy Analysis, 48(3), 1045-1072.",
+    "Parker, D. C., Nelson, P. M., Zaslofsky, A. F., Kanive, R., Foegen, A., Kaiser, P., & Heisted, D. (2019). Evaluation of a Math Intervention Program Implemented with Community Support. Journal of Research on Educational Effectiveness, 12(3), 391-412.",
+    "Codding, R. S., Nelson, P. M., Parker, D. C., Edmunds, R., & Klaft, J. (2022). Examining the impact of a tutoring program implemented with community support on math proficiency and growth. Journal of School Psychology, 90, 82-93. doi:10.1016/j.jsp.2021.11.002",
+    "ServeMinnesota (2018). A year-long state-wide RCT of the Minnesota Math Corps: Final report to Laura and John Arnold Foundation. https://osf.io/7s4bv/",
+    "Robles, S., O'Connell, K., Gothro, A., & Place, K. (2023). Math Corps' Tutoring Program: Math Knowledge Impacts and Participant Math Perceptions. Middle Years Math Grantee Report Series. Mathematica (ERIC ED628647).",
+    "Evidence for ESSA program record: GO Tutor Corps High-Impact Math Tutoring (key study: GO Tutor Corps Research Team, 2025, Evaluation of High-Impact Math Tutoring Program: Impact on Student Gains. Author).",
+    "Gersten, R., Rolfhus, E., Clarke, B., Decker, L. E., Wilkins, C., & Dimino, J. (2015). Intervention for First Graders With Limited Number Knowledge: Large-Scale Replication of a Randomized Controlled Trial. American Educational Research Journal, 52(3), 516-546.",
+    "Evidence for ESSA program record: Whole Number Foundations (formerly ROOTS/Fusion); key studies Clarke et al. 2014, 2020, 2022, 2023; Doabler et al. 2024.",
+    "Fuchs, L. S., Powell, S. R., Seethaler, P. M., Cirino, P. T., Fletcher, J. M., Fuchs, D., & Hamlett, C. L. (2010). The effects of strategic counting instruction, with and without deliberate practice, on number combination skill among students with mathematics difficulties. Learning and Individual Differences, 20(2), 89-100.",
+    "Fuchs, L. S., Schumacher, R. F., Long, J., Namkung, J., Malone, A. S., Wang, A., Hamlett, C. L., Jordan, N. C., Siegler, R. S., & Changas, P. (2016). Effects of intervention to improve at-risk fourth graders' understanding, calculations, and word problems with fractions. Elementary School Journal, 116(4), 625-651.",
+    "Dietrichson, J., Filges, T., Seerup, J. K., Klokker, R. H., Viinholt, B. C. A., Bøg, M., & Eiberg, M. (2021). Targeted school-based interventions for improving reading and mathematics for students with or at risk of academic difficulties in Grades K-6: A systematic review. Campbell Systematic Reviews, 17(2), e1152.",
+    "Dietrichson, J., Bøg, M., Filges, T., & Klint Jørgensen, A.-M. (2017). Academic Interventions for Elementary and Middle School Students With Low Socioeconomic Status: A Systematic Review and Meta-Analysis. Review of Educational Research, 87(2), 243-282.",
+    "Ritter, G. W., Barnett, J. H., Denny, G. S., & Albin, G. R. (2009). Review of Educational Research, 79(1), 3-38. doi:10.3102/0034654308325690; Campbell version: Ritter et al. (2006), doi:10.4073/csr.2006.7"
    ],
    "links": [
     {
@@ -199,11 +274,67 @@
     },
     {
      "url": "https://edworkingpapers.com/sites/default/files/Tutoring%20Meta-Analysis%20Oct%202024_unblinded.pdf"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:ED672280"
+    },
+    {
+     "url": "https://api.crossref.org/works/10.3102/01623737251400377"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ1229044"
+    },
+    {
+     "url": "https://ies.ed.gov/ncee/wwc/Study/94412"
+    },
+    {
+     "url": "https://ies.ed.gov/ncee/wwc/Study/90323"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED628647.pdf"
+    },
+    {
+     "url": "https://www.evidenceforessa.org/program/go-tutor-corps-high-impact-math-tutoring/"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ1063565"
+    },
+    {
+     "url": "https://www.evidenceforessa.org/program/roots/"
+    },
+    {
+     "url": "https://www.evidenceforessa.org/program/pirate-math/"
+    },
+    {
+     "url": "https://www.evidenceforessa.org/program/fraction-face-off/"
+    },
+    {
+     "url": "https://api.crossref.org/works/10.1002/cl2.1152"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ1133345"
+    },
+    {
+     "url": "https://api.crossref.org/works/10.3102/0034654308325690"
     }
    ],
    "claims": [
     "V-001",
-    "V-002"
+    "V-002",
+    "M-001",
+    "M-002",
+    "M-004",
+    "M-005",
+    "M-006",
+    "M-007",
+    "M-008",
+    "M-009",
+    "M-010",
+    "M-011",
+    "M-012",
+    "M-013",
+    "M-014",
+    "R-010"
    ]
   },
   {
@@ -215,19 +346,25 @@
     "S10"
    ],
    "contribution": "direct",
-   "pathway": "Daily small-group math tutoring in ninth and tenth grade raises high school math test scores, the skill the Algebra I end-of-course exam measures.",
+   "pathway": "Daily small-group math tutoring, scheduled as a class period in ninth and tenth grade, raises high school math test scores, including New York's Algebra I end-of-course exam.",
    "evidence": "good",
-   "modelMatch": "Daily math tutoring during a school-day class period, two students per paid, trained tutor, for students in grades 9 and 10 (the Saga model, about 40 minutes of tutoring a day).",
-   "conditions": "Daily in-school math tutoring, one class period a day, two students per paid and trained tutor, for students in grades 9 and 10.",
-   "typicalEffect": "0.16 standard deviations (first trial, boys only) and 0.37 standard deviations (replication) on math tests for students who took part; 0.18 to 0.40 standard deviations in the journal version. These are effects on participants; the effect of offering the program to all eligible students is smaller and was not retrieved in the checked evidence.",
-   "magnitude": "For participants, 0.16 to 0.37 standard deviations would move about 4 to 10 more in 100 to proficient on an exam where about 15.5 percent are proficient, if the effect carried over to the Keystone exam, which no study tested. Tutoring a quarter of a school's Algebra I takers would add about 1 to 2.5 percentage points to the school rate.",
-   "caveats": "One program (Saga) in Chicago; the first trial enrolled boys only. The test was not the Keystone Algebra I exam. Tutoring was about 40 minutes a day, not a full hour. The general tutoring meta-analysis supports math gains but found larger effects in earlier grades.",
+   "modelMatch": "A tutoring period every school day, built into the school schedule, with paid, trained tutors and groups of two to four students. A version that alternates tutor days with computer practice was tested in one randomized trial. A fully online version rests on one matched comparison only.",
+   "conditions": "A tutoring period every school day, built into the school schedule, with paid, trained tutors and groups of two to four students. A version that alternates tutor days with computer practice was tested in one randomized trial. A fully online version rests on one matched comparison only.",
+   "typicalEffect": "Average 0.14 (three trials: 0.09, 0.14, 0.19); technology-blended version 0.23 for participants at about 30 percent lower cost. Meta-analysis: small-group instruction 0.38, math tests 0.34.",
+   "magnitude": "In the trial, students offered tutoring scored 0.19 standard deviations higher on end-of-year standardized math tests (one cohort; Regents exams in New York, the PSAT in Chicago). In the online version's matched comparison, 8 more students in 100 passed New York's Algebra I exam by the end of ninth grade (39 versus 31 percent). For participants, 0.16 to 0.37 standard deviations would move about 4 to 10 more in 100 to proficient on an exam where about 15.5 percent are proficient, if the effect carried over to the Keystone exam, which no study tested. Tutoring a quarter of a school's Algebra I takers would add about 1 to 2.5 percentage points to the school rate.",
+   "caveats": "Outcomes are district or national tests, not the Keystone exam. Population was mostly entering ninth graders. The online version showed weaker effects for boys and for students who entered high school far behind. New York's Regents passing score is not the Keystone proficiency cut, so these rates do not translate into Keystone rates. The program needs a slot in the school day, so a partner runs it with a school, not on its own.",
    "philadelphia": {
     "found": false
    },
    "studies": [
     "Guryan, J., Ludwig, J., Bhatt, M. P., Cook, P. J., Davis, J. M. V., Dodge, K., Farkas, G., Fryer, R. G. Jr, Mayer, S., Pollack, H., & Steinberg, L. (2021). Not Too Late: Improving Academic Outcomes Among Adolescents. Becker Friedman Institute Working Paper No. 2021-30 (March 2021); published as Guryan, Ludwig, Bhatt, Cook, Davis, Dodge, Farkas, Fryer, Mayer, Pollack, Steinberg & Stoddard (2023), American Economic Review",
-    "Nickow, A., Oreopoulos, P., & Quan, V. (2020). The Impressive Effects of Tutoring on PreK-12 Learning: A Systematic Review and Meta-Analysis of the Experimental Evidence. NBER Working Paper 27476. Published as Nickow, Oreopoulos & Quan (2024), The Promise of Tutoring for PreK-12 Learning: A Systematic Review and Meta-Analysis of the Experimental Evidence, American Educational Research Journal, doi:10.3102/00028312231208687"
+    "Nickow, A., Oreopoulos, P., & Quan, V. (2020). The Impressive Effects of Tutoring on PreK-12 Learning: A Systematic Review and Meta-Analysis of the Experimental Evidence. NBER Working Paper 27476. Published as Nickow, Oreopoulos & Quan (2024), The Promise of Tutoring for PreK-12 Learning: A Systematic Review and Meta-Analysis of the Experimental Evidence, American Educational Research Journal, doi:10.3102/00028312231208687",
+    "Bhatt, M. P., Guryan, J., Khan, S. A., LaForest-Tucker, M., & Mishra, B. (2024). Can Technology Facilitate Scale? Evidence from a Randomized Evaluation of High Dosage Tutoring. NBER Working Paper 32510.",
+    "Evidence for ESSA program record: Saga Math (key studies Guryan et al. 2023, AER 113(3); Bhatt et al. 2024, NBER WP 32510).",
+    "Dietrichson, J., Filges, T., Klokker, R. H., Viinholt, B. C. A., Bøg, M., & Jensen, U. H. (2020). Targeted school-based interventions for improving reading and mathematics for students with, or at risk of, academic difficulties in Grades 7-12: A systematic review. Campbell Systematic Reviews, 16(2), e1081.",
+    "Kraft, M. A. (2015). How to Make Additional Time Matter: Integrating Individualized Tutorials into an Extended Day. Education Finance and Policy, 10(1), 81-116.",
+    "Bhatt, M. P., Guryan, J., Khan, S. A., LaForest-Tucker, M., & Mishra, B. (2024). Can Technology Facilitate Scale? Evidence from a Randomized Evaluation of High Dosage Tutoring. NBER Working Paper 32510.",
+    "Miller, C., Solís-Román, C., & Grossman, J. (2026). Expanding High-Dosage Tutoring: Evidence from Saga's Live-Online Math Model. MDRC."
    ],
    "links": [
     {
@@ -241,11 +378,36 @@
     },
     {
      "url": "https://nssa.stanford.edu/studies/promise-tutoring-prek-12-learning-systematic-review-and-metaanalysis-experimental-evidence"
+    },
+    {
+     "url": "https://www.nber.org/papers/w32510"
+    },
+    {
+     "url": "https://www.evidenceforessa.org/program/saga-math/"
+    },
+    {
+     "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pmc&id=8356291"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ1049742"
+    },
+    {
+     "url": "https://www.nber.org/system/files/working_papers/w32510/w32510.pdf"
+    },
+    {
+     "url": "https://www.mdrc.org/work/publications/expanding-high-dosage-tutoring-saga-education"
     }
    ],
    "claims": [
     "V-003",
-    "V-001"
+    "V-001",
+    "M-015",
+    "M-016",
+    "M-017",
+    "M-018",
+    "KV-003",
+    "KV-003b",
+    "KV-002"
    ]
   },
   {
@@ -265,14 +427,13 @@
     "S8"
    ],
    "contribution": "direct",
-   "pathway": "Universal social and emotional learning curricula taught during the school day raise students' test scores and grades slightly.",
-   "evidence": "good",
-   "evidenceScope": "for universal school-day programs",
-   "modelMatch": "A named, structured social and emotional learning curriculum (for example Second Step, Positive Action or Caring School Community) taught to whole classes during the school day, sequenced lessons with active practice, for at least a school year. Skill outcomes reported by an enrichment program do not qualify.",
-   "conditions": "Only for a universal, structured social and emotional learning curriculum delivered during the school day, following the four recommended practices (sequenced, active, focused, explicit). The out-of-school-time version is a separate, not-recommended row. Domain-only statements (Social and emotional skills, Y4) carry no achievement link.",
-   "typicalEffect": "About 0.10 standard deviations across test scores and grades combined (2025 meta-analysis, grades 1-12); 11 percentile points on academic performance (2011 meta-analysis). The evidence is for teacher-delivered classroom curricula, not for skill gains that partners report.",
+   "pathway": "Universal social and emotional learning curricula taught during the school day raise students' test scores slightly, and the gain is smaller in the largest, most rigorous trials than in earlier reviews.",
+   "evidence": "suggestive",
+   "modelMatch": "A universal, sequenced social and emotional learning curriculum taught to whole classes during the school day by trained teachers or partner staff, for at least a full school year. After-school or pull-out social skills groups and one-off assemblies do not qualify.",
+   "conditions": "A universal, sequenced social and emotional learning curriculum taught to whole classes during the school day by trained teachers or partner staff, for at least a full school year. After-school or pull-out social skills groups and one-off assemblies do not qualify.",
+   "typicalEffect": "Meta-analysis of school-based programs: overall 0.08 standard deviations (math 0.08, English 0.07), smaller in randomized trials than in quasi-experiments. Another meta-analysis: reading 0.25 and math 0.26, with smaller effects in large rigorous randomized trials. Positive Action in Chicago: the authors report a marginal math gain, the clearinghouse finds state reading and math not significant, and absenteeism improved. Positive Action in Hawaii: large gains per the authors, not significant in the clearinghouse review. INSIGHTS: early gains faded by middle school. A classroom social skills program: no main effects. Plan on 0.05 to 0.08 on state tests.",
    "magnitude": "At 0.10 standard deviations, about 3 to 4 more students in 100 reach proficient on the grades 3-8 English language arts or math test. Because the model is whole-class, a school where every class uses the curriculum could see a rise of that order; a partner teaching one grade of six would add about 0.5 to 0.6 percentage points to a school's grades 3-8 rate. Publication bias makes the true figure likely smaller.",
-   "caveats": "The share of randomized studies was not confirmed. Achievement mixes grades and tests, and no study used the state tests or the Keystone exams. Pooled effects are likely inflated by publication bias. Communication (Y4.6) and Teamwork (Y4.7) are left out because no study tested them against an indicator. The domain-only code Y4 was removed on the methods reviewer's advice.",
+   "caveats": "The federal seven-program social and emotional learning trial could not use test scores (it used rating scales), so it neither supports nor refutes this link. A science effect (0.06) rests on three estimates and is not added. Program developers ran several of the positive trials.",
    "philadelphia": {
     "found": false
    },
@@ -280,7 +441,17 @@
     "Durlak, J. A., Weissberg, R. P., Dymnicki, A. B., Taylor, R. D., & Schellinger, K. B. (2011). The impact of enhancing students' social and emotional learning: A meta-analysis of school-based universal interventions. Child Development, 82(1), 405-432. doi:10.1111/j.1467-8624.2010.01564.x",
     "Ha, C., McCarthy, M. F., Strambler, M. J., & Cipriano, C. (2025). Disentangling the effects of social and emotional learning programs on student academic achievement across grades 1-12: A systematic review and meta-analysis. Review of Educational Research. Prepublished October 9, 2025. https://doi.org/10.3102/00346543251367769",
     "Cipriano, C., Strambler, M. J., Naples, L. H., Ha, C., Kirk, M., Wood, M., Sehgal, K., Zieher, A. K., Eveleigh, A., McCarthy, M., Funaro, M., Ponnock, A., Chow, J. C., & Durlak, J. (2023). The state of evidence for social and emotional learning: A contemporary meta-analysis of universal school-based SEL interventions. Child Development, 94(5), 1181-1204. doi:10.1111/cdev.13968",
-    "Durlak, J. A., Weissberg, R. P., & Pachan, M. (2010). A Meta-Analysis of After-School Programs That Seek to Promote Personal and Social Skills in Children and Adolescents. American Journal of Community Psychology, 45, 294-309. doi:10.1007/s10464-010-9300-6"
+    "Durlak, J. A., Weissberg, R. P., & Pachan, M. (2010). A Meta-Analysis of After-School Programs That Seek to Promote Personal and Social Skills in Children and Adolescents. American Journal of Community Psychology, 45, 294-309. doi:10.1007/s10464-010-9300-6",
+    "Social and Character Development Research Consortium (2010). Efficacy of Schoolwide Programs to Promote Social and Character Development and Reduce Problem Behavior in Elementary School Children (NCER 2011-2001). ERIC lists Ruby, A., & Doolittle, E.",
+    "Bavarian, N., Lewis, K. M., DuBois, D. L., Acock, A., Vuchinich, S., Silverthorn, N., Snyder, F. J., Day, J., Ji, P., & Flay, B. R. (2013). Journal of School Health, 83(11), 771-779 (ERIC EJ1026798).",
+    "Duncan, R., Washburn, I. J., Lewis, K. M., Bavarian, N., DuBois, D. L., Acock, A. C., Vuchinich, S., & Flay, B. R. (2016). Can Universal SEL Programs Benefit Universally? Effects of the Positive Action Program on Multiple Trajectories of Social-Emotional and Misconduct Behaviors. Grantee Submission (ERIC ED590411).",
+    "Zhao, Y., & Sang, B. (2025). The Effect of Social-Emotional Learning Programs on Elementary and Middle School Students' Academic Achievement: A Meta-Analytic Review. Behavioral Sciences, 15(11), 1527.",
+    "Hart, S. C., DiPerna, J. C., Lei, P.-W., Sun, T., & Zhao, H. (2025). Real-world universal SEL and academic outcomes: An effectiveness trial in second grade. The Journal of Educational Research, 119(6), 707-721.",
+    "Zhu, P., Nash, P., Solis-Roman, C., Commins, N., & Martinez, L. (2026). Does an Early Social-Emotional Learning Program Have Lasting Academic Effects through High School? MDRC (ERIC ED681730).",
+    "Corcoran, R. P., Cheung, A. C. K., Kim, E., & Xie, C. (2018). Effective universal school-based social and emotional learning programs for improving academic achievement: A systematic review and meta-analysis of 50 years of research. Educational Research Review, 25, 56-72.",
+    "Schonfeld, D. J., Adams, R. E., Fredstrom, B. K., Weissberg, R. P., Gilman, R., Voyce, C., Tomlin, R., & Speese-Linehan, D. (2015). School Psychology Quarterly, 30(3), 406-420 (ERIC EJ1167885).",
+    "Snyder, F., Flay, B., Vuchinich, S., Acock, A., Washburn, I., Beets, M., & Li, K.-K. (2010). JREE, 3(1), 26-55 (ERIC EJ877222).",
+    "Zhao, Y., & Sang, B. (2025). The effect of social-emotional learning programs on elementary and middle school students' academic achievement: A meta-analytic review. Behavioral Sciences, 15(11), 1527. doi:10.3390/bs15111527."
    ],
    "links": [
     {
@@ -306,52 +477,50 @@
     {
      "url": "https://files.eric.ed.gov/fulltext/ED505368.pdf",
      "note": "2007 CASEL report"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED512329.pdf"
+    },
+    {
+     "url": "https://ies.ed.gov/ncee/wwc/Study/81474"
+    },
+    {
+     "url": "https://ies.ed.gov/ncee/wwc/Study/89360"
+    },
+    {
+     "url": "https://api.crossref.org/works/10.3390/bs15111527"
+    },
+    {
+     "url": "https://api.openalex.org/works/doi:10.1080/00220671.2025.2568068"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/"
+    },
+    {
+     "url": "https://api.semanticscholar.org/graph/v1/paper/DOI:10.1016/j.edurev.2017.12.001"
+    },
+    {
+     "url": "https://ies.ed.gov/ncee/wwc/Study/81439"
+    },
+    {
+     "url": "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC12649258/fullTextXML"
     }
    ],
    "claims": [
     "V-027",
     "V-028",
     "V-030",
-    "V-015"
-   ]
-  },
-  {
-   "id": "L-17",
-   "codes": [
-    "Y3.1"
-   ],
-   "indicators": [
-    "S1"
-   ],
-   "contribution": "direct",
-   "pathway": "Brief classroom exercises that frame worries about belonging as normal at the start of middle school cut absences.",
-   "evidence": "good",
-   "evidenceScope": "single trial",
-   "modelMatch": "Two brief, scripted classroom writing exercises at the start of middle school that frame worries about belonging as normal and temporary, delivered to whole sixth-grade classes. We expect this to be rare among partners.",
-   "conditions": "Only for the structured belonging and reappraisal writing exercises given at a school transition (two short sessions in sixth grade); not for general reports that youth feel they belong.",
-   "typicalEffect": "12 percent fewer absences than the control group, plus 18 percent fewer D and F grades and 34 percent fewer behavior referrals; cost about 1.35 dollars per student.",
-   "magnitude": "The effect is 12 percent fewer absences, a relative change: about 2 days for a sixth grader with 15 absences. The indicator counts students at or above 90 percent of days (no more than about 18 absences in a 180-day year), so it moves only for students within about two days of that line. Illustration: if one sixth grader in ten crosses the line in a middle school with three grades, the school rate rises about 3 points for sixth grade and about 1 point overall.",
-   "caveats": "One district-wide trial (11 middle schools in a Midwestern district). The absence figure is a relative change, not attendance-rate points.",
-   "philadelphia": {
-    "found": false
-   },
-   "studies": [
-    "Borman, G. D., Rozek, C. S., Pyne, J., & Hanselman, P. (2019). Reappraising academic and social adversity improves middle school students' academic achievement, behavior, and well-being. Proceedings of the National Academy of Sciences, 116(33), 16286-16291. https://doi.org/10.1073/pnas.1820317116"
-   ],
-   "links": [
-    {
-     "url": "https://pubmed.ncbi.nlm.nih.gov/31358624/"
-    },
-    {
-     "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6697885/",
-     "note": "PMC6697885 full text"
-    },
-    {
-     "url": "https://www.arnoldventures.org/stories/a-randomized-controlled-trial-of-a-social-belonging-mindset-intervention-for-students-entering-middle-school"
-    }
-   ],
-   "claims": [
-    "V-034"
+    "V-015",
+    "M-064",
+    "M-065",
+    "M-066",
+    "M-067",
+    "M-068",
+    "M-069",
+    "M-070",
+    "M-071",
+    "M-072",
+    "T-012"
    ]
   },
   {
@@ -438,14 +607,13 @@
     "S1"
    ],
    "contribution": "direct",
-   "pathway": "Personalized messages to parents about their own child's absences correct parents' underestimates, and their children then miss fewer days.",
+   "pathway": "Personalized messages to families about their own child's absences (mailings, texts or teacher-written postcards) correct parents' underestimates, and their children then miss fewer days.",
    "evidence": "strong",
-   "evidenceScope": "for the messaging model",
-   "modelMatch": "Repeated, personalized mailings, postcards or texts to a family about their own child's absences, drawn from school records under a data-sharing agreement. General family events and engagement policies do not qualify.",
-   "conditions": "Only for personalized information sent to families about their own child's absences (mailings, postcards or texts), which requires access to the child's school attendance records.",
-   "typicalEffect": "Chronic absence down 10 to 15 percent; total absences down 2.4 percent (single postcard, Philadelphia), 6 percent (best mailing, Philadelphia) and 1.9 percent across six district-run trials; class attendance up 12 percent with weekly texts.",
+   "modelMatch": "Repeated, personalized messages naming the child's own absences or missed learning, drawn from school records under a data-sharing agreement. A single letter at the 90-percent line, a standard legalistic truancy notice or general family events do not qualify.",
+   "conditions": "Repeated, personalized messages naming the child's own absences or missed learning, drawn from school records under a data-sharing agreement. A single letter at the 90-percent line, a standard legalistic truancy notice or general family events do not qualify.",
+   "typicalEffect": "Texting trial in 4 urban districts (26,843 students, kindergarten to grade 5): chronic absence 2.4 to 3.6 percentage points lower from 20.5 percent (12 to 18 percent), 3.5 to 7.3 points lower for students with high prior absence, at about 6 to 9 dollars per student. 47 rural districts in 16 states: absences down 1.7 percent for the offer (about 0.2 days) and 4.5 percent for families reached (about half a day), at 4.07 dollars per student. Teacher postcards, preschool to grade 2: absences down 8.3 percent. Teacher-parent outreach in grades 1-2 in five schools: 5 to 6 points fewer students with 4 or more absences. Redesigned truancy notices: 0.07 fewer days absent than the standard notice.",
    "magnitude": "Plan on about 2 percent fewer absences at scale (1.9 percent across six district-run trials), about 0.3 days for a student with 15 absences, which barely moves the 90-percent share. The best Philadelphia arm cut chronic absence from 36.0 to 31.9 percent among high-risk students who got mailings, about 4 points; if such students were a third of a school, that would be a little over 1 point on the school rate. Treat 1 point as an upper planning figure.",
-   "caveats": "Messages came from districts, not partners. Family Connection and Trust with the Program (F1.8) was removed: trust was not tested. The postcard trial's window was 43 school days. The comparison with earlier effect sizes in the six-trial study could not be checked.",
+   "caveats": "Effects are small per student and smaller at scale. A single nudge letter at the 90-percent line had no overall effect (a middle school subgroup improved). Texts about grades and attendance in grades 6-11 in one Midwest district did not change chronic absence. Partners need record access through the school or district.",
    "philadelphia": {
     "found": true,
     "note": "Rogers and Feller 2018 (28,080 students, 203 Philadelphia schools); Rogers et al. 2017 postcard trial"
@@ -455,7 +623,14 @@
     "Rogers, T., Duncan, T., Wolford, T., Ternovski, J., Subramanyam, S., & Reitano, A. (2017). A randomized experiment using absenteeism information to \"nudge\" attendance (REL 2017-252). Washington, DC: U.S. Department of Education, IES, NCEE, Regional Educational Laboratory Mid-Atlantic.",
     "Robinson, C. D., Lee, M. G., Dearing, E., & Rogers, T. (2018). Reducing student absenteeism in the early grades by targeting parental beliefs. American Educational Research Journal, 55(6), 1163-1192. https://doi.org/10.3102/0002831218772274",
     "Berger, Bolyard, Hersh, Sanbonmatsu, Staiger, & Kane (2025). Can Personalized Attendance Information Mitigate Student Absenteeism? Evidence from Six Randomized Field Trials. Journal of Research on Educational Effectiveness (published online 18 Nov 2025). doi:10.1080/19345747.2025.2537112",
-    "Bergman, P., & Chan, E. W. (2021). Leveraging parents through low-cost technology: The impact of high-frequency information on student achievement. Journal of Human Resources, 56(1), 125-158. doi:10.3368/jhr.56.1.1118-9837R1"
+    "Bergman, P., & Chan, E. W. (2021). Leveraging parents through low-cost technology: The impact of high-frequency information on student achievement. Journal of Human Resources, 56(1), 125-158. doi:10.3368/jhr.56.1.1118-9837R1",
+    "Heppen, J. B., Kurki, A., & Brown, S. (2020). Can Texting Parents Improve Attendance in Elementary School? A Test of an Adaptive Messaging Strategy (NCEE 2020-006). IES. ERIC ED607613.",
+    "Swanson, E., Thompson, S., Ash, J., Didriksen, H., Kane, T. J., Staiger, D. O., & Sanbonmatsu, L. (2026). Lifting Up Attendance in Rural Districts: A Multi-Site Trial of a Personalized Messaging Campaign. Educational Evaluation and Policy Analysis. doi:10.3102/01623737261438143 (working paper: EdWorkingPaper 25-1189, 2025).",
+    "Himmelsbach, Z., Weisenfeld, D., Lee, J. R., Hersh, D., Sanbonmatsu, L., Staiger, D. O., & Kane, T. J. (2022). Your Child Missed Learning the Alphabet Today. Journal of Research on Educational Effectiveness, 15(2), 263-278.",
+    "Cook, P. J., Dodge, K. A., Gifford, E. J., & Schulting, A. B. (2017). A new program to prevent primary school absenteeism: Results of a pilot study in five schools. Children and Youth Services Review, 82, 262-270.",
+    "Mac Iver, M. A., Wills, K., Cruz, A., & Mac Iver, D. J. (2021/2022). The Impact of Nudge Letters on Improving Attendance in an Urban District. Education and Urban Society, 54(2), 164-185.",
+    "Lasky-Fink, J., Robinson, C. D., Chang, H. N.-L., & Rogers, T. (2021). Using Behavioral Insights to Improve School Administrative Communications: The Case of Truancy Notifications. Educational Researcher, 50(7), 442-450.",
+    "Bergman, P., Edmond-Verley, C., & Notario-Risk, N. (2018). Parent skills and information asymmetries: Experimental evidence from home visits and text messages in middle and high schools. Economics of Education Review, 66, 92-103."
    ],
    "links": [
     {
@@ -495,6 +670,27 @@
     },
     {
      "url": "https://www.povertyactionlab.org/node/2353"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED607613.pdf"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED673996.pdf"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ1349892"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED582897.pdf"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ1328108"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ1314168"
+    },
+    {
+     "url": "https://ies.ed.gov/ncee/wwc/Study/94820"
     }
    ],
    "claims": [
@@ -502,7 +698,14 @@
     "V-051",
     "V-052",
     "V-053",
-    "V-054"
+    "V-054",
+    "P-014",
+    "P-015",
+    "P-016",
+    "P-017",
+    "P-018",
+    "P-019",
+    "P-020"
    ]
   },
   {
@@ -515,13 +718,13 @@
     "S1"
    ],
    "contribution": "direct",
-   "pathway": "Community schools that coordinate health, family and learning services on site cut chronic absence.",
-   "evidence": "good",
-   "modelMatch": "The partner is the lead agency or full-time coordinator of a whole-school community school, with on-site health, family and learning services, sustained for at least three years. Credit belongs at the organization level, not to individual outcome statements.",
-   "conditions": "Only when the partner is the lead agency or coordinator of a whole-school community school (a coordinator plus on-site services) sustained for three years. Cross-Sector Partnerships (A3.2) and Access to Resources (A2.3) statements alone do not qualify.",
-   "typicalEffect": "Chronic absence down 7.4 percentage points (elementary and middle) and 8.3 points (high school), three-year average.",
+   "pathway": "Community schools that coordinate health, family and learning services on site cut chronic absence in New York City and California, but not in Tennessee.",
+   "evidence": "suggestive",
+   "modelMatch": "The partner is the lead agency or full-time coordinator of a whole-school community school, with on-site health, family and learning services, sustained at least three years.",
+   "conditions": "The partner is the lead agency or full-time coordinator of a whole-school community school, with on-site health, family and learning services, sustained at least three years.",
+   "typicalEffect": "New York City: chronic absence down 7.4 percentage points (elementary and middle) and 8.3 (high school), three-year average. California (matched schools, first full year): chronic absence fell 1.5 points more than in matched schools (about 30 percent more), 2.8 points in elementary schools. Tennessee (statewide, staggered adoption): chronic absence rose 1.3 points (5.9 percent). Plan on the California size, not the New York City size.",
    "magnitude": "The school is the treated unit. Chronic absence fell 7.4 percentage points (elementary and middle) and 8.3 points (high school) on a three-year average. Because chronic absence is close to the complement of this indicator, the school's 90-percent share would rise by roughly 7 to 8 points if the New York City result carried over. This is the largest school-level effect in the map, and it is for the whole model, not one partner.",
-   "caveats": "Matched comparison schools, not randomized; New York City model (its funding level was not in the checked evidence). All community schools had positive effects, with Renewal schools strongest. Philadelphia's own initiative has no impact estimate: its year 1 evaluation found broad outcomes without measures.",
+   "caveats": "The Tennessee estimate is less certain because of pre-existing trends. Massachusetts Wraparound Zones, a lighter model, showed no attendance effect. Case management in Kalamazoo elementary schools improved attendance (size not checked), unlike the national case-management trial of integrated student supports.",
    "philadelphia": {
     "found": false,
     "note": "the Philadelphia Community Schools Initiative year 1 evaluation made no impact estimate"
@@ -529,7 +732,11 @@
    "studies": [
     "Johnston, W. R., Engberg, J., Opper, I. M., Sontag-Padilla, L., & Xenakis, L. (2020). Illustrating the Promise of Community Schools: An Assessment of the Impact of the New York City Community Schools Initiative. RAND Corporation, RR-3245-NYCCEO (brief RB-10107)",
     "Johnston, W. R., Engberg, J., Opper, I. M., Sontag-Padilla, L., & Xenakis, L. (2020). What Is the Impact of the New York City Community Schools Initiative? RAND Corporation, RB-10107-NYCCEO (research brief summarizing \"Illustrating the Promise of Community Schools: An Assessment of the Impact of the New York City Community Schools Initiative,\" RR-3245).",
-    "Duffy, M., & Turner, A. (2018, October). The Philadelphia Community Schools Initiative: Year 1 Evaluation. Philadelphia: Research for Action."
+    "Duffy, M., & Turner, A. (2018, October). The Philadelphia Community Schools Initiative: Year 1 Evaluation. Philadelphia: Research for Action.",
+    "Truwit, M. (2025). Investigating the promise of integrated student supports: An evaluation of the community school model in Tennessee. Peabody Journal of Education, 100(2), 252-282. https://doi.org/10.1080/0161956X.2025.2483144",
+    "Swain, W., Leung-Gagne, M., Maier, A., & Rubinstein, C. (2025). Community schools impact on student outcomes: Evidence from California. Learning Policy Institute (report ERIC ED678895; brief ED678896).",
+    "Gandhi, A. G., Slama, R., Park, S. J., Russo, P., Winner, K., Bzura, R., Jones, W., & Williamson, S. (2018). Focusing on the Whole Student: An Evaluation of Massachusetts's Wraparound Zone Initiative. Journal of Research on Educational Effectiveness, 11(2), 240-266.",
+    "Eberts, R. W., & Brown, Z. (2022). Evaluation of Communities in Schools of Kalamazoo. Upjohn Institute Technical Report No. 22-042. W. E. Upjohn Institute for Employment Research. ERIC ED623570."
    ],
    "links": [
     {
@@ -546,12 +753,28 @@
     },
     {
      "url": "https://whyy.org/articles/phillys-community-schools-initiative-a-mixed-bag-so-far-report-says/"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED681409.pdf"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED678896.pdf"
+    },
+    {
+     "url": "https://api.openalex.org/works/doi:10.1080/19345747.2017.1413691"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:ED623570"
     }
    ],
    "claims": [
     "V-103",
     "V-107",
-    "V-108"
+    "V-108",
+    "P-061",
+    "P-062",
+    "P-063",
+    "P-064"
    ]
   },
   {
@@ -564,21 +787,22 @@
     "S4"
    ],
    "contribution": "direct",
-   "pathway": "Winning a summer jobs lottery in Boston raised on-time graduation and cut dropout.",
-   "evidence": "good",
-   "evidenceScope": "one city",
-   "modelMatch": "A paid summer job placement (wages paid, several weeks) for low-income high school students, ideally allocated or evaluated by lottery.",
-   "conditions": "Only for programs that place low-income high school students in paid summer jobs, like the Boston model. Employability and Workplace Skills (Y7.3) statements alone do not qualify.",
-   "typicalEffect": "On-time graduation up 4.4 percentage points and dropout down 2.5 points over four years among Boston lottery applicants (journal; working paper 6.1 and 2.6).",
+   "pathway": "Winning a summer jobs lottery in Boston raised on-time graduation and cut dropout; a Chicago summer jobs trial found no change in school persistence.",
+   "evidence": "suggestive",
+   "modelMatch": "A paid summer jobs program for high school students, filled by lottery or similar open selection, as in Boston.",
+   "conditions": "A paid summer jobs program for high school students, filled by lottery or similar open selection, as in Boston.",
+   "typicalEffect": "Boston lottery: higher on-time graduation and lower dropout (existing link). Chicago lottery: no significant change in school persistence through the third year after the program, with confidence intervals ruling out more than 4 to 5 more days present.",
    "magnitude": "Among participants, +4.4 points on on-time graduation. If a partner places 5 percent of a high school's cohort, the school's four-year rate rises about 0.2 points. Dropouts: 2.5 fewer per 100 participants over four years, so a partner serving 200 students would mean about 5 fewer dropouts in the District count. The Chicago and New York City results suggest the expected effect elsewhere is smaller.",
-   "caveats": "One city's lottery. The Chicago trial found no schooling gain, and the J-PAL summary says the New York City and Chicago programs did not seem to raise school engagement. Philadelphia's WorkReady lottery results are pending. Employability and Workplace Skills (Y7.3) was removed because skill statements are not the tested treatment.",
+   "caveats": "One positive city trial and one null on persistence, so suggestive only. The older Summer Training and Education Program trial does not test summer jobs because its control group also had a summer job (dropout 29.2 versus 25.1 and 21.6 versus 22.6 percent, not significant). The dropout part is weaker than the graduation part.",
    "philadelphia": {
     "found": false,
     "note": "WorkReady lottery results pending"
    },
    "studies": [
     "Modestino, A. S., & Paulsen, R. (2023). School's Out: How Summer Youth Employment Programs Impact Academic Outcomes. Education Finance and Policy, 18(1), 97-126. https://doi.org/10.1162/edfp_a_00371 (working paper version June 2, 2019)",
-    "J-PAL. Understanding the Potential of Summer Jobs Programs for Youth in Philadelphia (evaluation summary; AEA RCT registry AEARCTR-0002451)."
+    "J-PAL. Understanding the Potential of Summer Jobs Programs for Youth in Philadelphia (evaluation summary; AEA RCT registry AEARCTR-0002451).",
+    "Davis, J. M. V., & Heller, S. B. (2020). Rethinking the Benefits of Youth Employment Programs: The Heterogeneous Effects of Summer Jobs. Review of Economics and Statistics, 102(4), 664-677 (NBER WP 23443, 2017).",
+    "Grossman, J. B., & Sipe, C. L. (1992). Summer Training and Education Program (STEP): Report on Long-Term Impacts. Philadelphia, PA: Public/Private Ventures. (WWC study 30518; WWC Intervention Report May 2009, ERIC ED505399)"
    ],
    "links": [
     {
@@ -592,11 +816,19 @@
     },
     {
      "url": "https://www.povertyactionlab.org/evaluation/understanding-potential-summer-jobs-programs-youth-philadelphia"
+    },
+    {
+     "url": "https://www.nber.org/system/files/working_papers/w23443/w23443.pdf"
+    },
+    {
+     "url": "https://ies.ed.gov/ncee/wwc/Study/30518"
     }
    ],
    "claims": [
     "V-080",
-    "V-082"
+    "V-082",
+    "Q-052",
+    "Q-053"
    ]
   },
   {
@@ -725,14 +957,13 @@
     "S8"
    ],
    "contribution": "direct",
-   "pathway": "More days in school cause higher reading and math scores in the middle grades.",
+   "pathway": "More days in school cause higher reading and math scores, most clearly in the middle grades.",
    "evidence": "good",
-   "evidenceScope": "for grades 6-8",
-   "modelMatch": "School-record attendance gains for the partner's own students, against a comparison group.",
-   "conditions": "Only when a program raises its students' school-day attendance as shown in school records. The grade 3 part is a separate, not-recommended row.",
-   "typicalEffect": "10 class absences lower math or English language arts scores by 0.03 to 0.04 standard deviations (California, middle and high school).",
+   "modelMatch": "A mechanism link: a partner earns credit through one of its own tested attendance links (for example personalized absence messages to families, or Check and Connect in grades 5 to 7), then this link sizes the test effect.",
+   "conditions": "A mechanism link: a partner earns credit through one of its own tested attendance links (for example personalized absence messages to families, or Check and Connect in grades 5 to 7), then this link sizes the test effect.",
+   "typicalEffect": "California: 10 more absences lower English by 0.05 and math by 0.08 standard deviations, more in grades 6 to 8. Philadelphia: a likely causal negative effect of absences on reading and math. Chicago Longitudinal Study: chronic absence lowered grade 8 math by 0.17; reading not significant. Sizing check: the 0.5 to 3.4 extra days linked to 21st Century Community Learning Centers participation imply at most about 0.02 in math.",
    "magnitude": "Too small to move a school proficiency rate on its own: 10 fewer absences per participant would add about 1 more proficient student in 100 participants; 2 more days would add about 0.2. This is a 'may also help later' note on an attendance gain, not a separate credit.",
-   "caveats": "The California estimate covers middle and high school. The Philadelphia instrumental-variables study (Gottfried 2010) supports the direction for elementary and middle school but was checked at abstract level only and folds in grade point average.",
+   "caveats": "Effects are small per day; elementary effects are flatter.",
    "philadelphia": {
     "found": true,
     "note": "Gottfried 2010; School District of Philadelphia 2023 attendance webinar"
@@ -740,7 +971,10 @@
    "studies": [
     "Liu, J., Lee, M., & Gershenson, S. (2021). The short- and long-run impacts of secondary school absences. Journal of Public Economics, 199, 104441. doi:10.1016/j.jpubeco.2021.104441 (EdWorkingPaper 19-125)",
     "Gottfried, M. A. (2010). Evaluating the Relationship between Student Attendance and Achievement in Urban Elementary and Middle Schools: An Instrumental Variables Approach. American Educational Research Journal, 47(2), 434-465. https://doi.org/10.3102/0002831209350494",
-    "School District of Philadelphia, Office of Evaluation, Research, and Accountability (2023). Research Roundup Webinar Series #9: Focus on Student Attendance (slide deck, April 12, 2023)."
+    "School District of Philadelphia, Office of Evaluation, Research, and Accountability (2023). Research Roundup Webinar Series #9: Focus on Student Attendance (slide deck, April 12, 2023).",
+    "Gottfried, M. A. (2013). Teachers College Record, 115(6). doi:10.1177/016146811311500605",
+    "Santibanez, L., & Guarino, C. (2020). EdWorkingPaper 20-261, Annenberg Institute (ERIC ED610250)",
+    "Smerillo, Reynolds, Temple & Ou (2018). J School Psychology, 67, 163-178. doi:10.1016/j.jsp.2017.11.001"
    ],
    "links": [
     {
@@ -754,12 +988,783 @@
     },
     {
      "url": "https://www.philasd.org/research/wp-content/uploads/sites/90/2023/04/April-2023-Research-Roundup-Student-Attendance.pdf"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ1020280&format=json"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED610250.pdf"
+    },
+    {
+     "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pmc&id=6047866&retmode=xml"
     }
    ],
    "claims": [
     "V-045",
     "V-056",
-    "V-026"
+    "V-026",
+    "M-101",
+    "M-102",
+    "M-103"
+   ]
+  },
+  {
+   "id": "L-103",
+   "codes": [
+    "Y1.17"
+   ],
+   "indicators": [
+    "S4"
+   ],
+   "contribution": "direct",
+   "pathway": "Students graduating within four years of first entering ninth grade is exactly what this indicator counts. This is a definition, not evidence that any program type raises graduation.",
+   "evidence": "definitional",
+   "modelMatch": "Any program, provided the partner shows from school records that its own students graduated within four years at a higher rate than a comparison group. A program model with a tested graduation effect (paid summer jobs) gives a reason to expect it; other models need their own data.",
+   "conditions": "Counts only on-time graduation (within four years of first entering ninth grade) from school records, for the partner's own students, against a comparison group. A GED, an equivalency diploma, re-enrollment and graduation after more than four years are part of this code but not of this indicator.",
+   "typicalEffect": "Not applicable: the size depends on the program. The program model with a tested graduation effect is paid summer jobs for high school students; attendance gains may also help a little.",
+   "magnitude": "Each participant in the cohort who graduates on time instead of later or not at all adds one student to the count: in a cohort of 400, 4 more on-time graduates add 1 percentage point.",
+   "caveats": "Added 2026-10-18 after the review, on a lead from the extractor export thread: the attendance identity had a row and the graduation identity did not. The basis is the SPOTlight wording in Severin's 2026-10-18 paste, not a study. Reaching dropouts was not added: whether a student who re-enrolls leaves the District dropout count depends on District enrollment rules that were not checked. Monitoring and mentoring (Check and Connect) and case management did not raise completion in the checked trials.",
+   "philadelphia": {
+    "found": false
+   },
+   "studies": [],
+   "links": [],
+   "claims": []
+  },
+  {
+   "id": "L-109",
+   "codes": [
+    "Y3.2",
+    "Y1.13"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "contribution": "direct",
+   "pathway": "A trained Check and Connect monitor who reviews each student's attendance records and follows up with the student and family cut absences for students in grades 5 to 7.",
+   "evidence": "suggestive",
+   "modelMatch": "Check and Connect delivered with fidelity: a trained monitor assigned to each student, regular review of the student's attendance from school records, and structured follow-up with student and family, for students in grades 5 to 7. General mentoring does not qualify.",
+   "conditions": "Check and Connect delivered with fidelity: a trained monitor assigned to each student, regular review of the student's attendance from school records, and structured follow-up with student and family, for students in grades 5 to 7. General mentoring does not qualify.",
+   "typicalEffect": "Chicago randomized trial (grades 1 to 8): students who took part in grades 5 to 7 had 4.2 fewer absences a year (22.9 percent); no detectable effect in grades 1 to 4; no effect on test scores or grades.",
+   "magnitude": "Chicago randomized trial (grades 1 to 8): students who took part in grades 5 to 7 had 4.2 fewer absences a year (22.9 percent); no detectable effect in grades 1 to 4; no effect on test scores or grades.",
+   "caveats": "One trial, and the 4.2-day figure is the effect on students who took part, concentrated in one grade band. A Texas trial in middle and high schools, delivered by Communities In Schools and compared with its usual services, found no attendance effect, and a high school trial in a large urban district found no significant effects. The program cost about 1,700 dollars per participant a year.",
+   "philadelphia": {
+    "found": false
+   },
+   "studies": [
+    "Guryan, J., Christenson, S., Cureton, A., Lai, I., Ludwig, J., Schwarz, C., Shirey, E., & Turner, M. C. (2021). The effect of mentoring on school attendance and academic outcomes: A randomized evaluation of the Check & Connect program. Journal of Policy Analysis and Management, 40(3), 841-882.",
+    "Maynard, B. R., Kjellstrand, E. K., & Thompson, A. M. (2014). Effects of Check and Connect on attendance, behavior, and academics: A randomized effectiveness trial. Research on Social Work Practice, 24(3), 296-309.",
+    "Heppen, J. B., Zeiser, K., Holtzman, D. J., O'Cummings, M., Christenson, S., & Pohl, A. (2018). Efficacy of the Check & Connect mentoring program for at-risk general education high school students. Journal of Research on Educational Effectiveness, 11(1), 56-82."
+   ],
+   "links": [
+    {
+     "url": "https://www.nber.org/system/files/working_papers/w27661/w27661.pdf"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED652188.pdf"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ1170313"
+    }
+   ],
+   "claims": [
+    "P-022",
+    "P-023",
+    "P-024"
+   ]
+  },
+  {
+   "id": "L-111",
+   "codes": [
+    "Y3.2",
+    "Y1.13"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "contribution": "direct",
+   "pathway": "A dedicated education specialist who meets regularly with youth in foster care and works across school and child-welfare systems raised their school attendance.",
+   "evidence": "suggestive",
+   "modelMatch": "The Fostering Opportunities model: an education specialist for youth in foster care in grades 6 to 12, with weekly check-ins and liaison with child-welfare caseworkers.",
+   "conditions": "The Fostering Opportunities model: an education specialist for youth in foster care in grades 6 to 12, with weekly check-ins and liaison with child-welfare caseworkers.",
+   "typicalEffect": "Colorado randomized trial (230 students in Jefferson County): attendance rate 7 percentage points higher at one year and 9 points at two years; clearinghouse effect size 0.49 (84 against 75 percent attendance in its 116-student sample).",
+   "magnitude": "Colorado randomized trial (230 students in Jefferson County): attendance rate 7 percentage points higher at one year and 9 points at two years; clearinghouse effect size 0.49 (84 against 75 percent attendance in its 116-student sample).",
+   "caveats": "One trial in one district; foster-care population only; the specialists were district staff in the trial.",
+   "philadelphia": {
+    "found": false
+   },
+   "studies": [
+    "Clemens, E. V., & Belcher, C. (2024, February). Fostering Opportunities: Results of a randomized controlled trial (Report No. 18-105D). Denver, CO: Colorado Evaluation and Action Lab at the University of Denver."
+   ],
+   "links": [
+    {
+     "url": "https://coloradolab.org/wp-content/uploads/2024/05/Fostering-Opportunities-JeffCo-Report-Final-Results.pdf"
+    }
+   ],
+   "claims": [
+    "P-033"
+   ]
+  },
+  {
+   "id": "L-113",
+   "codes": [
+    "Y1.1",
+    "A2.6"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "contribution": "direct",
+   "pathway": "One-to-one literacy tutoring during the school day combined with a family engagement worker raised early-grade school attendance as well as reading.",
+   "evidence": "suggestive",
+   "modelMatch": "The SPARK (Future Forward) model as tested: paid tutors give kindergarten to grade 2 students one-to-one literacy sessions several times a week during the school day for at least a full school year, plus a family engagement worker who contacts and visits each family regularly. Tutoring alone or family engagement alone does not qualify.",
+   "conditions": "The SPARK (Future Forward) model as tested: paid tutors give kindergarten to grade 2 students one-to-one literacy sessions several times a week during the school day for at least a full school year, plus a family engagement worker who contacts and visits each family regularly. Tutoring alone or family engagement alone does not qualify.",
+   "typicalEffect": "Milwaukee two-year trial (576 students, seven schools): absences effect size 0.20, significant (clearinghouse), with a literacy effect of about 0.23. Earlier Milwaukee cohort (496 students, six schools): about 3.3 fewer absences, effect size 0.18, not significant. One-semester trial in Alabama and rural Wisconsin (127 students): no attendance effect.",
+   "magnitude": "Milwaukee two-year trial (576 students, seven schools): absences effect size 0.20, significant (clearinghouse), with a literacy effect of about 0.23. Earlier Milwaukee cohort (496 students, six schools): about 3.3 fewer absences, effect size 0.18, not significant. One-semester trial in Alabama and rural Wisconsin (127 students): no attendance effect.",
+   "caveats": "Developer-led evaluations; only one of three trials found a significant attendance effect, and the shortest found none. Effect sizes for the significant trial come from clearinghouse summaries.",
+   "philadelphia": {
+    "found": false
+   },
+   "studies": [
+    "Jones, C. J., & Christian, M. (2021). The results of a randomized control trial evaluation of the SPARK literacy program: An innovative approach that pairs one-on-one tutoring with family engagement. Journal of Education for Students Placed at Risk, 26(3), 185-209.",
+    "Jones, C. (2018). SPARK early literacy: Testing the impact of a family-school-community partnership literacy intervention. School Community Journal, 28(2), 247-264.",
+    "Jones, C. J., Reeves, M., & Li, D. (2025). The impact of one semester of Future Forward on reading achievement and school attendance. Journal of Education for Students Placed at Risk, 31(2), 113-132. https://doi.org/10.1080/10824669.2025.2547228 (report version: Jones, C. J., & Li, D. (2023), ERIC ED629657)"
+   ],
+   "links": [
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ1306418"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/EJ1201942.pdf"
+    },
+    {
+     "url": "https://api.crossref.org/works/10.1080/10824669.2025.2547228"
+    }
+   ],
+   "claims": [
+    "P-035",
+    "P-036",
+    "P-037"
+   ]
+  },
+  {
+   "id": "L-114",
+   "codes": [
+    "Y2.6",
+    "Y1.13"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "contribution": "direct",
+   "pathway": "Summer programs that students return to over several summers, combining academics and enrichment, were followed by fewer school-year absences.",
+   "evidence": "suggestive",
+   "modelMatch": "Multi-summer programs that students attend for two or more summers, combining academic and enrichment activities, with school-record attendance tracked (for example Horizons or Aim High). One-off camps do not qualify.",
+   "conditions": "Multi-summer programs that students attend for two or more summers, combining academic and enrichment activities, with school-record attendance tracked (for example Horizons or Aim High). One-off camps do not qualify.",
+   "typicalEffect": "Aim High, San Francisco: unexcused absence rate about 1.06 percentage points lower three years after first participation; students attending all three summers 58 percent less likely to be chronically absent in grade 8. Horizons (1,324 students, 15 sites): attendance 95.8 against 94.6 percent (effect size 0.15); elementary 1.1 points higher (about two days); chronic absence not significantly different.",
+   "magnitude": "Aim High, San Francisco: unexcused absence rate about 1.06 percentage points lower three years after first participation; students attending all three summers 58 percent less likely to be chronically absent in grade 8. Horizons (1,324 students, 15 sites): attendance 95.8 against 94.6 percent (effect size 0.15); elementary 1.1 points higher (about two days); chronic absence not significantly different.",
+   "caveats": "Two quasi-experiments, no randomized trial; students who return for more summers may differ from those who do not. A school-break science camp in Knox County, Tennessee did not change attendance. Aim High funded its evaluation under an independence agreement. Test-score effects of summer programs are small.",
+   "philadelphia": {
+    "found": false
+   },
+   "studies": [
+    "Pyne, J., Messner, E., & Dee, T. S. (2023). The dynamic effects of a summer learning program on behavioral engagement in school. Education Finance and Policy, 18(1), 127-155. https://doi.org/10.1162/edfp_a_00368 (CEPA Working Paper 20-10)",
+    "Scher, L. (2018). Examining the long-term effects of the Horizons National Student Enrichment Program on student academic outcomes (Final report, September 26, 2018). Mansfield, MA: Concentric Research & Evaluation.",
+    "Holian, L., Warner-Griffin, C., & Gold, B. P. (2024). Gear Up 4 STEM: Final impact report. Technical report for Knox County Schools (ERIC ED648513).",
+    "Pyne, J., Messner, E., & Dee, T. S. (2023). The dynamic effects of a summer learning program on behavioral engagement in school. Education Finance and Policy, 18(2). doi:10.1162/edfp_a_00368 (working paper: CEPA WP 20-10, ERIC ED609963)"
+   ],
+   "links": [
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ1376853"
+    },
+    {
+     "url": "https://www.horizonskids.org/Customer-Content/horizonsnewcanaan/news/PDFs/Horizons_National_Retrospective_Study_Report_November_2018.pdf"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED648513.pdf"
+    }
+   ],
+   "claims": [
+    "P-040",
+    "P-041",
+    "P-043",
+    "R-040"
+   ]
+  },
+  {
+   "id": "L-115",
+   "codes": [
+    "Y8.5"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "contribution": "direct",
+   "pathway": "School-based telehealth clinics that let students be seen by a clinician during the school day cut absences and chronic absence.",
+   "evidence": "suggestive",
+   "modelMatch": "The partner operates an on-site or telehealth clinic in the school that treats students during the school day. A nurse position alone, health education or health-system care coordination does not qualify.",
+   "conditions": "The partner operates an on-site or telehealth clinic in the school that treats students during the school day. A nurse position alone, health education or health-system care coordination does not qualify.",
+   "typicalEffect": "Three rural North Carolina districts (staggered openings): chronic absence down 2.5 percentage points (29 percent) and about 0.8 fewer days absent (10 percent). Six elementary schools with telehealth (4,203 students, adjusting for prior absences): 7.7 percent fewer absences (0.6 days a year).",
+   "magnitude": "Three rural North Carolina districts (staggered openings): chronic absence down 2.5 percentage points (29 percent) and about 0.8 fewer days absent (10 percent). Six elementary schools with telehealth (4,203 students, adjusting for prior absences): 7.7 percent fewer absences (0.6 days a year).",
+   "caveats": "No randomized trial; rural and small-city settings. A full-time licensed practical nurse in elementary schools gave negligible or slightly worse attendance; a health-system care-coordination trial for children with chronic conditions found no attendance difference; school asthma education was null. A Hawai'i high school nurse program lowered chronic absence two to three years after adoption (size not checked), but it is a different model.",
+   "philadelphia": {
+    "found": false
+   },
+   "studies": [
+    "Komisarow, S., & Hemelt, S. W. (2024). School-based health care and absenteeism: Evidence from telemedicine. Education Finance and Policy, 19(2), 252-282. https://doi.org/10.1162/edfp_a_00398",
+    "Murphy, M., & Neely, J. (2023). School-based health services and chronic absenteeism: Evidence from Hawai'i public high schools. The High School Journal, 106(3), 208-231. https://doi.org/10.1353/hsj.2023.a930444",
+    "Long, M. W., Hobson, S., Douge, J., Wagaman, K., Sadlon, R., & Price, O. A. (2024). Effectiveness and cost-benefit of an elementary school-based telehealth program. The Journal of School Nursing, 40(3), 248-256 (online first 2021). https://doi.org/10.1177/10598405211069911",
+    "Leach, S. M., Hollands, F. M., Stone, E., Shand, R., Head, L., Wang, Y., Yan, B., Dossett, D., Chang, F., Ginsberg, Y. C., & Pan, Y. (2023). Costs and effects of school-based licensed practical nurses on elementary student attendance and chronic absenteeism. Prevention Science, 24(1), 94-104. https://doi.org/10.1007/s11121-022-01459-0",
+    "Martin, M. A., Caskey, R., Glassgow, A. E., Pappalardo, A. A., Hsu, L. L., Jang, J., Basu, S., Minier, M., Fox, K., & Van Voorhees, B. (2021). Trends in school attendance for low-income children with chronic health conditions: Results from a randomized controlled trial. Journal of School Health, 91(3), 187-194. https://doi.org/10.1111/josh.12989"
+   ],
+   "links": [
+    {
+     "url": "https://api.crossref.org/works/10.1162/edfp_a_00398"
+    },
+    {
+     "url": "https://api.crossref.org/works/10.1353/hsj.2023.a930444"
+    },
+    {
+     "url": "https://api.crossref.org/works/10.1177/10598405211069911"
+    },
+    {
+     "url": "https://api.crossref.org/works/10.1007/s11121-022-01459-0"
+    },
+    {
+     "url": "https://api.crossref.org/works/10.1111/josh.12989"
+    }
+   ],
+   "claims": [
+    "P-044",
+    "P-045",
+    "P-046",
+    "P-047",
+    "P-048"
+   ]
+  },
+  {
+   "id": "L-150",
+   "codes": [
+    "A2.3",
+    "F1.2"
+   ],
+   "indicators": [
+    "S5",
+    "S6"
+   ],
+   "contribution": "direct",
+   "pathway": "Giving children in high-poverty elementary schools free books they choose, repeatedly over several years, raises state reading test scores a little.",
+   "evidence": "suggestive",
+   "modelMatch": "Free, child-selected books given every year for at least three years (about a dozen a year, for example at the end of each school year or in fall and spring), to children in high-poverty elementary schools. A single summer's book mailing does not qualify (see the row from PR-07).",
+   "conditions": "Free, child-selected books given every year for at least three years (about a dozen a year, for example at the end of each school year or in fall and spring), to children in high-poverty elementary schools. A single summer's book mailing does not qualify (see the row from PR-07).",
+   "typicalEffect": "Randomized trial, 17 high-poverty schools (852 treatment, 478 control): 0.14 standard deviations on the state reading test after three summers, 0.21 for the most disadvantaged. Milwaukee school-level randomized trial (60 schools, Bernie's Book Bank): about 0.10 on the Wisconsin state reading test after five years.",
+   "magnitude": "Randomized trial, 17 high-poverty schools (852 treatment, 478 control): 0.14 standard deviations on the state reading test after three summers, 0.21 for the most disadvantaged. Milwaukee school-level randomized trial (60 schools, Bernie's Book Bank): about 0.10 on the Wisconsin state reading test after five years.",
+   "caveats": "The first trial was checked from its abstract only. The Milwaukee trial is a conference abstract with 59 percent attrition (differential under 1 point). One-summer book programs have null results at scale. Low cost.",
+   "philadelphia": {
+    "found": false
+   },
+   "studies": [
+    "Allington, R. L., McGill-Franzen, A., Camilli, G., Williams, L., Graff, J., Zeig, J., Zmach, C., & Nowak, R. (2010). Reading Psychology, 31(5), 411-427. doi:10.1080/02702711.2010.505165. ERIC EJ900788",
+    "Borman, G. (2024). A Multi-Site Cluster Randomized Controlled Trial of the Impacts of Bernie's Book Bank on Elementary Students' Literacy Achievement. SREE abstract. ERIC ED663025"
+   ],
+   "links": [
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ900788"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:ED663025"
+    }
+   ],
+   "claims": [
+    "R-029",
+    "R-030"
+   ]
+  }
+ ],
+ "associated": [
+  {
+   "id": "L-44",
+   "codes": [
+    "A2.5",
+    "Y2.6"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Regular participation in 21st Century Community Learning Centers after-school programs (30 or more days a year) is associated with slightly fewer school-day absences than matched non-participants with similar prior-year attendance. Randomized trials have not shown that the programs cause this.",
+   "basis": "Matched comparisons that adjust for prior-year attendance in independent state samples (Texas statewide, New Jersey) and in Philadelphia point the same way; randomized trials of after-school programs found no attendance effect.",
+   "typicalEffect": "Texas statewide: regular participants attended 0.3 to 1.4 percentage points more school days than matched non-participants (about 0.5 to 3.4 days a year, more at higher participation); two years at 60 or more days a year added about 1.1 to 1.2 points. New Jersey 2022-23: unexcused absence rate about 0.4 points lower (about three quarters of a day) than students who attended 15 days or fewer. Washington 2012-13: 14 percent (30 or more days) and 33 percent (60 or more days) fewer unexcused absences. Texas site-level study (779 centers): median center effect 0.14 standard deviations, with wide spread. Philadelphia (11 grantees): elementary regular participants were less likely to have 10 or more unexcused absences; no difference in middle or high school. Gains this size move the 90-percent share only for students close to the line.",
+   "caveats": "Students who keep coming differ from those who do not, and matching on prior attendance handles this only in part. A meta-analysis of controlled studies of after-school programs for at-risk youth found a small, non-significant attendance effect, and randomized trials of middle school after-school programs and of After School Matters in Chicago found no attendance difference. Most state reports come from one evaluator (American Institutes for Research); the Texas site-level and Philadelphia studies are by other evaluators. New Jersey's 2022-23 comparison group is low-attending participants, not non-participants. Two arts-focused Philadelphia centers found no attendance difference. Test-score effects are near zero.",
+   "philadelphia": {
+    "found": true,
+    "note": "evaluations of Philadelphia 21st Century Community Learning Centers grantees (Gao, Hallar and Hartmann 2014, Research for Action; Evans 2012, the District Office of Research and Evaluation), including a matched comparison in which only elementary participants had fewer unexcused absences"
+   },
+   "studies": [
+    "Kauh, T. J. (2011). AfterZone: Outcomes for Youth Participating in Providence's Citywide After-School System. Public/Private Ventures (The Wallace Foundation).",
+    "Arellano, B. D., Naftzger, N., Ramirez, B., & Sutter, A. (with Shields, Long, Diehl) (2020, July). 21st Century Community Learning Centers: Texas Afterschool Centers on Education 2014-15 through 2016-17 Evaluation Report. AIR for TEA.",
+    "Naftzger, N., & Arellano, B. D. (with Shields, Long, Hoepfner, Diehl) (2020, August). 21st Century Community Learning Centers: Texas Afterschool Centers on Education 2017-18 Evaluation Report. AIR for TEA.",
+    "Adachi, E., Rolfhus, E., & Barfield, D. (2018, January). Evaluation of Texas 21st Century Community Learning Centers: A Site-Level Approach. Policy Brief. Education Research Center, UT Austin (analysis by Westat). ERIC ED624482.",
+    "Vinson, M., Liu, F., & Lin, S. (2019, May). New Jersey 21st Century Community Learning Centers Year 5 Evaluation Report: Impact Data for 2016-17. AIR.",
+    "American Institutes for Research (2024, June). New Jersey 21st Century Community Learning Centers Year 4 Evaluation Report: Descriptive Data and Attendance Study for 2022-23.",
+    "Naftzger, N., Sniegowski, S., Devaney, E., Liu, F., Hutson, M., & Adams, N. (2015, October). Washington 21st Century Community Learning Centers Program Evaluation: 2012-13 and 2013-14. AIR.",
+    "Marchand, J., Sparr, M., Vinson, M., & Moroney, D. (2013, June). Rhode Island 21st Century Community Learning Centers Program Evaluation: Evaluation Report 2011-12. American Institutes for Research.",
+    "Gao, J., Hallar, B., & Hartmann, T. A. (2014). A Snapshot of OST Programs in Philadelphia: An Evaluation of Eleven 21st Century Community Learning Center Grantees. Research for Action. ERIC ED553131.",
+    "Evans, V. (2012). 21st Century Community Learning Centers - Cohort 5, Year 3 Evaluation Report (Regional Talent Centers). School District of Philadelphia, Office of Research and Evaluation.",
+    "Kremer, K. P., Maynard, B. R., Polanin, J. R., Vaughn, M. G., & Sarteschi, C. M. (2015). Effects of after-school programs with at-risk youth on attendance and externalizing behaviors: A systematic review and meta-analysis. Journal of Youth and Adolescence, 44(3), 616-636.",
+    "Gottfredson, D., Cross, A. B., Wilson, D., Rorie, M., & Connell, N. (2010). Effects of participation in after-school programs for middle school students: A randomized trial. Journal of Research on Educational Effectiveness, 3(3), 282-313.",
+    "Hirsch, B. J., Hedges, L. V., Stawicki, J., & Mekinda, M. A. (2011, June). After-School Programs for High School Students: An Evaluation of After School Matters. Technical Report. Northwestern University."
+   ],
+   "links": [
+    {
+     "url": "https://wallacefoundation.org/sites/default/files/2023-09/AfterZone-Outcomes-Youth-Participating-Providences-Citywide-After-School-System.pdf"
+    },
+    {
+     "url": "https://tea.texas.gov/sites/default/files/TX-21st-CCLC-2014-15_to_2016-17-508.pdf"
+    },
+    {
+     "url": "https://tea.texas.gov/sites/default/files/TX-21st-CCLC-2017-18-508.pdf"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED624482.pdf"
+    },
+    {
+     "url": "https://www.nj.gov/education/21cclc/docs/NJ%2021st%20CCLC%202016-17%20Report.pdf"
+    },
+    {
+     "url": "https://www.nj.gov/education/21cclc/docs/NJ21stCCLCEval2022-23DosageReport.pdf"
+    },
+    {
+     "url": "https://ospi.k12.wa.us/sites/default/files/2022-12/final2012-14statewideevaluationreport.pdf"
+    },
+    {
+     "url": "https://ride.ri.gov/Portals/0/Uploads/Documents/Students-and-Families-Great-Schools/Educational-Programming/21stCCLCs/RI21stCCLC-Impact-Report-2011-12.pdf"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED553131.pdf"
+    },
+    {
+     "url": "https://www.philasd.org/research/wp-content/uploads/sites/90/2020/04/21C-5_FinalReport_Nov_2012.pdf"
+    },
+    {
+     "url": "https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=DOI:10.1007/s10964-014-0226-4&format=json&resultType=core"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ888772"
+    },
+    {
+     "url": "https://wallacefoundation.org/sites/default/files/2024-10/after-school-programs-for-high-school-students.doi_.10.59656%252FYD-OS9954.001.pdf"
+    }
+   ],
+   "claims": [
+    "V-110",
+    "P-001",
+    "P-002",
+    "P-003",
+    "P-004",
+    "P-005",
+    "P-006",
+    "P-007",
+    "P-089",
+    "P-090",
+    "P-009",
+    "P-010",
+    "P-011"
+   ]
+  },
+  {
+   "id": "L-57",
+   "codes": [
+    "Y8.2",
+    "Y2.6"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Playing on a school sports team is associated with fewer absences during the season, comparing each student with themselves.",
+   "basis": "Two independent long-term studies that compare each student with themselves in and out of the sports season.",
+   "typicalEffect": "Indiana (about 262,000 high school students, student fixed effects): absence rate 0.70 points lower in season (0.89 for team sports). Earlier study (existing row): unexcused absences declined for male athletes, partly offset the day after games.",
+   "caveats": "Within-student designs control fixed traits but not season-specific motivation. The Indiana chronic-absence gap (10 against 23 percent) is descriptive. Transfer to partner sports programs is untested.",
+   "philadelphia": {
+    "found": false
+   },
+   "studies": [
+    "Cuffe, H. E., Waddell, G. R., & Bignell, W. (2014). Too Busy for School? The Effect of Athletic Participation on Absenteeism. IZA Discussion Paper No. 8426.",
+    "Malkus, N., & Hollon, S. (2026). An Extra Point for Attendance: The Impact of High School Varsity Athletics on Absenteeism. American Enterprise Institute. ERIC ED681610."
+   ],
+   "links": [
+    {
+     "url": "https://epflicht.ulb.uni-bonn.de/download/pdf/172102"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED681610.pdf"
+    }
+   ],
+   "claims": [
+    "V-122",
+    "P-075"
+   ]
+  },
+  {
+   "id": "L-87",
+   "codes": [
+    "F2.3"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Homelessness and eviction are associated with more school absences, and eviction itself causes more absences and school changes.",
+   "basis": "Two independent studies: one follows students and adjusts for prior attendance, the other uses random assignment of eviction cases to judges.",
+   "typicalEffect": "Los Angeles (weighting on grade 3 attendance and math): homeless students missed 5.8 more days. Chicago and New York City (random assignment of eviction cases to judges): eviction raised the share of days absent by 2.4 percentage points (about 4.3 days) and chronic absence by 8.8 points, and increased school changes.",
+   "caveats": "Programs that rehoused families did not raise attendance. The eviction study found little effect on grade 3 to 8 test scores, so no link to the grade 3 reading test is claimed and S5 is dropped from this row.",
+   "philadelphia": {
+    "found": true,
+    "note": "Fantuzzo et al. 2012"
+   },
+   "studies": [
+    "Fantuzzo, J. W., LeBoeuf, W. A., Chen, C.-C., Rouse, H. L., & Culhane, D. P. (2012). The unique and combined effects of homelessness and school mobility on the educational outcomes of young children. Educational Researcher, 41(9), 393-402. https://doi.org/10.3102/0013189X12468210",
+    "Collinson, R., Dutz, D., Humphries, J. E., Mader, N. S., Tannenbaum, D., & van Dijk, W. (2025, revised 2026). The effects of eviction on children (NBER Working Paper No. 33659).",
+    "De Gregorio, S., Dhaliwal, T. K., Owens, A., & Painter, G. (2020). Growing up homeless: Student homelessness and educational outcomes in Los Angeles (EdWorkingPaper No. 20-334). Annenberg Institute at Brown University."
+   ],
+   "links": [
+    {
+     "url": "https://aisp.upenn.edu/the-unique-and-combined-effects-of-homelessness-and-school-mobility-on-the-educational-outcomes-of-young-children/"
+    },
+    {
+     "url": "https://www.nber.org/system/files/working_papers/w33659/w33659.pdf"
+    },
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED671516.pdf"
+    }
+   ],
+   "claims": [
+    "V-076",
+    "P-059",
+    "P-060"
+   ]
+  },
+  {
+   "id": "L-91",
+   "codes": [
+    "Y1.12"
+   ],
+   "indicators": [
+    "S5",
+    "S6",
+    "S7",
+    "S8"
+   ],
+   "pathway": "Academic self-concept (how capable students believe they are in school subjects) is associated with slightly higher later test scores, compared with students who started at the same achievement level.",
+   "basis": "Two meta-analyses of long-term studies, each adjusting for earlier achievement, plus a five-year study of 3,425 students.",
+   "typicalEffect": "A small path of about 0.08 from self-concept to later achievement, net of earlier achievement, in both meta-analyses. The path from achievement to later self-concept is about twice as large (0.16).",
+   "caveats": "Holds for academic self-concept, not for growth mindset or general self-esteem (Self-Worth, Y5.4), where national long-term studies found no association once earlier achievement is counted. For self-efficacy, a meta-analysis found that in children only earlier performance predicts later self-efficacy, not the reverse. A 2024 reanalysis argues that adjusting for an earlier score can produce spurious effects of this kind.",
+   "philadelphia": {
+    "found": false
+   },
+   "studies": [
+    "Valentine, J. C., DuBois, D. L., & Cooper, H. (2004). The relation between self-beliefs and academic achievement: A meta-analytic review. Educational Psychologist, 39(2), 111-133.",
+    "Wu, H., Guo, Y., Yang, Y., Zhao, L., & Guo, C. (2021). A meta-analysis of the longitudinal relationship between academic self-concept and academic achievement. Educational Psychology Review, 33(4), 1749-1778.",
+    "Marsh, H. W., Pekrun, R., & Lüdtke, O. (2022). Directional ordering of self-concept, school grades, and standardized tests over five years. Educational Psychology Review, 34(4), 2697-2744.",
+    "Talsma, K., Schüz, B., Schwarzer, R., & Norris, K. (2018). I believe, therefore I achieve (and vice versa). Learning and Individual Differences, 61, 136-150.",
+    "Sorjonen, K., Ingre, M., Melin, B., & Nilsonne, G. (2024). Questioning the reciprocal effects model of academic self-concept and achievement. SAGE Open, 14(4)."
+   ],
+   "links": [
+    {
+     "url": "https://eric.ed.gov/?id=EJ682816"
+    },
+    {
+     "url": "https://eric.ed.gov/?id=EJ1319468"
+    },
+    {
+     "url": "https://eric.ed.gov/?id=EJ1360158"
+    },
+    {
+     "url": "https://doi.org/10.1016/j.lindif.2017.11.015",
+     "note": "abstract record"
+    },
+    {
+     "url": "https://ideas.repec.org/a/sae/sagope/v14y2024i4p21582440241292826.html"
+    }
+   ],
+   "claims": [
+    "V-022",
+    "R-06",
+    "B-002",
+    "B-003",
+    "B-004",
+    "B-005"
+   ]
+  },
+  {
+   "id": "L-100",
+   "codes": [
+    "Y1.15"
+   ],
+   "indicators": [
+    "S3"
+   ],
+   "pathway": "Failing courses and low grades in the middle grades or ninth grade are associated with later dropping out, beyond what eighth-grade test scores and background predict.",
+   "basis": "Long-term cohort studies in Philadelphia, Chicago and Baltimore, two of which compare against eighth-grade test scores or pre-high-school characteristics.",
+   "typicalEffect": "In Philadelphia, sixth graders who failed math were 54 percent less likely to graduate, and those who failed English 42 percent less likely. In Chicago, freshman grades and course failures explained about 39 percent of the variation in graduation, against about 12 percent for test scores and background.",
+   "caveats": "These are early-warning predictions, not effects of raising grades. Most studies count students who did not graduate rather than the District's dropout count. The Philadelphia cohorts are from the 1990s and 2000s.",
+   "philadelphia": {
+    "found": true,
+    "note": "Balfanz, Herzog and Mac Iver 2007; Neild, Stoner-Eby and Furstenberg 2008; Neild and Balfanz 2006"
+   },
+   "studies": [
+    "Balfanz, R., Herzog, L., & Mac Iver, D. J. (2007). Preventing student disengagement and keeping students on the graduation path in urban middle-grades schools. Educational Psychologist, 42(4), 223-235.",
+    "Allensworth, E. M., & Easton, J. Q. (2007). What matters for staying on-track and graduating in Chicago public high schools. Consortium on Chicago School Research.",
+    "Neild, R. C., Stoner-Eby, S., & Furstenberg, F. (2008). Connecting entrance and departure: The transition to ninth grade and high school dropout. Education and Urban Society, 40(5), 543-569.",
+    "Neild, R. C., & Balfanz, R. (2006). Unfulfilled Promise: The Dimensions and Characteristics of Philadelphia's Dropout Crisis, 2000-2005."
+   ],
+   "links": [
+    {
+     "url": "https://new.every1graduates.org/wp-content/uploads/2012/03/preventing_student_disengagement.pdf"
+    },
+    {
+     "url": "https://consortium.uchicago.edu/sites/default/files/2018-10/07%20What%20Matters%20Final.pdf"
+    },
+    {
+     "url": "https://eric.ed.gov/?id=EJ798244"
+    },
+    {
+     "url": "https://williampennfoundation.org/sites/default/files/2024-05/Unfulfilled%20Promise.pdf"
+    }
+   ],
+   "claims": [
+    "C-005",
+    "C-006",
+    "C-008",
+    "V-091"
+   ]
+  },
+  {
+   "id": "L-101",
+   "codes": [
+    "Y1.13"
+   ],
+   "indicators": [
+    "S3"
+   ],
+   "pathway": "Low attendance in the middle grades or ninth grade is associated with later dropping out, alongside other risk factors.",
+   "basis": "Long-term cohort studies in Philadelphia, Chicago and Baltimore, and a large study that adjusts for earlier test scores and grades.",
+   "typicalEffect": "Chicago Longitudinal Study: chronic absence in grades 4 to 6 went with an 18-point lower chance of four-year graduation and an 11-point lower chance of any completion by age 21, adjusted for kindergarten and grade 3 achievement.",
+   "caveats": "The exposure is grades 4 to 6 only.",
+   "philadelphia": {
+    "found": true,
+    "note": "Balfanz, Herzog and Mac Iver 2007; Neild and Balfanz 2006"
+   },
+   "studies": [
+    "Balfanz, R., Herzog, L., & Mac Iver, D. J. (2007). Preventing student disengagement and keeping students on the graduation path in urban middle-grades schools. Educational Psychologist, 42(4), 223-235.",
+    "Allensworth, E. M., & Easton, J. Q. (2007). What matters for staying on-track and graduating in Chicago public high schools. Consortium on Chicago School Research.",
+    "Mac Iver, M. A., & Messel, M. (2013). The ABCs of keeping on track to graduation: Research findings from Baltimore. Journal of Education for Students Placed at Risk, 18(1), 50-67.",
+    "Liu, J., Lee, M., & Gershenson, S. (2021). The short- and long-run impacts of secondary school absences. Journal of Public Economics, 199, 104441.",
+    "Neild, R. C., & Balfanz, R. (2006). Unfulfilled Promise: The Dimensions and Characteristics of Philadelphia's Dropout Crisis, 2000-2005.",
+    "Smerillo, N. E., Reynolds, A. J., Temple, J. A., & Ou, S.-R. (2018). Chronic Absence, Eighth-Grade Achievement, and High School Attainment in the Chicago Longitudinal Study. Journal of School Psychology, 67, 163-178. doi:10.1016/j.jsp.2017.11.001 (PMC6047866)"
+   ],
+   "links": [
+    {
+     "url": "https://new.every1graduates.org/wp-content/uploads/2012/03/preventing_student_disengagement.pdf"
+    },
+    {
+     "url": "https://consortium.uchicago.edu/sites/default/files/2018-10/07%20What%20Matters%20Final.pdf"
+    },
+    {
+     "url": "https://eric.ed.gov/?id=EJ995401"
+    },
+    {
+     "url": "https://edworkingpapers.com/ai19-125"
+    },
+    {
+     "url": "https://williampennfoundation.org/sites/default/files/2024-05/Unfulfilled%20Promise.pdf"
+    },
+    {
+     "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pmc&id=6047866"
+    }
+   ],
+   "claims": [
+    "V-057",
+    "C-005",
+    "C-006",
+    "C-007",
+    "C-011",
+    "V-091",
+    "Q-065"
+   ]
+  },
+  {
+   "id": "L-102",
+   "codes": [
+    "Y1.13"
+   ],
+   "indicators": [
+    "S5",
+    "S7"
+   ],
+   "pathway": "More absences are associated with lower grade 3 reading and math scores.",
+   "basis": "Long-term studies in North Carolina and Philadelphia that compare each student with themselves (fixed effects), two of them with an instrument for absences.",
+   "typicalEffect": "Philadelphia elementary students: a higher share of unexcused absences went with greater risk, particularly in math; excused absences were less harmful.",
+   "caveats": "Same author as an existing source, so it adds little independence.",
+   "philadelphia": {
+    "found": true,
+    "note": "Gottfried 2010; School District of Philadelphia 2023 attendance webinar"
+   },
+   "studies": [
+    "School District of Philadelphia, Office of Evaluation, Research, and Accountability (2023). Research Roundup Webinar Series #9: Focus on Student Attendance (slide deck, April 12, 2023).",
+    "Gottfried, M. A. (2010). Evaluating the Relationship between Student Attendance and Achievement in Urban Elementary and Middle Schools: An Instrumental Variables Approach. American Educational Research Journal, 47(2), 434-465. https://doi.org/10.3102/0002831209350494",
+    "Aucejo, E. M., & Romano, T. F. (2016). Assessing the effect of school days and absences on test score performance. Economics of Education Review, 55, 70-87 (CEP Discussion Paper 1302).",
+    "Gottfried, M. A. (2009). Excused versus unexcused: How student absences in elementary school affect academic achievement. Educational Evaluation and Policy Analysis, 31(4), 392-415.",
+    "Gottfried, M. A. (2009). EEPA, 31(4), 392-415. doi:10.3102/0162373709342467"
+   ],
+   "links": [
+    {
+     "url": "https://www.philasd.org/research/wp-content/uploads/sites/90/2023/04/April-2023-Research-Roundup-Student-Attendance.pdf"
+    },
+    {
+     "url": "https://eric.ed.gov/?id=EJ887169"
+    },
+    {
+     "url": "https://cep.lse.ac.uk/pubs/download/dp1302.pdf"
+    },
+    {
+     "url": "https://ideas.repec.org/p/ehl/lserod/68655.html"
+    },
+    {
+     "url": "https://eric.ed.gov/?id=EJ866928"
+    },
+    {
+     "url": "https://api.ies.ed.gov/eric/?search=id:EJ866928&format=json"
+    }
+   ],
+   "claims": [
+    "V-026",
+    "V-056",
+    "C-001",
+    "C-002",
+    "C-003",
+    "M-104"
+   ]
+  },
+  {
+   "id": "L-104",
+   "codes": [
+    "Y1.10",
+    "Y4.2"
+   ],
+   "indicators": [
+    "S5",
+    "S7"
+   ],
+   "pathway": "Attention, task persistence and impulse control at school entry are associated with higher later reading and math scores, beyond children's early academic skills.",
+   "basis": "An analysis of six long-term datasets with a meta-analysis, replicated in two Canadian cohorts, plus two further long-term studies that adjust for earlier achievement.",
+   "typicalEffect": "Effects are small. Early math skills predicted later scores most, then reading, then attention. In a national study, kindergarten executive functions predicted grade 2 scores by about 0.05 to 0.12 of a standard deviation after earlier achievement.",
+   "caveats": "Holds for young children only: in two middle-school studies, self-control did not predict changes in test scores once earlier scores were counted (it did predict report-card grades). Academic Perseverance (Y1.10) fits early task persistence; Emotion Regulation and Coping (Y4.2) fits only its impulse-control part. Social skills and prosocial behavior were not associated with later scores in the same studies.",
+   "philadelphia": {
+    "found": false
+   },
+   "studies": [
+    "Duncan, G. J., Dowsett, C. J., Claessens, A., Magnuson, K., Huston, A. C., et al. (2007). School readiness and later achievement. Developmental Psychology, 43(6), 1428-1446.",
+    "Romano, E., Babchishin, L., Pagani, L. S., & Kohen, D. (2010). School readiness and later achievement: Replication and extension using a nationwide Canadian survey. Developmental Psychology, 46(5), 995-1007.",
+    "Pagani, L. S., Fitzpatrick, C., Archambault, I., & Janosz, M. (2010). School readiness and later achievement: A French Canadian replication and extension. Developmental Psychology, 46(5), 984-994.",
+    "McClelland, M. M., Acock, A. C., Piccinin, A., Rhea, S. A., & Stallings, M. C. (2013). Relations between preschool attention span-persistence and age 25 educational outcomes. Early Childhood Research Quarterly, 28(2), 314-324.",
+    "Morgan, P. L., Farkas, G., Hillemeier, M. M., Pun, W. H., & Maczuga, S. (2019). Kindergarten children's executive functions predict their second-grade academic achievement and behavior. Child Development, 90(5), 1802-1816.",
+    "Duckworth, A. L., Quinn, P. D., & Tsukayama, E. (2012). What No Child Left Behind leaves behind. Journal of Educational Psychology, 104(2), 439-451."
+   ],
+   "links": [
+    {
+     "url": "https://eric.ed.gov/?id=EJ779938"
+    },
+    {
+     "url": "https://eric.ed.gov/?id=EJ897252"
+    },
+    {
+     "url": "https://eric.ed.gov/?id=EJ897251"
+    },
+    {
+     "url": "https://pubmed.ncbi.nlm.nih.gov/23543916/"
+    },
+    {
+     "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7306289/"
+    },
+    {
+     "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3782117/"
+    }
+   ],
+   "claims": [
+    "B-008",
+    "B-010",
+    "B-012",
+    "B-013",
+    "B-014",
+    "B-015"
+   ]
+  },
+  {
+   "id": "L-105",
+   "codes": [
+    "Y3.2"
+   ],
+   "indicators": [
+    "S3"
+   ],
+   "pathway": "High schools where students report better relationships with teachers are associated with fewer students dropping out, after accounting for tenth-grade math scores and background.",
+   "basis": "Two separate national long-term studies (3,840 students in 190 schools; 7,779 students in 431 schools), both adjusting for tenth-grade math achievement.",
+   "typicalEffect": "In one study, a school one standard deviation higher on student-teacher relations had about 86 percent lower odds of a student dropping out, but only in schools under 1,500 students. In the other, a better relationship climate went with lower dropout by senior year.",
+   "caveats": "This is about a whole school's relationship climate, not one student's mentor or relationship. In the first study the association disappeared in schools over 1,500 students, which matters for large Philadelphia high schools. Both studies count dropping out by senior year, not the four-year graduation rate. A meta-analysis of unadjusted associations found only a non-significant trend for poor teacher relationships and dropout. The same studies found no association with test-score gains.",
+   "philadelphia": {
+    "found": false
+   },
+   "studies": [
+    "Lee, V. E., & Burkam, D. T. (2001). Dropping out of high school: The role of school organization and structure (published 2003 in American Educational Research Journal, 40(2), 353-393).",
+    "Barile, J. P., Donohue, D. K., Anthony, E. R., Baker, A. M., Weaver, S. R., & Henrich, C. C. (2012). Teacher-student relationship climate and school outcomes: Implications for educational policy initiatives. Journal of Youth and Adolescence, 41(3), 256-267.",
+    "Gubbels, J., van der Put, C. E., & Assink, M. (2019). Risk factors for school absenteeism and dropout: A meta-analytic review. Journal of Youth and Adolescence, 48(9), 1637-1667."
+   ],
+   "links": [
+    {
+     "url": "https://files.eric.ed.gov/fulltext/ED458694.pdf"
+    },
+    {
+     "url": "https://repository.up.ac.za/bitstreams/2e2e55b8-2bba-4c33-a7b0-be571e34f1a5/download"
+    },
+    {
+     "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6732159/"
+    }
+   ],
+   "claims": [
+    "A-001",
+    "A-002",
+    "A-005"
+   ]
+  },
+  {
+   "id": "L-106",
+   "codes": [
+    "Y1.9"
+   ],
+   "indicators": [
+    "S3"
+   ],
+   "pathway": "Students who do their homework, take part and pay attention in class are associated with lower dropout, compared with students at the same achievement level.",
+   "basis": "Two separate long-term studies (1,272 Maryland youth followed from grade 7; a national sample of high school students), both with achievement in the model.",
+   "typicalEffect": "In the national sample, teacher-rated academic engagement (standardized coefficient about -0.27) and student-reported behavioral engagement (about -0.30) each predicted lower dropout by grade 12, with test achievement (about -0.20) in the same model.",
+   "caveats": "Narrow: two studies. In the national sample, achievement was measured at the same time as engagement, not before it, and behavioral engagement includes skipping and lateness, which overlaps attendance.",
+   "philadelphia": {
+    "found": false
+   },
+   "studies": [
+    "Wang, M.-T., & Fredricks, J. A. (2014). The reciprocal links between school engagement, youth problem behaviors, and school dropout during adolescence. Child Development, 85(2), 722-737.",
+    "Fall, A.-M., & Roberts, G. (2012). High school dropouts: Interactions between social context, self-perceptions, school engagement, and student dropout. Journal of Adolescence, 35(4), 787-798."
+   ],
+   "links": [
+    {
+     "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3815520/"
+    },
+    {
+     "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3478125/"
+    }
+   ],
+   "claims": [
+    "C-013",
+    "C-014"
    ]
   }
  ],
@@ -778,12 +1783,13 @@
   {
    "id": "L-05",
    "codes": [
-    "Y1.3"
+    "Y1.3",
+    "Y1.1"
    ],
    "indicators": [
     "S1"
    ],
-   "pathway": "Daily math tutoring did not change how many days students were absent.",
+   "pathway": "Daily math tutoring did not change total days absent in the larger Chicago trial; in the District of Columbia, students were less likely to be absent on the days they had tutoring.",
    "evidence": "good"
   },
   {
@@ -810,7 +1816,7 @@
     "S7",
     "S8"
    ],
-   "pathway": "Voluntary summer learning programs gave a small, short-lived math gain; state test advantages appeared only among students who attended often, which is a correlational finding.",
+   "pathway": "Voluntary summer learning programs gave small, short-lived gains; randomized trials found little effect on reading and no lasting state test advantage.",
    "evidence": "suggestive"
   },
   {
@@ -825,7 +1831,7 @@
     "S7",
     "S8"
    ],
-   "pathway": "Out-of-school-time programs with real academic instruction raise reading and math achievement a little, most when certified teachers teach or tutoring is included.",
+   "pathway": "Out-of-school-time programs with academic instruction raise achievement a little at best; experimental reviews find mostly null effects.",
    "evidence": "suggestive"
   },
   {
@@ -837,7 +1843,7 @@
     "S7",
     "S8"
    ],
-   "pathway": "A structured after-school math curriculum raised math scores slightly for one year, but not in the second cohort or after a second year.",
+   "pathway": "A structured after-school math curriculum did not raise scores reliably.",
    "evidence": "suggestive"
   },
   {
@@ -849,7 +1855,7 @@
     "S5",
     "S6"
    ],
-   "pathway": "Structured after-school reading instruction did not raise reading scores, and a two-year offer lowered them.",
+   "pathway": "Structured after-school reading instruction did not raise reading scores in randomized trials; one positive trial of a structured curriculum used non-state tests.",
    "evidence": "good"
   },
   {
@@ -860,7 +1866,7 @@
    "indicators": [
     "S8"
    ],
-   "pathway": "An intensive multi-year after-school and summer academic program raised math problem-solving scores four years later.",
+   "pathway": "An intensive multi-year after-school academic program did not raise state test scores in its randomized trial, though grades rose.",
    "evidence": "suggestive"
   },
   {
@@ -876,7 +1882,7 @@
     "S7",
     "S8"
    ],
-   "pathway": "General after-school centers with little academic time did not change test scores, grades or homework completion.",
+   "pathway": "General after-school centers, including 21st Century Community Learning Centers, did not raise state test scores in the national randomized trial, and statewide matched comparisons find effects near zero, sometimes negative at low participation.",
    "evidence": "good"
   },
   {
@@ -893,7 +1899,7 @@
    "indicators": [
     "S4"
    ],
-   "pathway": "Social and emotional learning gains persist years later, but graduation was rarely measured.",
+   "pathway": "Two randomized trials of early social and emotional learning programs that followed children to graduation found no direct effect.",
    "evidence": "thin"
   },
   {
@@ -919,6 +1925,17 @@
    ],
    "pathway": "The same cognitive behavioral program at new sites showed no significant effect on student outcomes.",
    "evidence": "good"
+  },
+  {
+   "id": "L-17",
+   "codes": [
+    "Y3.1"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Brief classroom exercises that frame worries about belonging as normal at the start of middle school cut absences.",
+   "evidence": "suggestive (one trial; a preregistered replication by the same team found no effect)"
   },
   {
    "id": "L-18",
@@ -982,7 +1999,7 @@
     "S7",
     "S8"
    ],
-   "pathway": "Mentoring gives small gains across many kinds of outcomes, but academic gains from school-based mentoring faded by the second year.",
+   "pathway": "School-based mentoring did not raise test scores.",
    "evidence": "suggestive"
   },
   {
@@ -994,7 +2011,7 @@
    "indicators": [
     "S3"
    ],
-   "pathway": "A trained monitor who tracks each student's attendance, behavior and grades and steps in early keeps students in school.",
+   "pathway": "Check and Connect kept students with disabilities in school in earlier trials, but a later randomized trial in general education found no effect, so the dropout claim does not extend to general student populations.",
    "evidence": "suggestive"
   },
   {
@@ -1006,7 +2023,7 @@
    "indicators": [
     "S4"
    ],
-   "pathway": "The same monitoring and mentoring program showed no discernible effect on completing school.",
+   "pathway": "The monitoring and mentoring program Check and Connect showed no discernible effect on completing school, and a later randomized trial in general education also found no effect.",
    "evidence": "good"
   },
   {
@@ -1075,7 +2092,7 @@
     "S10",
     "S12"
    ],
-   "pathway": "Information to parents about their child's schoolwork raised math scores in one high school trial but did not move state test scores in a larger trial.",
+   "pathway": "Information to parents about their child's schoolwork raised grades, but effects on test scores were very small or absent.",
    "evidence": "good"
   },
   {
@@ -1086,9 +2103,10 @@
    ],
    "indicators": [
     "S1",
-    "S6"
+    "S6",
+    "S8"
    ],
-   "pathway": "Relationship-building home visits go with less chronic absence in one multi-district study, but not in another district's evaluation.",
+   "pathway": "Relationship-building teacher home visits were followed by slightly higher attendance and math scores in a matched study in the District of Columbia, but a St. Louis randomized trial found no differences.",
    "evidence": "suggestive"
   },
   {
@@ -1156,7 +2174,7 @@
     "S7",
     "S8"
    ],
-   "pathway": "Community schools raised math scores by the third year.",
+   "pathway": "Community schools raised math scores by the third year in New York City, but other evaluations found no math change.",
    "evidence": "suggestive"
   },
   {
@@ -1197,7 +2215,7 @@
     "S3",
     "S4"
    ],
-   "pathway": "Case management and early-warning school reform improved attitudes or the share of students with no warning flags, but not attendance, course passing or graduation.",
+   "pathway": "Case management and early-warning school reform improved some intermediate outcomes, but large randomized studies found no overall effect on graduation.",
    "evidence": "good"
   },
   {
@@ -1235,18 +2253,7 @@
     "S7",
     "S8"
    ],
-   "pathway": "After-school programs that use sequenced, active, focused and explicit practices show test-score gains that other programs do not.",
-   "evidence": "suggestive"
-  },
-  {
-   "id": "L-44",
-   "codes": [
-    "A2.5"
-   ],
-   "indicators": [
-    "S1"
-   ],
-   "pathway": "Middle schoolers who took part in a citywide after-school system had fewer school absences two years later.",
+   "pathway": "After-school programs that use sequenced, active, focused and explicit practices show test gains in weak studies.",
    "evidence": "suggestive"
   },
   {
@@ -1261,7 +2268,7 @@
     "S7",
     "S8"
    ],
-   "pathway": "Coaching that changes how adults teach raises students' achievement.",
+   "pathway": "Coaching that changes how adults teach raises students' achievement, but partners earn no credit unless they coach classroom teachers.",
    "evidence": "good only for coaching classroom reading or math teachers; otherwise suggestive"
   },
   {
@@ -1286,7 +2293,7 @@
    "indicators": [
     "S2"
    ],
-   "pathway": "Monitoring with rewards raised teacher attendance in developing countries; no study tested partner programs.",
+   "pathway": "Teacher attendance in the United States responds to district policy (performance standards, tenure rules, leave policies), and teacher absence lowers student achievement; no partner program has been tested.",
    "evidence": "thin"
   },
   {
@@ -1300,7 +2307,7 @@
     "S9",
     "S11"
    ],
-   "pathway": "Girls in an after-school science program more often reached high state science performance in the program's own evaluation.",
+   "pathway": "A girls' after-school science program went with more high science performance in the program's own data; the strongest out-of-school science study found only a very small grade 8 gain.",
    "evidence": "thin"
   },
   {
@@ -1412,18 +2419,6 @@
    "evidence": "suggestive"
   },
   {
-   "id": "L-57",
-   "codes": [
-    "Y8.2",
-    "Y2.6"
-   ],
-   "indicators": [
-    "S1"
-   ],
-   "pathway": "Playing on a high school team cut unexcused absences for boys, though game-day gains were offset the next day.",
-   "evidence": "suggestive"
-  },
-  {
    "id": "L-58",
    "codes": [
     "Y8.2",
@@ -1445,7 +2440,7 @@
     "S7",
     "S8"
    ],
-   "pathway": "Physical activity programs may help math a little, but the largest meta-analysis of randomized trials found no significant academic effect.",
+   "pathway": "Physical activity programs may help math slightly, but trials disagree.",
    "evidence": "good"
   },
   {
@@ -1515,7 +2510,7 @@
     "S7",
     "S8"
    ],
-   "pathway": "School eye exams and free glasses gave a small one-year reading gain that did not last or appear on the state test.",
+   "pathway": "School eye exams and free glasses gave a small one-year gain that faded.",
    "evidence": "suggestive"
   },
   {
@@ -1526,7 +2521,7 @@
    "indicators": [
     "S3"
    ],
-   "pathway": "Primary care at school-based health centers did not reduce high school dropout by much.",
+   "pathway": "Primary care at school-based health centers did not reduce dropout or raise graduation.",
    "evidence": "good"
   },
   {
@@ -1543,12 +2538,12 @@
   {
    "id": "L-67",
    "codes": [
-    "Y8.5"
+    "Y1.13"
    ],
    "indicators": [
     "S1"
    ],
-   "pathway": "A review of school interventions for persistently absent secondary students found variable, weak evidence.",
+   "pathway": "Across many attendance interventions, average effects on attendance are small and vary widely by model.",
    "evidence": "thin"
   },
   {
@@ -1627,7 +2622,7 @@
    "indicators": [
     "S4"
    ],
-   "pathway": "Attending a full-time technical high school raised on-time graduation.",
+   "pathway": "Attending a full-time technical high school raised on-time graduation in lottery studies.",
    "evidence": "good for the school model, not a partner link"
   },
   {
@@ -1638,7 +2633,7 @@
    "indicators": [
     "S1"
    ],
-   "pathway": "Attending a technical high school raised attendance for boys.",
+   "pathway": "Admission to a career academy or technical high school reduced ninth-grade absences.",
    "evidence": "suggestive"
   },
   {
@@ -1665,7 +2660,7 @@
     "S3",
     "S4"
    ],
-   "pathway": "Career academies raised later earnings but did not raise high school completion overall.",
+   "pathway": "Career academies raised later earnings but did not raise high school completion overall in the national trial; a later lottery study in one North Carolina district found higher graduation, mostly for boys.",
    "evidence": "good"
   },
   {
@@ -1689,7 +2684,7 @@
    "indicators": [
     "S13"
    ],
-   "pathway": "Technical skills and industry credentials are what the industry skills exam measures, but no study tested a program's effect on that exam.",
+   "pathway": "Technical skills are what the industry certification exam measures; one Pennsylvania study found cooperative education students scored higher on it, but no study tested a partner program.",
    "evidence": "thin"
   },
   {
@@ -1712,7 +2707,7 @@
    "indicators": [
     "S1"
    ],
-   "pathway": "Universal free school meals cut low attendance for poorer students in the second year, but classroom breakfast did not change attendance in Philadelphia.",
+   "pathway": "Changes to how or when school breakfast is served gave mixed attendance results: breakfast after the bell lowered chronic absence, while universal free breakfast and breakfast in the classroom did not change attendance.",
    "evidence": "good"
   },
   {
@@ -1726,7 +2721,7 @@
     "S7",
     "S8"
    ],
-   "pathway": "Universal free meals raised test scores very slightly in New York City and not at all in high-poverty districts; classroom breakfast results conflict.",
+   "pathway": "Universal free school meals raise test scores very slightly at most.",
    "evidence": "good"
   },
   {
@@ -1737,20 +2732,7 @@
    "indicators": [
     "S1"
    ],
-   "pathway": "Housing subsidies for homeless families meant fewer school moves and slightly fewer absences.",
-   "evidence": "suggestive"
-  },
-  {
-   "id": "L-87",
-   "codes": [
-    "F2.3",
-    "Y1.13"
-   ],
-   "indicators": [
-    "S1",
-    "S5"
-   ],
-   "pathway": "Homelessness and school moves go with engagement problems for Philadelphia third graders, with the combination worst.",
+   "pathway": "Housing subsidies and rapid rehousing for homeless families did not improve children's attendance, and rehousing families outside the city raised absences.",
    "evidence": "suggestive"
   },
   {
@@ -1764,7 +2746,7 @@
     "S7",
     "S8"
    ],
-   "pathway": "More family income from the Earned Income Tax Credit raised children's math and reading scores.",
+   "pathway": "More family income raised young children's achievement in welfare experiments, but recent work on the Earned Income Tax Credit finds small or no effects.",
    "evidence": "suggestive"
   },
   {
@@ -1789,25 +2771,6 @@
    ],
    "pathway": "A short growth-mindset lesson raised grades for lower achievers, but no checked study links that grade gain to graduation.",
    "evidence": "thin"
-  },
-  {
-   "id": "L-91",
-   "codes": [
-    "Y1.12",
-    "Y5.3",
-    "Y5.4"
-   ],
-   "indicators": [
-    "S5",
-    "S6",
-    "S7",
-    "S8",
-    "S10",
-    "S11",
-    "S12"
-   ],
-   "pathway": "Positive academic self-beliefs slightly predict later achievement, and self-concept and achievement reinforce each other.",
-   "evidence": "suggestive"
   },
   {
    "id": "L-92",
@@ -1887,7 +2850,7 @@
    "indicators": [
     "S4"
    ],
-   "pathway": "Structured volunteer service with classroom discussion cut course failure, and passing courses predicts graduating in Philadelphia.",
+   "pathway": "Structured volunteer service with classroom discussion cut course failure in older studies, but none of those studies met clearinghouse standards.",
    "evidence": "None"
   },
   {
@@ -1922,38 +2885,816 @@
    "evidence": "suggestive"
   },
   {
-   "id": "L-100",
+   "id": "L-107",
+   "codes": [
+    "A2.5",
+    "Y2.6"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Offering or attending a general after-school program did not reliably raise school-day attendance in randomized trials or in a meta-analysis of controlled studies, so after-school programs should not claim to raise attendance.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-108",
+   "codes": [
+    "Y1.13"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Perfect-attendance awards did not raise later attendance, and awards given after the fact lowered it.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-110",
+   "codes": [
+    "Y3.2",
+    "Y3.3"
+   ],
+   "indicators": [
+    "S1",
+    "S3",
+    "S4"
+   ],
+   "pathway": "School-based, community, peer and college-access mentoring, and mentors or facilitators assigned to off-track students, did not reliably change school-record attendance, course passing or high school completion in randomized trials and matched studies.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-112",
+   "codes": [
+    "Y3.2",
+    "Y4.2"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Weekly one-to-one play sessions with a trained paraprofessional for young children with low attendance and adjustment concerns were followed by higher attendance in one trial.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-116",
+   "codes": [
+    "A1.2",
+    "Y8.5"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Online communities of practice for school licensed practical nurses focused on attendance lowered chronic absence in one trial; the version for registered nurses did not.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-117",
+   "codes": [
+    "Y8.10",
+    "A3.3"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Paid community members stationed along routes to school at arrival and dismissal (Safe Passage) lowered school absence rates.",
+   "evidence": "suggestive (one quasi-experiment; the checker confirmed it only in part)"
+  },
+  {
+   "id": "L-118",
+   "codes": [
+    "A2.3"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Eligibility for a school bus or a full-fare transit pass raised attendance and cut chronic absence, while fare-free bus rides for students in one Florida county were followed by lower attendance.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-119",
+   "codes": [
+    "A1.2",
+    "Y1.14"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Whole-school restorative practices reduced suspensions but did not reliably change attendance or chronic absence.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-120",
+   "codes": [
+    "Y1.13",
+    "Y8.13"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Court-based truancy diversion did not improve attendance once regression to the mean was accounted for.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-121",
+   "codes": [
+    "A3.1",
+    "Y1.15",
+    "Y1.13"
+   ],
+   "indicators": [
+    "S1",
+    "S3",
+    "S4"
+   ],
+   "pathway": "A school early-warning and monitoring system cut chronic absence and course failure after one year in a United States trial, but a Norwegian trial found no effect on absence or completion, and no study measured graduation or dropout.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-122",
+   "codes": [
+    "Y4",
+    "Y6.1"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "A school-wide social and character curriculum (Positive Action) was followed by lower school-level absenteeism in two cluster trials, but clearinghouse reviews of the same trials disagree on whether the effect is significant.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-123",
+   "codes": [
+    "F2.4",
+    "F1.7"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "State human-services caseworkers placed in schools to help families with basic needs were followed by lower chronic absence.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-124",
+   "codes": [
+    "F2.1"
+   ],
+   "indicators": [
+    "S1",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8"
+   ],
+   "pathway": "Cash rewards to families tied to attendance, test scores and other activities did not raise attendance, test scores or graduation overall; welfare rules tying benefits to teen attendance raised some attendance measures but not completion.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-125",
+   "codes": [
+    "A2.4"
+   ],
+   "indicators": [
+    "S1"
+   ],
+   "pathway": "Longer exposure to whole-school inclusion programs (Special Olympics Unified Champion Schools) was followed by slightly lower absence for students with intellectual disabilities in grades 3 to 8 only.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-126",
+   "codes": [
+    "A2.5",
+    "Y2.6"
+   ],
+   "indicators": [
+    "S3",
+    "S4"
+   ],
+   "pathway": "Students who attend some multi-year after-school programs heavily and for several years drop out less and graduate on time more often than similar students, but the evidence comes mainly from one program and does not show the programs cause it.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-127",
+   "codes": [
+    "Y1.17",
+    "Y1.15",
+    "Y3.2"
+   ],
+   "indicators": [
+    "S3",
+    "S4"
+   ],
+   "pathway": "A school-based support program for ninth graders in one Philadelphia high school went with higher graduation but no change in school leaving.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-128",
    "codes": [
     "Y1.15"
    ],
    "indicators": [
-    "S3"
+    "S4"
    ],
-   "pathway": "Failing ninth-grade courses flags students who later drop out (Philadelphia cohorts, 2000-2005).",
-   "evidence": "thin"
+   "pathway": "A multi-year out-of-school program for low-income middle and high school students raised credits and grade point average for lottery winners who started behind, which predicts but does not show higher graduation.",
+   "evidence": "None: null or below the bar in checked studies"
   },
   {
-   "id": "L-101",
+   "id": "L-129",
    "codes": [
-    "Y1.13"
+    "Y1.17"
+   ],
+   "indicators": [
+    "S3",
+    "S4"
+   ],
+   "pathway": "Dropout prevention programs as a group reduce dropout in meta-analyses, but no single model a partner could run stands out, and effects shrink in the better-designed studies.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-130",
+   "codes": [
+    "Y3.2",
+    "Y1.15",
+    "Y1.17"
+   ],
+   "indicators": [
+    "S4"
+   ],
+   "pathway": "Intensive multi-year mentoring, tutoring and stipends through high school (the Quantum Opportunity Program) raised graduation in a small pilot but not in a seven-site randomized replication.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-131",
+   "codes": [
+    "Y3.3",
+    "Y3.1"
+   ],
+   "indicators": [
+    "S4"
+   ],
+   "pathway": "A peer-led transition program for ninth graders went with higher graduation for boys in one school, but a later randomized trial found no effect on attendance, credits or promotion.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-132",
+   "codes": [
+    "A1.2",
+    "Y1.15",
+    "Y3.2"
+   ],
+   "indicators": [
+    "S1",
+    "S4",
+    "S10"
+   ],
+   "pathway": "Building Assets, Reducing Risks, a ninth-grade school model of teacher teams and relationship-building, cut course failure, but its effects on chronic absence and math were not consistent across trials and graduation was not measured.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-133",
+   "codes": [
+    "Y7.4"
+   ],
+   "indicators": [
+    "S4"
+   ],
+   "pathway": "Students in career and technical programs of study, and students who earn industry certifications, graduate more often, but most of this evidence does not show adjustment for prior achievement.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-134",
+   "codes": [
+    "Y7.1",
+    "Y7.2"
+   ],
+   "indicators": [
+    "S3",
+    "S4"
+   ],
+   "pathway": "School-to-career activities in high school went with lower dropout and higher graduation in one national survey analysis.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-135",
+   "codes": [
+    "Y1.16",
+    "Y1.17"
+   ],
+   "indicators": [
+    "S4",
+    "S11"
+   ],
+   "pathway": "Early college high schools raise graduation in lottery studies, but they are schools, not partner programs. In a North Carolina lottery study, 68 percent of early college students passed the Biology end-of-course exam in tenth grade, against 53 percent of other applicants.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-136",
+   "codes": [
+    "Y7.1",
+    "Y7.4",
+    "Y7.3"
+   ],
+   "indicators": [
+    "S3",
+    "S4",
+    "S13"
+   ],
+   "pathway": "Career-focused high school programs with employer partners and paid internships did not raise school enrollment, graduation or credential earning in randomized trials.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-137",
+   "codes": [
+    "Y7.2",
+    "Y1.11"
+   ],
+   "indicators": [
+    "S4"
+   ],
+   "pathway": "Advancement Via Individual Determination, a college-preparation elective, went with higher graduation in a matched study, but a schoolwide study found no change.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-138",
+   "codes": [
+    "Y7.2",
+    "Y1.18"
+   ],
+   "indicators": [
+    "S4"
+   ],
+   "pathway": "A meta-analysis of Gaining Early Awareness and Readiness for Undergraduate Programs reports higher graduation and college enrollment, but the designs are unverified.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-139",
+   "codes": [
+    "Y1.17",
+    "Y7.4"
+   ],
+   "indicators": [
+    "S3",
+    "S4",
+    "S13"
+   ],
+   "pathway": "Programs for young people who have already left school raise completion of a high school equivalency credential, which does not count in the four-year graduation rate.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-140",
+   "codes": [
+    "Y4.2",
+    "Y1.9"
+   ],
+   "indicators": [
+    "S4"
+   ],
+   "pathway": "A first-grade classroom package that included the Good Behavior Game raised graduation in one randomized cohort in Baltimore.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-141",
+   "codes": [
+    "Y4.2",
+    "F1.1"
    ],
    "indicators": [
     "S3"
    ],
-   "pathway": "Low attendance in the middle grades flags most Philadelphia students who later drop out.",
-   "evidence": "suggestive"
+   "pathway": "A kindergarten-age prevention program for disruptive boys in Montreal reduced dropout only indirectly, through less grade retention.",
+   "evidence": "None: null or below the bar in checked studies"
   },
   {
-   "id": "L-102",
+   "id": "L-142",
    "codes": [
-    "Y1.13"
+    "F1.1",
+    "Y3.4"
+   ],
+   "indicators": [
+    "S3"
+   ],
+   "pathway": "A family-strengthening program for Mexican American middle schoolers (Bridges to High School) lowered dropout indirectly, through school engagement.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-143",
+   "codes": [
+    "Y5.2",
+    "Y3.2"
+   ],
+   "indicators": [
+    "S3"
+   ],
+   "pathway": "A district course for Black male students in Oakland, taught by Black male teachers, went with fewer dropouts.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-144",
+   "codes": [
+    "A3.2",
+    "A2.3"
+   ],
+   "indicators": [
+    "S3"
+   ],
+   "pathway": "Tennessee's integrated student supports in schools did not change dropout.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-145",
+   "codes": [
+    "Y1.15",
+    "Y1.17",
+    "Y1.3"
+   ],
+   "indicators": [
+    "S4",
+    "S10"
+   ],
+   "pathway": "Online credit recovery for failed Algebra I led to fewer students recovering the credit than face-to-face classes, with no difference in graduation.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-146",
+   "codes": [
+    "F1.1",
+    "F1.2"
+   ],
+   "indicators": [
+    "S1",
+    "S3"
+   ],
+   "pathway": "Positive family processes and parent involvement go with less absence and dropout, but the evidence does not show adjustment for prior achievement.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-147",
+   "codes": [
+    "Y1.17",
+    "Y3.2"
+   ],
+   "indicators": [
+    "S4"
+   ],
+   "pathway": "Pathways to Education, a neighborhood program of tutoring, mentoring, family support and financial aid, raised five-year graduation in Toronto.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-148",
+   "codes": [
+    "Y1.13",
+    "A2.6",
+    "Y1.17"
+   ],
+   "indicators": [
+    "S3"
+   ],
+   "pathway": "Achievement for Latinos through Academic Success, an attendance and family-contact program, cut ninth-grade dropout, but the gain faded by grade 11.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-149",
+   "codes": [
+    "Y1.1",
+    "Y1.3"
    ],
    "indicators": [
     "S5",
-    "S7"
+    "S6",
+    "S7",
+    "S8"
    ],
-   "pathway": "Grade 3 students who attend more are more likely to score proficient in English language arts (District correlation).",
+   "pathway": "Federally funded outside tutoring offered to students in low-performing schools (supplemental educational services) mostly did not raise state test scores.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-151",
+   "codes": [
+    "A2.3",
+    "F1.2"
+   ],
+   "indicators": [
+    "S5",
+    "S6"
+   ],
+   "pathway": "Mailing books to children for one summer did not raise reading scores at scale; it helped only when teachers and parents added reading support.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-152",
+   "codes": [
+    "Y1.1"
+   ],
+   "indicators": [
+    "S5",
+    "S6"
+   ],
+   "pathway": "Electronic books and independent silent reading programs did not improve reading comprehension.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-153",
+   "codes": [
+    "Y1.7",
+    "Y4.6"
+   ],
+   "indicators": [
+    "S4",
+    "S6",
+    "S12"
+   ],
+   "pathway": "Competitive policy debate leagues for high school students went with higher English scores and graduation in Boston and Chicago.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-154",
+   "codes": [
+    "Y1.1"
+   ],
+   "indicators": [
+    "S12"
+   ],
+   "pathway": "Daily high-dosage tutorials in one Boston charter school raised grade 10 English scores.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-155",
+   "codes": [
+    "Y1.6",
+    "Y2.5"
+   ],
+   "indicators": [
+    "S6",
+    "S8"
+   ],
+   "pathway": "Intensive youth orchestra programs went with higher test scores for students who stayed, but students opt in.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-156",
+   "codes": [
+    "Y2.6",
+    "Y6.5"
+   ],
+   "indicators": [
+    "S6",
+    "S8"
+   ],
+   "pathway": "A program of out-of-school learning activities with credit toward recognition (Children's University) gave small reading and math gains in England.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-157",
+   "codes": [
+    "Y3.2",
+    "Y1.1",
+    "Y1.3"
+   ],
+   "indicators": [
+    "S5",
+    "S6",
+    "S7",
+    "S8"
+   ],
+   "pathway": "City Year schools were more likely to raise proficiency rates in a study the program commissioned.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-158",
+   "codes": [
+    "Y1.1",
+    "A2.5"
+   ],
+   "indicators": [
+    "S5"
+   ],
+   "pathway": "A library literacy program has no test or school-record outcomes.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-159",
+   "codes": [
+    "Y1.1",
+    "F1.2",
+    "F1.1"
+   ],
+   "indicators": [
+    "S5",
+    "S6"
+   ],
+   "pathway": "A summer family reading program showed larger reading growth in a sponsor-commissioned matched study.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-160",
+   "codes": [
+    "F1.2",
+    "A2.6"
+   ],
+   "indicators": [
+    "S5"
+   ],
+   "pathway": "Text messages to parents of preschool and kindergarten children improved early literacy, with no follow-up to grade 3.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-161",
+   "codes": [
+    "Y1.1",
+    "Y3.3"
+   ],
+   "indicators": [
+    "S5",
+    "S6"
+   ],
+   "pathway": "Cross-age peer tutoring helps both tutors and tutees in a meta-analysis of mixed designs.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-162",
+   "codes": [
+    "Y1.3"
+   ],
+   "indicators": [
+    "S8",
+    "S10"
+   ],
+   "pathway": "An intensive summer algebra-readiness program raised end-of-summer math scores.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-163",
+   "codes": [
+    "Y1.3"
+   ],
+   "indicators": [
+    "S8"
+   ],
+   "pathway": "A basketball-themed math program at a summer camp raised scores on a researcher test.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-164",
+   "codes": [
+    "Y1.9"
+   ],
+   "indicators": [
+    "S6",
+    "S8"
+   ],
+   "pathway": "Paying students for test results did not raise scores; paying for reading books raised reading in one city.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-165",
+   "codes": [
+    "A3.2",
+    "A2.3"
+   ],
+   "indicators": [
+    "S6",
+    "S8"
+   ],
+   "pathway": "City Connects, a school-based coordinator who reviews every student's strengths and needs and links them to services, went with higher grade 5 scores in a lottery-based study, but the gains did not survive correction for multiple tests.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-166",
+   "codes": [
+    "F1.2"
+   ],
+   "indicators": [
+    "S7",
+    "S8"
+   ],
+   "pathway": "Family math activities at home did not raise children's math test scores in randomized trials.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-167",
+   "codes": [
+    "Y1.12",
+    "Y5.4"
+   ],
+   "indicators": [
+    "S7",
+    "S8",
+    "S10"
+   ],
+   "pathway": "Growth mindset and identity-affirming writing exercises did not raise math test scores reliably.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-168",
+   "codes": [
+    "Y7.4",
+    "A1.2",
+    "Y1.3"
+   ],
+   "indicators": [
+    "S10"
+   ],
+   "pathway": "Teaching math through career and technical courses (the Math-in-Career and Technical Education model) raised math scores in one randomized trial; a later study found no math gain.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-169",
+   "codes": [
+    "Y1.4",
+    "A3.2"
+   ],
+   "indicators": [
+    "S9",
+    "S11"
+   ],
+   "pathway": "Middle school partnerships with science museums (Urban Advantage in New York City) raised grade 8 science scores slightly.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-170",
+   "codes": [
+    "Y1.4",
+    "Y2.3"
+   ],
+   "indicators": [
+    "S1",
+    "S8",
+    "S9"
+   ],
+   "pathway": "Out-of-school science, technology, engineering and math programs gave inconsistent science and math gains and did not raise attendance.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-171",
+   "codes": [
+    "Y1.4",
+    "Y6.6"
+   ],
+   "indicators": [
+    "S9"
+   ],
+   "pathway": "School gardens and outdoor environmental education gave small or uncertain science gains.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-172",
+   "codes": [
+    "F1.2",
+    "F1.1"
+   ],
+   "indicators": [
+    "S9"
+   ],
+   "pathway": "Text messages prompting parents to talk about science did not raise science scores.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-173",
+   "codes": [
+    "A1.1",
+    "A1.2",
+    "A1.3"
+   ],
+   "indicators": [
+    "S2"
+   ],
+   "pathway": "No rigorous United States study has tested a staff-support program a partner could run on teacher attendance.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-174",
+   "codes": [
+    "Y1.13"
+   ],
+   "indicators": [
+    "S10",
+    "S12"
+   ],
+   "pathway": "Missing math or English classes in high school lowers that subject's state test score slightly. In one large California district, 10 missed classes cost 0.03 to 0.04 standard deviations.",
    "evidence": "suggestive"
+  },
+  {
+   "id": "L-175",
+   "codes": [
+    "Y7.2"
+   ],
+   "indicators": [
+    "S10",
+    "S11",
+    "S12"
+   ],
+   "pathway": "College-preparation programs have not been shown to raise high school test results. In the national Upward Bound trial, only math credits rose, and grades did not change.",
+   "evidence": "None: null or below the bar in checked studies"
+  },
+  {
+   "id": "L-176",
+   "codes": [
+    "Y1.1"
+   ],
+   "indicators": [
+    "S12"
+   ],
+   "pathway": "High school reading programs that raised test scores were school-run reading courses that replaced an elective; no partner-run high school reading model has been tested on a state English test.",
+   "evidence": "None: school model, not a partner link"
   }
  ]
 }
