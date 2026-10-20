@@ -44,6 +44,8 @@ from outcomes_data import (
     goal_name,
     hierarchy_counts,
     sample_outcome_texts,
+    SPOTLIGHT_ASSOCIATED_NAMES,
+    SPOTLIGHT_ASSOCIATED_NOTE,
     SPOTLIGHT_EVIDENCE,
     SPOTLIGHT_MODEL_NAMES,
     SPOTLIGHT_NO_LINK,
@@ -772,7 +774,8 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
     """What the District indicators map (spotlight_component.py) draws: goals, program models, indicators.
 
     `reach` comes from outcomes_data.spotlight_indicator_reach. Goals are in codebook order under
-    their domains, in the domain's wheel hue. Each recommended link is one program-model node, so
+    their domains, in the domain's wheel hue. Each recommended (tested) link is one program-model node, and
+    each research-associated link a node of its own kind ("associated"), never merged with them, so
     a link with six goals and four indicators is drawn as six bands in and four out, not 24.
     Program counts go to the side panel as text only; they are never drawn as lengths or widths,
     and never added up per indicator. `n_goals` is how many goals the codebook has, so the map
@@ -845,8 +848,22 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
             "studies": [str(c) for c in link.get("studies") or []],
             "hue": hue_of.get(link["codes"][0]),
         })
+    # Research-associated links get nodes of their own kind beside the tested ones, never merged with them.
+    for link in links.get("associated", []):
+        out_links.append({
+            "id": link["id"], "goals": link["codes"], "indicators": link["indicators"],
+            "name": SPOTLIGHT_ASSOCIATED_NAMES.get(link["id"], link["id"]), "kind": "associated",
+            "associated": True, "evidence": "", "evidenceLabel": "", "scope": "", "predicts": False,
+            "model": "", "conditions": "", "size": "",
+            "pathway": _without_codes(link.get("pathway")), "basis": _without_codes(link.get("basis")),
+            "effect": _without_codes(link.get("typicalEffect")), "caveats": _without_codes(link.get("caveats")),
+            "philadelphia": _without_codes((link.get("philadelphia") or {}).get("note")),
+            "studies": [str(c) for c in link.get("studies") or []],
+            "hue": hue_of.get(link["codes"][0]),
+        })
     indicators = [{"id": r["id"], "group": r["group"], "name": r["name"], "wording": r["wording"],
-                   "value": r["value"], "reached": bool(r["links"])} for r in reach]
+                   "value": r["value"], "reached": bool(r["links"]), "associated": bool(r.get("associated"))}
+                  for r in reach]
     guard = links.get("guardrails", {})
     scope_out = {"kind": scope["kind"], "label": scope["label"]} if scope else None
     sig = hashlib.sha1(json.dumps([goals, [i["id"] for i in indicators], scope_out],
@@ -857,6 +874,8 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
         "bylaw": ((crosswalk or {}).get("source") or {}).get("url", ""),
         "year": links.get("spotlightYear", ""), "scope": scope_out,
         "possible": SPOTLIGHT_POSSIBLE,
+        "associatedCaution": links.get("associatedCaution", ""), "associatedRule": links.get("associatedRule", ""),
+        "associatedNote": SPOTLIGHT_ASSOCIATED_NOTE,
         "guardrail": {"summary": SPOTLIGHT_NO_LINK, "quote": guard.get("quote", ""),
                       "url": guard.get("url", "")},
         "selected": selected,

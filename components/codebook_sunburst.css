@@ -195,6 +195,8 @@
 .sb-panel-inner { overflow-y: auto; scrollbar-width: thin; }
 .sb-spot-note { margin: 6px 0 0; }
 .sb-spot-lane { margin-top: 6px; }
+.sb-spot-assoc-head { margin-top: 12px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.sb-spot-caution { font-style: italic; color: var(--muted); }
 .sb-spot-lane-name { font-weight: 600; color: var(--ink-2); }
 .sb-spot-quote { margin: 8px 0 0; color: var(--muted); font-style: italic; }
 .sb-spot-link { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }

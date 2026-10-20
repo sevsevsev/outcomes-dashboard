@@ -149,3 +149,7 @@
 .sm-lane-lines { margin: 8px 0 0; font-size: 13px; line-height: 1.45; }
 .sm-lane-lines dt { margin-top: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .sm-lane-lines dd { margin: 2px 0 0; color: var(--ink-2); }
+
+/* Research-associated links: nodes of their own kind, dashed, never read as a program model. */
+.sm-node-assoc { border-style: dashed; border-left-style: dashed; background: #fbfcfd; }
+.sm-node-assoc .sm-ev { font-style: italic; }

@@ -1439,6 +1439,7 @@ function spotlightOf(sb, node) {
   const spot = sb.model.data.spotlight;
   if (!spot || !spot.goals || !/^[YFA]\d+\.\d+$/.test(node.label)) return null;
   const links = spot.goals[node.label] || [];
+  const assoc = (spot.associated || {})[node.label] || [];
   const lane = (spot.lanes || {})[node.label];
   const box = el('details', 'sb-def-more sb-spot');
   box.open = !!sb.spotOpen;
@@ -1450,7 +1451,7 @@ function spotlightOf(sb, node) {
     if (lane.serves) lines.append(el('dt', '', 'Serves'), el('dd', '', lane.serves));
     box.append(lines);
   }
-  if (!links.length && lane) {
+  if (!links.length && !assoc.length && lane) {
     if (lane.quote) {
       const q = el('p', 'sb-spot-quote', `“${lane.quote}”`);
       box.append(q);
@@ -1463,10 +1464,10 @@ function spotlightOf(sb, node) {
         box.lastChild.append(a);
       }
     }
-  } else if (!links.length) {
+  } else if (!links.length && !assoc.length) {
     box.append(el('p', 'sb-spot-note', spot.guardrail));
-  } else {
-    box.append(el('p', 'sb-spot-note', spot.note));
+  } else if (links.length) {
+    box.append(el('div', 'sb-spot-assoc-head', 'Tested program models'), el('p', 'sb-spot-note', spot.note));
     for (const l of links) {
       const item = el('div', 'sb-spot-link');
       item.append(el('div', 'sb-spot-ind', l.indicators.join('; ')),
@@ -1477,6 +1478,19 @@ function spotlightOf(sb, node) {
       item.append(lines);
       box.append(item);
     }
+  }
+  if (assoc.length) {
+    // Research associations sit beside the tested links, in a list of their own, with the caution every time.
+    const head = el('div', 'sb-spot-assoc-head', 'Research associations (never credit)');
+    box.append(head);
+    for (const a of assoc) {
+      const item = el('div', 'sb-spot-link');
+      item.append(el('div', 'sb-spot-ind', `Is associated with ${a.indicators.join('; ')}`),
+        el('p', 'sb-spot-note', a.pathway));
+      box.append(item);
+    }
+    if (spot.associatedCaution) box.append(el('p', 'sb-spot-note sb-spot-caution', spot.associatedCaution));
+    if (spot.associatedNote) box.append(el('p', 'sb-spot-note sb-spot-caution', spot.associatedNote));
   }
   const from = el('div', 'sb-def-version');
   from.append(document.createTextNode(`From the ${spot.year ? spot.year + ' ' : ''}SPOTlight review of ${spot.reviewed}`));
