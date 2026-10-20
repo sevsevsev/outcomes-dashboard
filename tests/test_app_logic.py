@@ -888,3 +888,36 @@ def test_copied_crosswalk_places_every_codebook_goal_and_domain_once():
     assert placed["Y1.6"]["laneName"] == "Guardrail: a well-rounded education"
     # The file holds no counts and no evidence.
     assert not any(isinstance(v, (int, float)) for c in crosswalk["codes"] for v in c.values())
+
+
+def test_priority_grid_puts_cells_only_where_the_crosswalk_has_goals():
+    """Rows are lanes under the Board's headings, columns are domains; a cell counts programs once per logic model."""
+    from outcomes_data import priority_grid_data, priority_pick_codes
+    rows = pd.DataFrame({
+        app.COL_SUBCAT: ["Y1.3 Mathematics", "Y1.3 Mathematics", "Y1.6 Arts Learning",
+                         "Y2 Engagement, Interest & Creative Expression, no specific goal", "Y1.6 Arts Learning"],
+        app.COL_ORG_VIEW: ["A", "A", "B", "C", "C"],
+        app.COL_PROGRAM: ["Tutors", "Math Club", "Art", "Club", "Club"],
+        app.COL_SOURCE_FILE: ["1_1 - A - LM.pdf", "1_1 - A - LM.pdf", "2_1 - B.pdf", "3_1 - C.pdf", "3_1 - C.pdf"],
+    })
+    crosswalk = small_crosswalk()
+    data = priority_grid_data(rows, crosswalk, {"Y1": "Academic Learning & Achievement",
+                                                "Y2": "Engagement, Interest & Creative Expression",
+                                                "A2": "Program Quality, Access & Reach"})
+    assert [lane["id"] for lane in data["lanes"]] == ["names-indicator", "guardrail-well-rounded", "quality-condition"]
+    assert data["groups"] == ["Board goals and SPOTlight indicators", "Board guardrails", "Valued on their own terms"]
+    assert [d["code"] for d in data["domains"]] == ["Y1", "Y2", "A2"]
+    cells = {(c["lane"], c["domain"]): c for c in data["cells"]}
+    # No cell where the crosswalk has no goal: Mathematics is the only names-indicator domain here.
+    assert set(cells) == {("names-indicator", "Y1"), ("guardrail-well-rounded", "Y1"),
+                          ("guardrail-well-rounded", "Y2"), ("quality-condition", "A2")}
+    assert cells[("names-indicator", "Y1")]["programs"] == 1     # Tutors and Math Club share one logic model
+    assert cells[("guardrail-well-rounded", "Y1")]["programs"] == 2
+    assert cells[("quality-condition", "A2")]["programs"] == 0
+    y2 = cells[("guardrail-well-rounded", "Y2")]["goals"][0]
+    assert y2["name"] == "Engagement, Interest & Creative Expression, no specific goal" and y2["programs"] == 1
+    # The row ends with the same count as the old list: a program naming two cells in a lane counts once.
+    assert {lane["id"]: lane["programs"] for lane in data["lanes"]}["guardrail-well-rounded"] == 2
+    assert priority_pick_codes({"kind": "lane", "id": "guardrail-well-rounded"}, crosswalk) == ["Y1.6", "Y2"]
+    assert priority_pick_codes({"kind": "cell", "id": "guardrail-well-rounded|Y2"}, crosswalk) == ["Y2"]
+    assert priority_grid_data(rows, {}, {}) == {}
