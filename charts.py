@@ -50,6 +50,8 @@ from outcomes_data import (
     SPOTLIGHT_POSSIBLE,
     SUNBURST_SEP,
     _without_codes,
+    crosswalk_code_lanes,
+    crosswalk_lanes,
     subcategory_sort_key,
 )
 
@@ -765,7 +767,8 @@ def spotlight_link_kind(link: dict) -> str:
 
 
 def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, str], definitions: dict,
-                       n_goals: int, selected: Optional[dict] = None, scope: Optional[dict] = None) -> dict:
+                       n_goals: int, selected: Optional[dict] = None, scope: Optional[dict] = None,
+                       crosswalk: Optional[dict] = None, goal_names: Optional[dict[str, str]] = None) -> dict:
     """What the District indicators map (spotlight_component.py) draws: goals, program models, indicators.
 
     `reach` comes from outcomes_data.spotlight_indicator_reach. Goals are in codebook order under
@@ -778,19 +781,45 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
     `scope` (from app.indicator_scope) narrows the view to one program or one school's partners: each
     goal then carries "here", what the scope's count is for it (0 when no one there names it), with
     the partner names or sample statements behind it.
+
+    With the outcome `crosswalk`, goals are grouped by the District priority (lane) they serve, in the
+    crosswalk's lane order and codebook order within a lane, and "lanes" lists every lane with its
+    other goals (from `goal_names`, every codebook goal): the ones with no link, which the map shows as
+    one row per lane rather than as a gap. Without it, goals sit under their domains as before.
     """
     if not links:
         return {}
     goals_by_code = {g["code"]: g for r in reach for g in r["goals"]}
     goal_defs = definitions.get("goals", {}) if definitions else {}
+    lane_list = crosswalk_lanes(crosswalk or {})
+    lane_of = crosswalk_code_lanes(crosswalk or {})
+    lane_rank = {lane["id"]: k for k, lane in enumerate(lane_list)}
+
+    def order(code: str) -> tuple:
+        return (lane_rank.get(lane_of.get(code, {}).get("lane"), len(lane_rank)), subcategory_sort_key(code))
+
     goals = []
-    for code in sorted(goals_by_code, key=subcategory_sort_key):
+    for code in sorted(goals_by_code, key=order):
         domain = code.split(".")[0]
         hue = DOMAIN_HUES[DOMAIN_ORDER_V3.index(domain)] if domain in DOMAIN_ORDER_V3 else None
+        lane = lane_of.get(code, {})
         goals.append({"id": code, "name": goals_by_code[code]["name"], "domain": domain,
                       "domainName": domain_names.get(domain, domain), "hue": hue,
                       "programs": goals_by_code[code]["programs"],
-                      "definition": goal_defs.get(code, {}).get("definition", "")})
+                      "definition": goal_defs.get(code, {}).get("definition", ""),
+                      "lane": lane.get("lane", ""), "laneName": lane.get("laneName", ""),
+                      "serves": lane.get("serves", "")})
+    lanes = []
+    if lane_list:
+        names = {c["code"]: c["name"] for c in crosswalk.get("codes", [])} | (goal_names or {})
+        for lane in lane_list:
+            others = sorted(({"id": code, "name": names.get(code, code), "serves": entry["serves"]}
+                             for code, entry in lane_of.items()
+                             if "." in code and entry["lane"] == lane["id"] and code not in goals_by_code),
+                            key=lambda g: subcategory_sort_key(g["id"]))
+            linked = sum(g["lane"] == lane["id"] for g in goals)
+            if linked or others:
+                lanes.append({**lane, "linked": linked, "goals": others})
     if scope:
         for g in goals:
             found = scope["goals"].get(g["id"], {})
@@ -824,7 +853,9 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
                                   sort_keys=True).encode()).hexdigest()
     return {
         "sig": sig[:16], "goals": goals, "links": out_links, "indicators": indicators,
-        "otherGoals": max(0, n_goals - len(goals)), "year": links.get("spotlightYear", ""), "scope": scope_out,
+        "otherGoals": max(0, n_goals - len(goals)), "lanes": lanes,
+        "bylaw": ((crosswalk or {}).get("source") or {}).get("url", ""),
+        "year": links.get("spotlightYear", ""), "scope": scope_out,
         "possible": SPOTLIGHT_POSSIBLE,
         "guardrail": {"summary": SPOTLIGHT_NO_LINK, "quote": guard.get("quote", ""),
                       "url": guard.get("url", "")},

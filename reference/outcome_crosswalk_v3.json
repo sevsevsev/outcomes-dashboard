@@ -1,0 +1,779 @@
+{
+ "crosswalkVersion": "1.0.0",
+ "codebook": "youth_outcomes_v3",
+ "codebookVersion": "3.3.0",
+ "rule": "A lane says which District priority an outcome serves. It says what a partner works toward, never that the partner moves it, and it is never a score for a partner. Research credit comes only from the SPOTlight links file, by program model.",
+ "source": {
+  "citation": "Board of Education, School District of Philadelphia. Bylaw 003.1, Goals and Guardrails (adopted 29 June 2023, revised 19 October 2023).",
+  "url": "https://www.philasd.org/schoolboard/wp-content/uploads/sites/892/2023/10/003.1-Goals-and-Guardrails.docx-1.pdf",
+  "guardrailDefinition": {
+   "text": "Guardrails: The nonnegotiable conditions that must exist in schools to support achieving the Goals.",
+   "claim": "B-1"
+  },
+  "goals": [
+   {
+    "text": "All students read on or above grade level",
+    "claim": "B-2"
+   },
+   {
+    "text": "All students perform on or above grade level in math",
+    "claim": "B-3"
+   },
+   {
+    "text": "All students graduate college and career ready",
+    "claim": "B-4"
+   }
+  ],
+  "guardrails": [
+   {
+    "text": "Every school will be a safe, welcoming, and healthy place where students, staff, and community want to be and learn each day ... spaces with inclusive climates that provide students with access to robust social, emotional, and mental health supports",
+    "claim": "B-5"
+   },
+   {
+    "text": "Every student will have a well-rounded education with co-curricular opportunities, including arts and athletics, integrated into the school experience.",
+    "claim": "B-6"
+   },
+   {
+    "text": "Every parent and guardian will be welcomed and encouraged to be partners in their child’s school community.",
+    "claim": "B-7"
+   },
+   {
+    "text": "Students' potential will not be limited by practices that perpetuate systemic racism and hinder student achievement.",
+    "claim": "B-8"
+   }
+  ],
+  "note": "The fourth guardrail concerns District practices that perpetuate systemic racism, not a student outcome, so no code is placed in it."
+ },
+ "lanes": [
+  {
+   "id": "names-indicator",
+   "name": "Names a SPOTlight indicator",
+   "description": "The outcome is the subject of a District SPOTlight indicator: reading, math, science, attendance, graduation or the career and technical education industry test."
+  },
+  {
+   "id": "step-toward-indicator",
+   "name": "Steps toward an indicator",
+   "description": "Research follows this outcome to a SPOTlight indicator: grades and on-track status, engagement, persistence, mindsets, suspensions, school readiness."
+  },
+  {
+   "id": "college-career-goal",
+   "name": "Board goal: graduate college and career ready",
+   "description": "Serves the Board goal of graduating college and career ready. Apart from graduation, the SPOTlight has no measure for it.",
+   "quote": {
+    "text": "All students graduate college and career ready",
+    "claim": "B-4"
+   }
+  },
+  {
+   "id": "guardrail-safe-welcoming",
+   "name": "Guardrail: safe, welcoming and healthy schools",
+   "description": "Valued under the Board guardrail for safe, welcoming and healthy schools with social, emotional and mental health supports.",
+   "quote": {
+    "text": "Every school will be a safe, welcoming, and healthy place where students, staff, and community want to be and learn each day ... spaces with inclusive climates that provide students with access to robust social, emotional, and mental health supports",
+    "claim": "B-5"
+   }
+  },
+  {
+   "id": "guardrail-well-rounded",
+   "name": "Guardrail: a well-rounded education",
+   "description": "Valued under the Board guardrail for a well-rounded education with co-curricular opportunities, including arts and athletics.",
+   "quote": {
+    "text": "Every student will have a well-rounded education with co-curricular opportunities, including arts and athletics, integrated into the school experience.",
+    "claim": "B-6"
+   }
+  },
+  {
+   "id": "guardrail-family-partners",
+   "name": "Guardrail: parents and guardians as partners",
+   "description": "Valued under the Board guardrail that welcomes parents and guardians as partners in their child's school community.",
+   "quote": {
+    "text": "Every parent and guardian will be welcomed and encouraged to be partners in their child’s school community.",
+    "claim": "B-7"
+   }
+  },
+  {
+   "id": "family-outcome",
+   "name": "Family outcome, valued on its own terms",
+   "description": "A result for families and caregivers: well-being, skills and basic needs. It is not tested against student indicators."
+  },
+  {
+   "id": "quality-condition",
+   "name": "Condition for quality, not a student outcome",
+   "description": "A result for staff, programs, access or systems. Testing it against student indicators would be a category error."
+  }
+ ],
+ "codes": [
+  {
+   "code": "Y1",
+   "name": "Academic Learning & Achievement",
+   "lane": "step-toward-indicator",
+   "serves": "Depends on the subject, which the statement does not name"
+  },
+  {
+   "code": "Y1.1",
+   "name": "Literacy: Reading & Writing",
+   "lane": "names-indicator",
+   "serves": "English language arts tests (grade 3, grades 3 to 8, Keystone Literature)"
+  },
+  {
+   "code": "Y1.2",
+   "name": "English Language Development & Multilingualism",
+   "lane": "step-toward-indicator",
+   "serves": "English language arts tests"
+  },
+  {
+   "code": "Y1.3",
+   "name": "Mathematics",
+   "lane": "names-indicator",
+   "serves": "Math tests (grade 3, grades 3 to 8, Keystone Algebra I)"
+  },
+  {
+   "code": "Y1.4",
+   "name": "Science, Technology & Engineering",
+   "lane": "names-indicator",
+   "serves": "Science tests (grades 4 and 8, Keystone Biology), for the science part of the code"
+  },
+  {
+   "code": "Y1.5",
+   "name": "Other Academic Subjects",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y1.6",
+   "name": "Arts Learning",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y1.7",
+   "name": "Critical Thinking, Inquiry & Media Literacy",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y1.8",
+   "name": "Early Learning & School Readiness",
+   "lane": "step-toward-indicator",
+   "serves": "Grade 3 reading and math tests"
+  },
+  {
+   "code": "Y1.9",
+   "name": "Academic Engagement Behaviors",
+   "lane": "step-toward-indicator",
+   "serves": "Dropouts"
+  },
+  {
+   "code": "Y1.10",
+   "name": "Academic Perseverance",
+   "lane": "step-toward-indicator",
+   "serves": "Reading and math tests"
+  },
+  {
+   "code": "Y1.11",
+   "name": "Learning Strategies & Study Skills",
+   "lane": "step-toward-indicator",
+   "serves": "Reading and math tests"
+  },
+  {
+   "code": "Y1.12",
+   "name": "Academic Mindsets & Self-Efficacy",
+   "lane": "step-toward-indicator",
+   "serves": "Reading and math tests"
+  },
+  {
+   "code": "Y1.13",
+   "name": "Attendance & School Stability",
+   "lane": "names-indicator",
+   "serves": "Student attendance (90 percent or more of days)"
+  },
+  {
+   "code": "Y1.14",
+   "name": "Exclusionary Discipline",
+   "lane": "step-toward-indicator",
+   "serves": "Attendance; graduation"
+  },
+  {
+   "code": "Y1.15",
+   "name": "Grades, Credits & On-Track Status",
+   "lane": "step-toward-indicator",
+   "serves": "Four-year graduation; dropouts"
+  },
+  {
+   "code": "Y1.16",
+   "name": "Advanced Coursework & Dual Credit",
+   "lane": "college-career-goal",
+   "serves": "Graduate college and career ready"
+  },
+  {
+   "code": "Y1.17",
+   "name": "High School Completion & Re-engagement",
+   "lane": "names-indicator",
+   "serves": "Four-year graduation; dropouts"
+  },
+  {
+   "code": "Y1.18",
+   "name": "Postsecondary Enrollment, Persistence & Completion",
+   "lane": "college-career-goal",
+   "serves": "Graduate college and career ready"
+  },
+  {
+   "code": "Y2",
+   "name": "Engagement, Interest & Creative Expression",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y2.1",
+   "name": "Enjoyment & Joy",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y2.2",
+   "name": "Curiosity & Triggered Interest",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y2.3",
+   "name": "Sustained & Individual Interest",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y2.4",
+   "name": "Relevance & Utility Value",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y2.5",
+   "name": "Creative Expression & Performance",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y2.6",
+   "name": "Participation in Enriching Activities",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y3",
+   "name": "Belonging & Relationships",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y3.1",
+   "name": "Belonging & Mattering",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y3.2",
+   "name": "Supportive Adult Relationships",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y3.3",
+   "name": "Peer Relationships & Friendship",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y3.4",
+   "name": "Family Relationships",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y3.5",
+   "name": "Social Capital & Networks",
+   "lane": "college-career-goal",
+   "serves": "Graduate college and career ready"
+  },
+  {
+   "code": "Y4",
+   "name": "Social & Emotional Skills (CASEL)",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y4.1",
+   "name": "Emotion Awareness",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y4.2",
+   "name": "Emotion Regulation & Coping",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y4.3",
+   "name": "Goal-Setting, Organization & Self-Discipline",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y4.4",
+   "name": "Empathy, Perspective-Taking & Social Awareness",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y4.5",
+   "name": "Respect for Diversity & Cultural Competence",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y4.6",
+   "name": "Communication & Public Speaking",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y4.7",
+   "name": "Teamwork, Collaboration & Group Leadership",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y4.8",
+   "name": "Relationship-Building & Conflict Resolution",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y4.9",
+   "name": "Help-Seeking & Offering Support",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y4.10",
+   "name": "Decision-Making & Problem-Solving",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y4.11",
+   "name": "Ethical & Prosocial Choices",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y4.12",
+   "name": "Risk Avoidance & Refusal Skills",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y5",
+   "name": "Identity, Confidence & Agency",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y5.1",
+   "name": "Self-Understanding & Identity Exploration",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y5.2",
+   "name": "Cultural & Social Identity",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y5.3",
+   "name": "Domain Identity",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y5.4",
+   "name": "Confidence, Self-Efficacy & Self-Worth",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y5.5",
+   "name": "Purpose & Future Orientation",
+   "lane": "college-career-goal",
+   "serves": "Graduate college and career ready"
+  },
+  {
+   "code": "Y5.6",
+   "name": "Agency, Self-Determination & Self-Advocacy",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y6",
+   "name": "Character, Values & Civic Life",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y6.1",
+   "name": "Positive Values & Character",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y6.2",
+   "name": "Civic Knowledge",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y6.3",
+   "name": "Critical Consciousness & Social Justice",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y6.4",
+   "name": "Civic Voice, Leadership & Participation",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y6.5",
+   "name": "Community Service & Action",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y6.6",
+   "name": "Environmental Stewardship",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y6.7",
+   "name": "Digital Citizenship & Online Safety",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y7",
+   "name": "Career & Economic Readiness",
+   "lane": "college-career-goal",
+   "serves": "Graduate college and career ready"
+  },
+  {
+   "code": "Y7.1",
+   "name": "Career Awareness & Exploration",
+   "lane": "college-career-goal",
+   "serves": "Graduate college and career ready"
+  },
+  {
+   "code": "Y7.2",
+   "name": "College & Career Transition Knowledge",
+   "lane": "college-career-goal",
+   "serves": "Graduate college and career ready"
+  },
+  {
+   "code": "Y7.3",
+   "name": "Employability & Workplace Skills",
+   "lane": "college-career-goal",
+   "serves": "Graduate college and career ready"
+  },
+  {
+   "code": "Y7.4",
+   "name": "Technical Skills, Credentials & Work-Based Learning",
+   "lane": "names-indicator",
+   "serves": "Career and technical education industry test, grade 12"
+  },
+  {
+   "code": "Y7.5",
+   "name": "Employment & Earnings",
+   "lane": "college-career-goal",
+   "serves": "Graduate college and career ready"
+  },
+  {
+   "code": "Y7.6",
+   "name": "Financial Capability",
+   "lane": "college-career-goal",
+   "serves": "Graduate college and career ready, on a broad reading of career ready"
+  },
+  {
+   "code": "Y7.7",
+   "name": "Independent Living Skills",
+   "lane": "college-career-goal",
+   "serves": "Graduate college and career ready, on a broad reading of career ready"
+  },
+  {
+   "code": "Y8",
+   "name": "Health, Safety & Well-Being",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y8.1",
+   "name": "Healthy Daily Habits",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y8.2",
+   "name": "Motor & Sport Skills",
+   "lane": "guardrail-well-rounded",
+   "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"
+  },
+  {
+   "code": "Y8.3",
+   "name": "Health Knowledge & Safety Skills",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y8.4",
+   "name": "Sexual & Reproductive Health",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y8.5",
+   "name": "Health Care Access & Condition Management",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y8.6",
+   "name": "Mental Health Symptoms & Distress",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y8.7",
+   "name": "Flourishing & Life Satisfaction",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y8.8",
+   "name": "Healing & Trauma Recovery",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y8.9",
+   "name": "Mental Health Service Access & Use",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y8.10",
+   "name": "Felt Safety",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y8.11",
+   "name": "Substance Use",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y8.12",
+   "name": "Violence, Bullying & Victimization",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "Y8.13",
+   "name": "Justice Involvement, Diversion & Reentry",
+   "lane": "guardrail-safe-welcoming",
+   "serves": "Safe, welcoming and healthy schools with social, emotional and mental health supports"
+  },
+  {
+   "code": "F1",
+   "name": "Family & Caregiver Strengthening",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "F1.1",
+   "name": "Parenting Knowledge & Practices",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "F1.2",
+   "name": "Home Learning Environment & Routines",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "F1.3",
+   "name": "Family Health Practices",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "F1.4",
+   "name": "Caregiver Well-Being & Resilience",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "F1.5",
+   "name": "Caregiver Social Connections",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "F1.6",
+   "name": "Adult Education, Skills & Employment",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "F1.7",
+   "name": "System Navigation & Rights Knowledge",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "F1.8",
+   "name": "Family Connection & Trust with the Program",
+   "lane": "guardrail-family-partners",
+   "serves": "Parents and guardians welcomed as partners"
+  },
+  {
+   "code": "F1.9",
+   "name": "Family Participation & Leadership",
+   "lane": "guardrail-family-partners",
+   "serves": "Parents and guardians welcomed as partners"
+  },
+  {
+   "code": "F2",
+   "name": "Basic Needs & Economic Stability",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "F2.1",
+   "name": "Income, Benefits & Financial Stability",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "F2.2",
+   "name": "Food Security",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "F2.3",
+   "name": "Housing Stability & Safe Living Situation",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "F2.4",
+   "name": "Material Necessities (Clothing, Gear & Supplies)",
+   "lane": "family-outcome",
+   "serves": "Family and caregiver well-being, skills and basic needs"
+  },
+  {
+   "code": "A1",
+   "name": "Staff & Volunteer Capacity",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A1.1",
+   "name": "Staff & Volunteer Knowledge & Skills",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A1.2",
+   "name": "Practice Change",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A1.3",
+   "name": "Workforce Stability & Well-Being",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A2",
+   "name": "Program Quality, Access & Reach",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A2.1",
+   "name": "Program Quality",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A2.2",
+   "name": "Participant & Family Satisfaction",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A2.3",
+   "name": "Access to Resources",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A2.4",
+   "name": "Inclusion, Accommodations & Language Access",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A2.5",
+   "name": "Participation, Dosage & Reach (Output)",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A2.6",
+   "name": "Family Engagement Systems",
+   "lane": "guardrail-family-partners",
+   "serves": "Parents and guardians welcomed as partners"
+  },
+  {
+   "code": "A3",
+   "name": "Systems, Policy & Community Conditions",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A3.1",
+   "name": "Policy & Institutional Change",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A3.2",
+   "name": "Cross-Sector Partnerships",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  },
+  {
+   "code": "A3.3",
+   "name": "Community Conditions & Collective Efficacy",
+   "lane": "quality-condition",
+   "serves": "Staff, program, access and system conditions"
+  }
+ ]
+}

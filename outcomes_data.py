@@ -59,6 +59,8 @@ CODEBOOK_DEFINITIONS_V3_PATH = APP_DIR / "reference" / "codebook_definitions_v3.
 # Which 3.x goals may reach the District's SPOTlight indicators, copied from the coder repo by
 # scripts/build_spotlight_links.py. Internal dashboard only: public display needs district sign-off.
 SPOTLIGHT_LINKS_V3_PATH = APP_DIR / "reference" / "spotlight_links_v3.json"
+# Which District priority (lane) each 3.x code and domain serves, copied from the coder repo by the same script.
+CROSSWALK_V3_PATH = APP_DIR / "reference" / "outcome_crosswalk_v3.json"
 
 # Column names used throughout the app. Keeping them in one place means a
 # renamed column in a future export only needs changing here.
@@ -897,11 +899,12 @@ def spotlight_link_summary(link: dict, names: dict[str, str]) -> dict:
     }
 
 
-def spotlight_panel_data(links: dict) -> dict:
+def spotlight_panel_data(links: dict, crosswalk: Optional[dict] = None) -> dict:
     """What the wheel's side panel shows under a picked goal's "Connection to District indicators".
 
-    {"goals": {"Y1.1": [link summaries]}, "guardrail": the note for goals with no link, "note": the
-    possible-only caution, "reviewed", "year", "report"}; {} when the links file is missing.
+    {"goals": {"Y1.1": [link summaries]}, "lanes": {"Y1.1": {lane, laneName, serves, quote}} from the
+    crosswalk, "guardrail": the note for a goal with no link and no lane, "note": the possible-only caution,
+    "reviewed", "year", "report", "bylaw" (the Board bylaw's link)}; {} when the links file is missing.
     """
     if not links:
         return {}
@@ -910,9 +913,77 @@ def spotlight_panel_data(links: dict) -> dict:
     for link in links.get("links", []):
         for code in link["codes"]:
             goals.setdefault(code, []).append(spotlight_link_summary(link, names))
-    return {"goals": goals, "guardrail": SPOTLIGHT_NO_LINK, "note": SPOTLIGHT_POSSIBLE,
+    quotes = {lane["id"]: lane["quote"] for lane in crosswalk_lanes(crosswalk or {})}
+    lanes = {code: {**entry, "quote": quotes.get(entry["lane"], "")}
+             for code, entry in crosswalk_code_lanes(crosswalk or {}).items()}
+    return {"goals": goals, "lanes": lanes, "guardrail": SPOTLIGHT_NO_LINK, "note": SPOTLIGHT_POSSIBLE,
             "reviewed": links.get("reviewedOn", ""), "year": links.get("spotlightYear", ""),
-            "report": links.get("report", "")}
+            "report": links.get("report", ""), "bylaw": ((crosswalk or {}).get("source") or {}).get("url", "")}
+
+
+def load_crosswalk(path: Union[str, Path] = CROSSWALK_V3_PATH) -> dict:
+    """The outcome crosswalk (lanes, one lane per code and domain, Board Bylaw 003.1 source); {} if missing."""
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+
+
+def crosswalk_lanes(crosswalk: dict) -> list[dict]:
+    """The lanes in the file's order, each {id, name, description, quote (Board text or "")}."""
+    return [{"id": lane["id"], "name": lane["name"], "description": lane.get("description", ""),
+             "quote": (lane.get("quote") or {}).get("text", "")} for lane in crosswalk.get("lanes", [])]
+
+
+def crosswalk_code_lanes(crosswalk: dict) -> dict[str, dict]:
+    """Code or domain ("Y1.3", "Y4") -> {lane (id), laneName, serves}."""
+    names = {lane["id"]: lane["name"] for lane in crosswalk.get("lanes", [])}
+    return {c["code"]: {"lane": c["lane"], "laneName": names.get(c["lane"], c["lane"]), "serves": c.get("serves", "")}
+            for c in crosswalk.get("codes", [])}
+
+
+def logic_model_programs(df: pd.DataFrame) -> pd.Series:
+    """One label per row naming its program, with programs that share a logic model joined into one.
+
+    A program is a program name within one organization, as on the wheel. Two programs coded from the same
+    logic model file share a label, and so do the parts of one program spread over several files, so a count
+    of distinct labels counts each logic model's programs once.
+    """
+    programs = (df[COL_ORG_VIEW].astype(str) + "\x1f" + df[COL_PROGRAM].astype(str)).to_numpy()
+    files = (df[COL_SOURCE_FILE].fillna("").astype(str).str.strip().to_numpy()
+             if COL_SOURCE_FILE in df.columns else np.full(len(df), ""))
+    parent: dict[str, str] = {}
+
+    def find(x: str) -> str:
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for program, file in zip(programs, files):
+        root = find("p:" + program)
+        if file:
+            other = find("f:" + file)
+            if other != root:
+                parent[other] = root
+    return pd.Series([find("p:" + p) for p in programs], index=df.index)
+
+
+def lane_program_counts(df: pd.DataFrame, crosswalk: dict) -> list[dict]:
+    """For each lane, in the file's order: how many programs name at least one goal (or domain) in it.
+
+    Programs that share one logic model count once. A program naming goals in several lanes counts in each,
+    so the counts never add up to a total, and they say what programs work toward, not what they achieve.
+    """
+    lanes = crosswalk_lanes(crosswalk)
+    if not lanes:
+        return []
+    lane_of = {code: entry["lane"] for code, entry in crosswalk_code_lanes(crosswalk).items()}
+    row_lane = df[COL_SUBCAT].map(lambda label: lane_of.get(split_code(label)[0]))
+    programs = logic_model_programs(df)
+    per_lane = programs.groupby(row_lane).nunique()
+    return [{**lane, "programs": int(per_lane.get(lane["id"], 0))} for lane in lanes]
 
 
 def codebook_domain_names(path: Union[str, Path] = CODEBOOK_V3_PATH) -> dict[str, str]:
@@ -923,16 +994,21 @@ def codebook_domain_names(path: Union[str, Path] = CODEBOOK_V3_PATH) -> dict[str
     return dict(split_code(label) for label in codebook[COL_DOMAIN].drop_duplicates())
 
 
-def spotlight_pick_codes(pick: Optional[dict], links: dict) -> list[str]:
+def spotlight_pick_codes(pick: Optional[dict], links: dict, crosswalk: Optional[dict] = None) -> list[str]:
     """The goal codes a pick on the District indicators map stands for, in codebook order.
 
     A goal stands for itself, a link for its goals, an indicator for the goals of every link that
-    reaches it; an indicator no link reaches, or the "other goals" row, stands for none.
+    reaches it, and a lane row for the lane's goals and domain with no link (from the `crosswalk`);
+    an indicator no link reaches, or the "other goals" row, stands for none.
     """
     if not pick or not links:
         return []
     kind, pid = pick.get("kind"), pick.get("id")
-    if kind == "goal":
+    if kind == "lane":
+        linked = {c for link in links.get("links", []) for c in link["codes"]}
+        codes = {c for c, entry in crosswalk_code_lanes(crosswalk or {}).items()
+                 if entry["lane"] == pid and c not in linked}
+    elif kind == "goal":
         codes = {pid}
     elif kind == "link":
         codes = {c for link in links.get("links", []) if link["id"] == pid for c in link["codes"]}

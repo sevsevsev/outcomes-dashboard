@@ -566,13 +566,13 @@ def test_domain_only_rows_get_their_own_goal_and_stay_out_of_coverage_gaps():
 
 def test_codebook_matches_the_files_numbering():
     v3 = app.load_codebook_for(app.clean_outcomes(district_rows()))
-    assert len(v3) == 98 and ATTEND in set(v3[app.COL_SUBCAT]) and CONF not in set(v3[app.COL_SUBCAT])
+    assert len(v3) == 99 and ATTEND in set(v3[app.COL_SUBCAT]) and CONF not in set(v3[app.COL_SUBCAT])
     v1 = app.load_codebook_for(app.clean_outcomes(raw_rows()))
     assert CONF in set(v1[app.COL_SUBCAT]) and ATTEND not in set(v1[app.COL_SUBCAT])
     frame = app.clean_outcomes(district_rows())
     frame = frame.assign(**{app.COL_ORG_VIEW: frame[app.COL_ORG]})
     coverage = app.subcategory_coverage(frame, v3)
-    assert (coverage["organizations"] == 0).sum() == 98 - 4   # every 3.x code but the four the file uses
+    assert (coverage["organizations"] == 0).sum() == 99 - 4   # every 3.x code but the four the file uses
 
 
 def test_peer_and_findings_views_work_on_a_codebook_3_file():
@@ -775,3 +775,104 @@ def test_spotlight_pick_codes():
     assert spotlight_pick_codes({"kind": "indicator", "id": "S11"}, links) == []
     assert spotlight_pick_codes({"kind": "other", "id": "other"}, links) == []
     assert spotlight_pick_codes(None, links) == []
+
+def small_crosswalk():
+    """A cut-down outcome crosswalk in the coder's layout: lanes, then one lane per code and domain."""
+    lanes = [
+        {"id": "names-indicator", "name": "Names a SPOTlight indicator", "description": "Names one."},
+        {"id": "guardrail-well-rounded", "name": "Guardrail: a well-rounded education",
+         "description": "Valued under the Board guardrail for a well-rounded education.",
+         "quote": {"text": "Every student will have a well-rounded education", "claim": "B-6"}},
+        {"id": "quality-condition", "name": "Condition for quality, not a student outcome", "description": "Staff."},
+    ]
+    codes = [
+        {"code": "Y1.3", "name": "Mathematics", "lane": "names-indicator", "serves": "Math tests"},
+        {"code": "Y1.4", "name": "Science, Technology & Engineering", "lane": "names-indicator",
+         "serves": "Science tests"},
+        {"code": "Y1.6", "name": "Arts Learning", "lane": "guardrail-well-rounded",
+         "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"},
+        {"code": "Y2", "name": "Engagement, Interest & Creative Expression", "lane": "guardrail-well-rounded",
+         "serves": "A well-rounded education with co-curricular opportunities, including arts and athletics"},
+        {"code": "A2.1", "name": "Program Quality", "lane": "quality-condition", "serves": "Staff, program, access"},
+    ]
+    return {"lanes": lanes, "codes": codes, "source": {"url": "https://example.org/bylaw.pdf"}}
+
+
+def test_lane_program_counts_count_shared_logic_models_once():
+    """Each lane counts programs naming a goal or domain in it; programs sharing one logic model count once."""
+    rows = pd.DataFrame({
+        app.COL_SUBCAT: ["Y1.3 Mathematics", "Y1.3 Mathematics", "Y1.6 Arts Learning",
+                         "Y2 Engagement, Interest & Creative Expression, no specific goal", "Y8.1 Healthy Daily Habits",
+                         "Y1.3 Mathematics"],
+        app.COL_ORG_VIEW: ["A", "A", "B", "C", "D", "A"],
+        app.COL_PROGRAM: ["Tutors", "Math Club", "Art", "Club", "Health", "Tutors"],
+        app.COL_SOURCE_FILE: ["1_1 - A - LM.pdf", "1_1 - A - LM.pdf", "2_1 - B.pdf", "3_1 - C.pdf", "4_1 - D.pdf",
+                              "1_1 - A - LM part 2.pdf"],
+    })
+    counts = {lane["id"]: lane["programs"] for lane in app.lane_program_counts(rows, small_crosswalk())}
+    # Tutors and Math Club share one logic model (and Tutors spans two files), so A counts once.
+    assert counts == {"names-indicator": 1, "guardrail-well-rounded": 2, "quality-condition": 0}
+    assert [lane["name"] for lane in app.lane_program_counts(rows, small_crosswalk())][1] == (
+        "Guardrail: a well-rounded education")
+    assert app.lane_program_counts(rows, {}) == []
+    # Without file names, a program is a program name within one organization, as on the wheel.
+    no_files = rows.drop(columns=[app.COL_SOURCE_FILE])
+    assert app.logic_model_programs(no_files).nunique() == app.count_programs(no_files)
+
+
+def test_wheel_panel_shows_lane_and_serves_in_place_of_the_guardrail_note():
+    from outcomes_data import load_spotlight_links, spotlight_panel_data
+    panel = spotlight_panel_data(load_spotlight_links(), small_crosswalk())
+    arts = panel["lanes"]["Y1.6"]
+    assert arts["laneName"] == "Guardrail: a well-rounded education"
+    assert arts["serves"].startswith("A well-rounded education")
+    assert arts["quote"] == "Every student will have a well-rounded education"
+    assert panel["lanes"]["Y1.3"]["quote"] == ""
+    assert panel["bylaw"] == "https://example.org/bylaw.pdf"
+    assert spotlight_panel_data(load_spotlight_links())["lanes"] == {}
+
+
+def test_spotlight_map_groups_goals_by_lane():
+    """With the crosswalk, linked goals sit under their lanes, and each lane lists its goals with no link."""
+    from outcomes_data import (codebook_domain_names, codebook_goal_names, load_spotlight_links,
+                               spotlight_indicator_reach, spotlight_pick_codes)
+    links = load_spotlight_links()
+    rows = pd.DataFrame({app.COL_SUBCAT: ["Y1.3 Mathematics"], app.COL_ORG_VIEW: ["A"], app.COL_PROGRAM: ["Tutors"]})
+    reach = spotlight_indicator_reach(rows, links, codebook_goal_names())
+    data = charts.spotlight_map_data(reach, links, codebook_domain_names(), {}, n_goals=99,
+                                     crosswalk=small_crosswalk(), goal_names=codebook_goal_names())
+    maths = next(g for g in data["goals"] if g["id"] == "Y1.3")
+    assert maths["laneName"] == "Names a SPOTlight indicator" and maths["serves"] == "Math tests"
+    placed = [g["lane"] for g in data["goals"] if g["lane"]]
+    assert placed == sorted(placed, key=["names-indicator", "guardrail-well-rounded", "quality-condition"].index)
+    lanes = {lane["id"]: lane for lane in data["lanes"]}
+    assert [g["id"] for g in lanes["names-indicator"]["goals"]] == ["Y1.4"]   # science has no link here
+    assert lanes["names-indicator"]["linked"] >= 1
+    arts = lanes["guardrail-well-rounded"]
+    assert [g["name"] for g in arts["goals"]] == ["Arts Learning"]   # the domain row Y2 is not a goal
+    assert arts["linked"] == 0 and arts["quote"]
+    assert data["bylaw"] == "https://example.org/bylaw.pdf"
+    # A lane row stands for its unlinked goals and domain, for the table under the map.
+    assert spotlight_pick_codes({"kind": "lane", "id": "guardrail-well-rounded"}, links, small_crosswalk()) == [
+        "Y1.6", "Y2"]
+    # Without the crosswalk, the old domain grouping and "other goals" row stay.
+    plain = charts.spotlight_map_data(reach, links, codebook_domain_names(), {}, n_goals=99)
+    assert plain["lanes"] == [] and plain["otherGoals"] > 0
+
+
+def test_copied_crosswalk_places_every_codebook_goal_and_domain_once():
+    """The copied crosswalk puts each 3.x goal and domain in exactly one of its lanes, with a serves line."""
+    from outcomes_data import (codebook_domain_names, codebook_goal_names, crosswalk_code_lanes, crosswalk_lanes,
+                               load_crosswalk)
+    crosswalk = load_crosswalk()
+    lanes = crosswalk_lanes(crosswalk)
+    assert len(lanes) == 8 and lanes[0]["name"] == "Names a SPOTlight indicator"
+    codes = [c["code"] for c in crosswalk["codes"]]
+    assert len(codes) == len(set(codes))
+    assert set(codes) == set(codebook_goal_names()) | set(codebook_domain_names())
+    placed = crosswalk_code_lanes(crosswalk)
+    assert {e["lane"] for e in placed.values()} <= {lane["id"] for lane in lanes}
+    assert all(e["serves"] for e in placed.values())
+    assert placed["Y1.6"]["laneName"] == "Guardrail: a well-rounded education"
+    # The file holds no counts and no evidence.
+    assert not any(isinstance(v, (int, float)) for c in crosswalk["codes"] for v in c.values())

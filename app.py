@@ -100,6 +100,8 @@ from outcomes_data import (
     load_codebook_terms,
     load_codebook_definitions,
     load_spotlight_links,
+    load_crosswalk,
+    lane_program_counts,
     codebook_domain_names,
     codebook_goal_names,
     codebook_scheme,
@@ -192,6 +194,11 @@ def cached_definitions() -> dict:
 @st.cache_data(show_spinner=False)
 def cached_spotlight() -> dict:
     return load_spotlight_links()
+
+
+@st.cache_data(show_spinner=False)
+def cached_crosswalk() -> dict:
+    return load_crosswalk()
 
 
 @st.cache_data(show_spinner=False)
@@ -310,6 +317,13 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 
 /* District indicators: one block per indicator, each link's goals with how many programs name them. */
 .ind {{ margin: 0 0 1.4rem 0; max-width: 52rem; }}
+.dp {{ margin: 0.25rem 0 1rem 0; max-width: 1080px; }}
+.dp-title {{ font-size: 0.75rem !important; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: {MUTED}; margin: 0 0 0.25rem 0; }}
+.dp-list {{ list-style: none; margin: 0 !important; padding: 0; columns: 2 420px; column-gap: 2.5rem; }}
+.dp-list li {{ display: flex; justify-content: space-between; gap: 1rem; break-inside: avoid; margin: 0 !important; padding: 0.2rem 0 !important; border-bottom: 1px solid {HAIRLINE}; font-size: 0.8125rem; line-height: 1.4; }}
+.dp-name {{ color: {INK_2}; }}
+.dp-n {{ color: {MUTED}; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }}
+.dp-note {{ color: {MUTED}; font-size: 0.75rem !important; margin: 0.4rem 0 0 0; max-width: 760px; }}
 .ind-name {{ font-weight: 600; font-size: 1rem !important; color: {INK}; margin: 0; }}
 .ind-value {{ font-weight: 400; font-size: 0.8125rem; color: {MUTED}; font-variant-numeric: tabular-nums; margin-left: 0.5rem; }}
 .ind-wording {{ color: {MUTED}; font-size: 0.8125rem !important; margin: 0.1rem 0 0.4rem 0; }}
@@ -797,7 +811,7 @@ def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value",
                                          short_names=cached_short_names())
     data["search"] = cached_search_index(df, layout)
     data["definitions"] = cached_definitions()
-    data["spotlight"] = spotlight_panel_data(cached_spotlight())
+    data["spotlight"] = spotlight_panel_data(cached_spotlight(), cached_crosswalk())
     pick = codebook_sunburst(data, key=key)
     ids = set(nodes["id"])
     if pick and pick["domain"] not in ids:
@@ -1401,28 +1415,36 @@ def page_indicators(df: pd.DataFrame, everything: pd.DataFrame) -> None:
         f"For the other **{len(unreached)}**, the review found no study strong enough to link a goal: "
         f"{'; '.join(unreached)}.",
     ])
+    district_priorities(df)
     scope, rows = indicator_scope(df, everything)
     pick = indicator_map(reach, links, scope)
     guard = links.get("guardrails", {})
-    if guard:
+    if guard and not cached_crosswalk():
         st.markdown(
             f"<p class='lanes'>The Board of Education counts goals without an indicator link toward its guardrails: "
             f"“{html.escape(guard.get('quote', ''))}” "
             f"(<a href='{html.escape(guard.get('url', ''))}' target='_blank' rel='noopener noreferrer'>Bylaw "
             f"003.1</a>). <a href='{html.escape(links.get('report', ''))}' target='_blank' "
             f"rel='noopener noreferrer'>Read the full review</a>.</p>", unsafe_allow_html=True)
+    elif links.get("report"):
+        st.markdown(f"<p class='lanes'><a href='{html.escape(links['report'])}' target='_blank' "
+                    "rel='noopener noreferrer'>Read the full research review</a>.</p>", unsafe_allow_html=True)
 
-    codes = spotlight_pick_codes(pick, links)
+    crosswalk = cached_crosswalk()
+    codes = spotlight_pick_codes(pick, links, crosswalk)
     goal_codes = rows[COL_SUBCAT].map(lambda label: split_code(label)[0])
     rows = rows[goal_codes.isin(codes)] if pick else rows[goal_codes.isin(
         {c for link in links.get("links", []) for c in link["codes"]})]
     where = " naming a goal with an indicator link"
     if pick:
         e = html.escape
+        lane_names = {lane["id"]: lane["name"] for lane in crosswalk.get("lanes", [])}
         name = {"goal": lambda: cached_goal_names().get(pick["id"], pick["id"]),
+                "lane": lambda: lane_names.get(pick["id"], pick["id"]),
                 "link": lambda: SPOTLIGHT_MODEL_NAMES.get(pick["id"], pick["id"]),
                 "indicator": lambda: spotlight_indicator_names(links).get(pick["id"], pick["id"])}.get(pick["kind"])
         where = (f" naming <b>{e(name())}</b>" if pick["kind"] == "goal"
+                 else f" naming a goal with no indicator link in <b>{e(name())}</b>" if pick["kind"] == "lane"
                  else f" naming a goal in <b>{e(name())}</b>" if pick["kind"] == "link"
                  else f" naming a goal that could help move <b>{e(name())}</b>" if codes
                  else " naming a goal linked to this pick: none")
@@ -1440,6 +1462,31 @@ def page_indicators(df: pd.DataFrame, everything: pd.DataFrame) -> None:
         for group, indicators in groups.items():
             st.markdown(f"<p class='sec-title'>{html.escape(group)}</p>"
                         + "".join(indicator_block(r, by_code, year) for r in indicators), unsafe_allow_html=True)
+
+
+def district_priorities(df: pd.DataFrame) -> None:
+    """A small, quiet list: for each District priority (lane), how many programs name a goal in it.
+
+    Programs that share one logic model count once. The counts follow the filter bar. They are never totalled,
+    ranked or colored: a program can name goals in several lanes, and a lane says what programs work toward.
+    """
+    crosswalk = cached_crosswalk()
+    lanes = lane_program_counts(df, crosswalk)
+    if not lanes:
+        return
+    e = html.escape
+    rows = "".join(
+        f"<li><span class='dp-name'>{e(lane['name'])}</span><span class='dp-n'>{lane['programs']:,} "
+        f"{'program' if lane['programs'] == 1 else 'programs'} naming a goal in this lane</span></li>"
+        for lane in lanes)
+    source = crosswalk.get("source") or {}
+    bylaw = (f" The goals and guardrails are the Board of Education's (<a href='{e(source['url'])}' target='_blank' "
+             "rel='noopener noreferrer'>Bylaw 003.1</a>)." if source.get("url") else "")
+    st.markdown(
+        f"<div class='dp'><p class='dp-title'>District priorities</p><ul class='dp-list'>{rows}</ul>"
+        "<p class='dp-note'>Each goal belongs to one District priority. A program counts in every lane where it "
+        "names a goal, so the counts don't add up, and they say what programs work toward, not what they achieve. "
+        f"Programs that share one logic model count once.{bylaw}</p></div>", unsafe_allow_html=True)
 
 
 SCOPE_ALL, SCOPE_PROGRAM, SCOPE_SCHOOL = "All partners", "One program", "Partners at a school"
@@ -1511,7 +1558,7 @@ def indicator_map(reach: list[dict], links: dict, scope: Optional[dict] = None, 
     last_key = f"{key}_last"
     data = charts.spotlight_map_data(reach, links, cached_domain_names(), cached_definitions(),
                                      n_goals=len(cached_goal_names()), selected=st.session_state.get(last_key),
-                                     scope=scope)
+                                     scope=scope, crosswalk=cached_crosswalk(), goal_names=cached_goal_names())
     pick = spotlight_map(data, key=key)
     st.session_state[last_key] = pick
     return pick
