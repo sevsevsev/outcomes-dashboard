@@ -858,3 +858,21 @@ def test_spotlight_map_groups_goals_by_lane():
     # Without the crosswalk, the old domain grouping and "other goals" row stay.
     plain = charts.spotlight_map_data(reach, links, codebook_domain_names(), {}, n_goals=99)
     assert plain["lanes"] == [] and plain["otherGoals"] > 0
+
+
+def test_copied_crosswalk_places_every_codebook_goal_and_domain_once():
+    """The copied crosswalk puts each 3.x goal and domain in exactly one of its lanes, with a serves line."""
+    from outcomes_data import (codebook_domain_names, codebook_goal_names, crosswalk_code_lanes, crosswalk_lanes,
+                               load_crosswalk)
+    crosswalk = load_crosswalk()
+    lanes = crosswalk_lanes(crosswalk)
+    assert len(lanes) == 8 and lanes[0]["name"] == "Names a SPOTlight indicator"
+    codes = [c["code"] for c in crosswalk["codes"]]
+    assert len(codes) == len(set(codes))
+    assert set(codes) == set(codebook_goal_names()) | set(codebook_domain_names())
+    placed = crosswalk_code_lanes(crosswalk)
+    assert {e["lane"] for e in placed.values()} <= {lane["id"] for lane in lanes}
+    assert all(e["serves"] for e in placed.values())
+    assert placed["Y1.6"]["laneName"] == "Guardrail: a well-rounded education"
+    # The file holds no counts and no evidence.
+    assert not any(isinstance(v, (int, float)) for c in crosswalk["codes"] for v in c.values())
