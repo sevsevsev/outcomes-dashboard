@@ -566,13 +566,13 @@ def test_domain_only_rows_get_their_own_goal_and_stay_out_of_coverage_gaps():
 
 def test_codebook_matches_the_files_numbering():
     v3 = app.load_codebook_for(app.clean_outcomes(district_rows()))
-    assert len(v3) == 98 and ATTEND in set(v3[app.COL_SUBCAT]) and CONF not in set(v3[app.COL_SUBCAT])
+    assert len(v3) == 99 and ATTEND in set(v3[app.COL_SUBCAT]) and CONF not in set(v3[app.COL_SUBCAT])
     v1 = app.load_codebook_for(app.clean_outcomes(raw_rows()))
     assert CONF in set(v1[app.COL_SUBCAT]) and ATTEND not in set(v1[app.COL_SUBCAT])
     frame = app.clean_outcomes(district_rows())
     frame = frame.assign(**{app.COL_ORG_VIEW: frame[app.COL_ORG]})
     coverage = app.subcategory_coverage(frame, v3)
-    assert (coverage["organizations"] == 0).sum() == 98 - 4   # every 3.x code but the four the file uses
+    assert (coverage["organizations"] == 0).sum() == 99 - 4   # every 3.x code but the four the file uses
 
 
 def test_peer_and_findings_views_work_on_a_codebook_3_file():

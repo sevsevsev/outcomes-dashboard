@@ -1,5 +1,5 @@
 {
- "version": "3.1.4",
+ "version": "3.3.0",
  "domains": {
   "Y1": {
    "description": "What young people learn and how they progress through school: demonstrated learning by subject, the behaviors and beliefs that shape learning, and school and postsecondary status. All academic outcomes live here, in three categories."
@@ -29,7 +29,7 @@
    "description": "Caregivers and other adult participants: parenting and home learning, caregiver well-being and connections, adult education and system navigation, and the family's partnership with the program."
   },
   "F2": {
-   "description": "The material stability of a household or of a young person living independently: income and benefits, food, housing."
+   "description": "The material stability of a household or of a young person living independently, and the basic goods a young person has: income and benefits, food, housing, clothing and supplies."
   },
   "A1": {
    "description": "The adults who serve young people: what they learn, what they change in practice, and whether the workforce is stable and well."
@@ -136,7 +136,7 @@
    "description": "Household or independent-youth income, public benefits and financial stability."
   },
   "F2.B": {
-   "description": "Having enough healthy food and a safe, stable place to live."
+   "description": "Having enough healthy food, a safe, stable place to live, and the clothing, shoes, gear and supplies a young person needs."
   },
   "A1.A": {
    "description": "What staff and volunteers learn and how they apply it in their practice."
@@ -194,16 +194,18 @@
    ]
   },
   "Y1.4": {
-   "definition": "A demonstrated gain in science (life, physical, earth, environmental), engineering design, or computing and coding, including digital-literacy skills.",
-   "include": "Science test proficiency; ecosystem or ecology knowledge; engineering design process; coding, computational thinking, digital skills.",
-   "exclude": "STEM interest; STEM identity; online safety; industry certifications; advanced course enrollment.",
+   "definition": "A demonstrated gain in science (life, physical, earth, environmental), engineering design, or computer science (coding, computational thinking, computing systems).",
+   "include": "Science test proficiency; ecosystem or ecology knowledge; engineering design process; coding, computational thinking.",
+   "exclude": "STEM interest; STEM identity; online safety; industry certifications; advanced course enrollment; everyday digital skills (email, video calls, online forms, office software).",
    "see_also": [
     "Y2.2",
     "Y2.3",
     "Y5.3",
     "Y6.7",
     "Y7.4",
-    "Y1.16"
+    "Y1.16",
+    "Y7.3",
+    "F1.6"
    ]
   },
   "Y1.5": {
@@ -381,7 +383,7 @@
   },
   "Y2.5": {
    "definition": "Self-expression through making something (art, music, writing, design), presenting or performing finished work, or responding to art, as an experience rather than a stated skill gain.",
-   "include": "Composing, creating, exhibiting, performing, critiquing or connecting art to personal meaning.",
+   "include": "Composing, creating, exhibiting, performing, appreciating, critiquing or connecting art to personal meaning.",
    "exclude": "A stated technique or knowledge gain in an art form; a stated writing skill gain; teamwork during a production.",
    "see_also": [
     "Y1.6",
@@ -391,8 +393,8 @@
   },
   "Y2.6": {
    "definition": "An individual young person's choice to take part in constructive activities, inside the program (returning, joining) or outside it (sports, arts, clubs, faith groups).",
-   "include": "Returning for another year; joining a team or club; participating fully alongside peers; per-person participation thresholds.",
-   "exclude": "Aggregate program attendance, counts or rates; the program's accommodations.",
+   "include": "Returning for another year; joining a team or club; taking part in activities outside the program.",
+   "exclude": "Attendance or dosage in the program, counted or per person; the program's accommodations; inclusion of youth with disabilities alongside peers.",
    "see_also": [
     "A2.5",
     "A2.4"
@@ -687,9 +689,9 @@
    ]
   },
   "Y7.1": {
-   "definition": "Learning about careers and pathways, interest inventories, workplace and campus visits, and interest in or aspiration toward a career field.",
-   "include": "Researching careers; exploring pathways; interest in a STEM career; college visits.",
-   "exclude": "Applications and FAFSA; lasting interest in an activity.",
+   "definition": "Learning about careers and pathways, interest inventories, workplace visits and job shadowing, and interest in or aspiration toward a career field.",
+   "include": "Researching careers; exploring pathways; interest in a STEM career; workplace visits.",
+   "exclude": "College visits, applications and FAFSA; lasting interest in an activity.",
    "see_also": [
     "Y7.2",
     "Y2.3"
@@ -697,7 +699,7 @@
   },
   "Y7.2": {
    "definition": "Knowing and completing the process of moving to college or work: applications, FAFSA, financial aid, resumes, interviews.",
-   "include": "FAFSA completion; college applications; comparing aid letters; resume writing.",
+   "include": "College campus visits and college fairs; FAFSA completion; college applications; comparing aid letters; resume writing.",
    "exclude": "Enrolment itself; employability behaviors on the job.",
    "see_also": [
     "Y1.18",
@@ -706,7 +708,7 @@
   },
   "Y7.3": {
    "definition": "Professionalism and workplace skills: punctuality, workplace communication, initiative, job performance.",
-   "include": "Professional conduct; supervisor evaluations; workplace communication.",
+   "include": "Professional conduct; supervisor evaluations; workplace communication; everyday digital skills for work or daily life (email, video calls, online forms, office software).",
    "exclude": "Having or keeping a job; general SEL skills outside a work context.",
    "see_also": [
     "Y7.5",
@@ -921,7 +923,7 @@
   "F1.6": {
    "definition": "The education, training, English proficiency, digital or financial skills, and employment of a caregiver or other adult participant.",
    "include": "GED or job training for parents; adult ESL; digital literacy for family members or older adults.",
-   "exclude": "Household income; young people's own skills.",
+   "exclude": "Household income, savings, or confidence about money; young people's own skills.",
    "see_also": [
     "F2.1"
    ]
@@ -945,9 +947,9 @@
    ]
   },
   "F1.9": {
-   "definition": "Families attending, volunteering or taking part in program or school decisions.",
-   "include": "Serving on advisory councils; attending workshops (per-family thresholds); volunteering.",
-   "exclude": "Aggregate family attendance counts; the organization creating structures.",
+   "definition": "Families volunteering, leading family activities, or taking part in program or school decisions.",
+   "include": "Serving on advisory councils; volunteering; leading or co-hosting family events.",
+   "exclude": "Family attendance at workshops or events, counted or per family; the organization creating structures.",
    "see_also": [
     "A2.5",
     "A2.6"
@@ -955,7 +957,7 @@
   },
   "F2.1": {
    "definition": "Household or independent-youth income, public benefits, and financial stability.",
-   "include": "Household income; SNAP/TANF/Medicaid enrollment; household savings.",
+   "include": "Household income; SNAP/TANF/Medicaid enrollment; household savings; families' confidence about money.",
    "exclude": "The youth's own money skills; caregiver job training.",
    "see_also": [
     "Y7.6",
@@ -978,6 +980,24 @@
    "see_also": [
     "A2.5",
     "Y1.13"
+   ]
+  },
+  "F2.4": {
+   "definition": "A young person having, or being given, the basic goods a child needs, rather than going without them for lack of money (the statement need not name the cause): clothing, properly fitting shoes, outdoor leisure equipment, school supplies, enough menstrual materials, and basic toiletries.",
+   "include": "Weather-appropriate clothing; shoes that fit; outdoor play gear such as a bike; school supplies, including students coming to class with the supplies they need; enough period products; soap, shampoo, toothpaste, a toothbrush, deodorant and other basic toiletries; the number of children who will have a coat or other goods; goods distributed, provided or given to named young people (\"coats distributed to students\", \"each student will receive a backpack of supplies\", \"cleats and a uniform for every player\").",
+   "exclude": "Goods counted with no young people named, or access to goods (\"500 pairs of gloves handed out\", \"free period products available at school\"); devices and internet; food; housing; basic needs or material hardship in general; what having the goods leads to (school attendance, joining a team, physical activity, confidence or dignity, belonging, household costs).",
+   "see_also": [
+    "A2.3",
+    "F2",
+    "F2.1",
+    "F2.2",
+    "F2.3",
+    "Y1.13",
+    "Y1.9",
+    "Y2.6",
+    "Y8.1",
+    "Y5.4",
+    "Y3.1"
    ]
   },
   "A1.1": {
@@ -1027,16 +1047,17 @@
   "A2.3": {
    "definition": "Providing materials, devices, connectivity or facilities, including counts of resources distributed.",
    "include": "Laptops and hotspots; home internet; facilities access.",
-   "exclude": "Participants' digital skills.",
+   "exclude": "Participants' digital skills; clothing, shoes, gear, school supplies, menstrual materials or toiletries that young people are stated to have or to be given.",
    "see_also": [
     "Y1.4",
-    "F1.6"
+    "F1.6",
+    "F2.4"
    ]
   },
   "A2.4": {
    "definition": "Removing barriers so that all participants can take part: accommodations, accessible formats, interpretation and translation.",
-   "include": "Sensory kits and visual schedules; accessible materials; interpreters; home-language communications.",
-   "exclude": "Youth participating alongside peers (their participation); families navigating systems.",
+   "include": "Sensory kits and visual schedules; accessible materials; interpreters; home-language communications; youth with disabilities (or another group facing barriers) taking part alongside peers, when inclusion is the point.",
+   "exclude": "A young person's choice to join or return; families learning to navigate systems.",
    "see_also": [
     "Y2.6",
     "F1.7"
@@ -1044,7 +1065,7 @@
   },
   "A2.5": {
    "definition": "Program-level counts, rates and dosage: youth served, attendance rates, sessions, match length, training hours, and services staff delivered.",
-   "include": "Number served; average daily attendance; match duration; sessions delivered; applications submitted by staff.",
+   "include": "Number served; average daily attendance; per-person attendance thresholds (sessions, workshops); match duration; sessions delivered; applications submitted by staff.",
    "exclude": "An individual youth's choice to return; a student's school attendance.",
    "see_also": [
     "Y2.6",
