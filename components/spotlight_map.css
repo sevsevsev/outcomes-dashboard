@@ -138,3 +138,14 @@
 @media (prefers-reduced-motion: reduce) {
   .sm-row, .sm-node, .sm-band, .sm-end { transition: none; }
 }
+
+/* Lanes: the District priority each goal serves (outcome crosswalk). The goal's domain hue stays as a small swatch. */
+.sm-lane { color: var(--ink-2); }
+.sm-goals .sm-lane ~ .sm-goal .sm-line { padding-left: 0; }
+.sm-goal-hue { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 7px; vertical-align: 1px; text-indent: 0; }
+.sm-goals .sm-lane ~ .sm-goal .sm-name { padding-left: 15px; text-indent: -15px; }
+.sm-lane-row { margin-top: 0; }
+.sm-lane-row .sm-name { color: var(--muted); font-weight: 400; }
+.sm-lane-lines { margin: 8px 0 0; font-size: 13px; line-height: 1.45; }
+.sm-lane-lines dt { margin-top: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.sm-lane-lines dd { margin: 2px 0 0; color: var(--ink-2); }

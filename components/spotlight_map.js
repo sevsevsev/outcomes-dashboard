@@ -97,12 +97,13 @@ function buildModel(data) {
   const goalIn = g => !scope || (goals.get(g)?.here || 0) > 0;
   const linkIn = l => l.goals.some(goalIn);
   const indIn = i => !scope || (linksOfInd.get(i) || []).some(linkIn);
-  return { data, scope, goals, links, indicators, linksOfGoal, linksOfInd, goalIn, linkIn, indIn };
+  const lanes = new Map((data.lanes || []).map(l => [l.id, l]));
+  return { data, scope, goals, links, indicators, lanes, linksOfGoal, linksOfInd, goalIn, linkIn, indIn };
 }
 
 /** What a pick lights: the rows, nodes and line segments ("in" goal->link, "out" link->indicator). */
 function litBy(model, item) {
-  const lit = { goal: new Set(), link: new Set(), indicator: new Set(), other: false, seg: new Set() };
+  const lit = { goal: new Set(), link: new Set(), indicator: new Set(), lane: new Set(), other: false, seg: new Set() };
   if (!item) return null;
   const take = (l, goalIds, indIds) => {
     lit.link.add(l.id);
@@ -118,6 +119,8 @@ function litBy(model, item) {
   } else if (item.kind === 'indicator') {
     lit.indicator.add(item.id);
     for (const l of model.linksOfInd.get(item.id) || []) take(l, l.goals, [item.id]);
+  } else if (item.kind === 'lane') {
+    lit.lane.add(item.id);
   } else if (item.kind === 'other') {
     lit.other = true;
   }
@@ -134,7 +137,7 @@ function mount(root, sm, data) {
   sm.hover = null;
   if (firstMount && data.selected && data.selected.kind) sm.pick = data.selected;
   root.replaceChildren();
-  sm.rows = { goal: new Map(), link: new Map(), indicator: new Map(), other: null };
+  sm.rows = { goal: new Map(), link: new Map(), indicator: new Map(), lane: new Map(), other: null };
   const scope = data.scope;
 
   const map = el('div', 'sm-map');
@@ -145,30 +148,57 @@ function mount(root, sm, data) {
   sm.cols = cols;
   sm.svg = svg;
 
-  // Goals, in codebook order under their domains.
+  // Goals, grouped by the District priority (lane) they serve, from the outcome crosswalk; without it, in
+  // codebook order under their domains. Each lane ends with one row for its goals that have no link.
   const goalCol = el('div', 'sm-col sm-goals');
   goalCol.append(el('div', 'sm-head', 'Goals partners name'));
-  let domain = null;
-  for (const g of data.goals) {
-    if (g.domain !== domain) {
-      domain = g.domain;
-      const head = el('div', 'sm-dom');
-      const sw = el('span', 'sm-swatch');
-      sw.style.background = swatch(g.hue);
-      head.append(sw, el('span', null, g.domainName));
-      goalCol.append(head);
-    }
+  const goalRow = g => {
     const here = scope ? hereWords(scope, g.here || 0) : '';
     const row = button(`sm-row sm-goal${model.goalIn(g.id) ? '' : ' is-out'}`, { kind: 'goal', id: g.id }, sm,
       `${g.name}. ${scope ? `${here || 'Not named here'}.` : `${programs(g.programs)}.`}`);
     const line = el('span', 'sm-line');
-    line.append(el('span', 'sm-name', g.name));
+    const name = el('span', 'sm-name', g.name);
+    if (model.lanes.size) {
+      const sw = el('span', 'sm-swatch sm-goal-hue');
+      sw.style.background = swatch(g.hue);
+      sw.title = g.domainName;
+      name.prepend(sw);
+    }
+    line.append(name);
     if (scope && g.here) line.append(el('span', 'sm-value', here));
     row.append(line);
     sm.rows.goal.set(g.id, row);
     goalCol.append(row);
+  };
+  if (model.lanes.size) {
+    for (const lane of model.lanes.values()) {
+      goalCol.append(el('div', 'sm-dom sm-lane', lane.name));
+      data.goals.filter(g => g.lane === lane.id).forEach(goalRow);
+      if (!lane.goals.length) continue;
+      const n = lane.goals.length;
+      const words = lane.linked ? plural(n, 'more goal', 'more goals') : plural(n, 'goal', 'goals');
+      const row = button('sm-row sm-other sm-lane-row', { kind: 'lane', id: lane.id }, sm,
+        `${lane.name}: ${words} with no indicator link.`);
+      row.append(el('span', 'sm-name', words));
+      sm.rows.lane.set(lane.id, row);
+      goalCol.append(row);
+    }
+    data.goals.filter(g => !model.lanes.has(g.lane)).forEach(goalRow);
+  } else {
+    let domain = null;
+    for (const g of data.goals) {
+      if (g.domain !== domain) {
+        domain = g.domain;
+        const head = el('div', 'sm-dom');
+        const sw = el('span', 'sm-swatch');
+        sw.style.background = swatch(g.hue);
+        head.append(sw, el('span', null, g.domainName));
+        goalCol.append(head);
+      }
+      goalRow(g);
+    }
   }
-  if (data.otherGoals) {
+  if (data.otherGoals && !model.lanes.size) {
     const other = button('sm-row sm-other', { kind: 'other', id: 'other' }, sm);
     other.append(el('span', 'sm-name', `${data.otherGoals} other goals have no link to an indicator`),
       el('span', 'sm-note', 'The Board counts them toward its guardrails: a well-rounded education and safe, welcoming schools.'));
@@ -336,7 +366,7 @@ function place(sm) {
     const node = sm.rows.link.get(l.id);
     return { node, want, h: node.offsetHeight };
   }).sort((a, b) => a.want - b.want);
-  const colH = Math.max(...[...sm.rows.goal.values(), ...sm.rows.indicator.values(), sm.rows.other].filter(Boolean)
+  const colH = Math.max(...[...sm.rows.goal.values(), ...sm.rows.lane.values(), ...sm.rows.indicator.values(), sm.rows.other].filter(Boolean)
     .map(r => rel(r.getBoundingClientRect(), base).bottom));
   let y = 0;
   for (const n of nodes) { n.top = Math.max(n.want - n.h / 2, y); y = n.top + n.h + NODE_GAP; }
@@ -424,7 +454,7 @@ function paint(sm) {
   const item = sm.pick || sm.hover;
   const lit = litBy(sm.model, item);
   sm.map.classList.toggle('is-focus', !!lit);
-  for (const [kind, rows] of [['goal', sm.rows.goal], ['link', sm.rows.link], ['indicator', sm.rows.indicator]]) {
+  for (const [kind, rows] of [['goal', sm.rows.goal], ['link', sm.rows.link], ['indicator', sm.rows.indicator], ['lane', sm.rows.lane]]) {
     for (const [id, row] of rows) {
       const on = !!lit && lit[kind].has(id);
       row.classList.toggle('is-on', on);
@@ -477,6 +507,17 @@ function readout(sm, item) {
     }
     return kids;
   };
+  const laneLines = (name, serves) => {
+    const dl = el('dl', 'sm-lane-lines');
+    if (name) dl.append(el('dt', null, 'District priority'), el('dd', 'sm-strong', name));
+    if (serves) dl.append(el('dt', null, 'Serves'), el('dd', null, serves));
+    return dl;
+  };
+  const bylaw = () => {
+    const a = el('a', 'sm-link', 'Board of Education Bylaw 003.1, Goals and Guardrails');
+    a.href = data.bylaw; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    return a;
+  };
   const linkLine = l => {
     const li = el('li');
     li.append(el('b', null, l.name), el('span', 'sm-muted', ` · ${kindLine(l)}`));
@@ -508,6 +549,7 @@ function readout(sm, item) {
         text(`${data.goals.length} partner goals link to ${data.indicators.filter(i => i.reached).length} of the ${data.indicators.length} indicators through ${data.links.length} program models that studies tested.`),
         text(data.possible, 'sm-caution'));
     }
+    if (model.lanes.size) inner.append(el('p', 'sm-hint', 'Goals are grouped by the District priority they serve. Pick a priority’s other goals to see what they serve.'));
     inner.append(el('p', 'sm-hint', 'Point at or pick a goal, a program model or an indicator to see why it is linked and what a program would have to run.'));
   } else if (item.kind === 'goal') {
     const g = model.goals.get(item.id);
@@ -520,6 +562,7 @@ function readout(sm, item) {
     }
     inner.append(eyebrow(`Goal · ${g.domainName}`, g.hue), el('div', 'sm-title', g.name));
     if (g.definition) inner.append(text(g.definition));
+    if (g.laneName) inner.append(laneLines(g.laneName, g.serves));
     if (scope) {
       if (scope.kind === 'school') {
         inner.append(el('p', 'sm-count', g.here
@@ -596,6 +639,28 @@ function readout(sm, item) {
       }
       inner.append(section('Program models that could help move it, and the goals they join', list),
         text('Counts are per goal and never add up per indicator: one program can name several of these goals.', 'sm-caution'));
+    }
+  } else if (item.kind === 'lane') {
+    const lane = model.lanes.get(item.id);
+    // Most goals in a lane serve the same thing, which the lane's description already says; name only the others.
+    const tally = new Map();
+    for (const g of lane.goals) tally.set(g.serves, (tally.get(g.serves) || 0) + 1);
+    const [usual, often] = [...tally.entries()].sort((a, b) => b[1] - a[1])[0] || [];
+    const shared = often > 1 ? usual : null;
+    const list = el('ul', 'sm-list');
+    for (const g of lane.goals) {
+      const li = el('li');
+      li.append(el('b', null, g.name));
+      if (g.serves && g.serves !== shared) li.append(el('div', 'sm-sub', `Serves: ${g.serves}`));
+      list.append(li);
+    }
+    inner.append(eyebrow('District priority'), el('div', 'sm-title', lane.name), text(lane.description));
+    if (lane.quote) inner.append(el('p', 'sm-quote', `“${lane.quote}”`));
+    if (lane.quote && data.bylaw) inner.append(bylaw());
+    if (shared) inner.append(laneLines(null, shared));
+    inner.append(section(lane.linked ? 'Its goals with no link to an indicator' : 'Its goals', list));
+    if (lane.id === 'names-indicator' || lane.id === 'step-toward-indicator') {
+      inner.append(text('The research review has not tied these goals to an indicator through a program model that studies tested.', 'sm-caution'));
     }
   } else if (item.kind === 'other') {
     inner.append(eyebrow('Goals with no link to an indicator'),

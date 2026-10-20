@@ -1431,17 +1431,39 @@ function definitionOf(sb, node, brief = false) {
   return out;
 }
 
-/** "Connection to District indicators" for a picked 3.x goal: the SPOTlight links the review recommends, each with
- *  its evidence and the program model it needs, or the guardrail note when the goal has none (never a blank). */
+/** "Connection to District indicators" for a picked 3.x goal: the District priority (lane) it serves, from the
+ *  outcome crosswalk, then the SPOTlight links the review recommends, each with its evidence and the program model
+ *  it needs. A goal with no link shows its lane and what it serves, with the Board's words for a guardrail lane;
+ *  the general guardrail note is left only for a goal the crosswalk doesn't place (never a blank). */
 function spotlightOf(sb, node) {
   const spot = sb.model.data.spotlight;
   if (!spot || !spot.goals || !/^[YFA]\d+\.\d+$/.test(node.label)) return null;
   const links = spot.goals[node.label] || [];
+  const lane = (spot.lanes || {})[node.label];
   const box = el('details', 'sb-def-more sb-spot');
   box.open = !!sb.spotOpen;
   box.addEventListener('toggle', () => { sb.spotOpen = box.open; });
   box.append(el('summary', '', 'Connection to District indicators'));
-  if (!links.length) {
+  if (lane) {
+    const lines = el('dl', 'sb-spot-lane');
+    lines.append(el('dt', '', 'District priority'), el('dd', 'sb-spot-lane-name', lane.laneName));
+    if (lane.serves) lines.append(el('dt', '', 'Serves'), el('dd', '', lane.serves));
+    box.append(lines);
+  }
+  if (!links.length && lane) {
+    if (lane.quote) {
+      const q = el('p', 'sb-spot-quote', `“${lane.quote}”`);
+      box.append(q);
+      if (spot.bylaw) {
+        const a = el('a', 'sb-spot-report', 'Board of Education Bylaw 003.1, Goals and Guardrails');
+        a.href = spot.bylaw;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        box.append(el('p', 'sb-spot-note'));
+        box.lastChild.append(a);
+      }
+    }
+  } else if (!links.length) {
     box.append(el('p', 'sb-spot-note', spot.guardrail));
   } else {
     box.append(el('p', 'sb-spot-note', spot.note));

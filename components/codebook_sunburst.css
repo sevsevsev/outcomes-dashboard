@@ -194,6 +194,9 @@
 /* SPOTlight links under a picked goal. The panel keeps its height, so long link text scrolls inside it. */
 .sb-panel-inner { overflow-y: auto; scrollbar-width: thin; }
 .sb-spot-note { margin: 6px 0 0; }
+.sb-spot-lane { margin-top: 6px; }
+.sb-spot-lane-name { font-weight: 600; color: var(--ink-2); }
+.sb-spot-quote { margin: 8px 0 0; color: var(--muted); font-style: italic; }
 .sb-spot-link { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
 .sb-spot-ind { font-weight: 600; color: var(--ink-2); }
 .sb-spot-ev { margin-top: 2px; color: var(--muted); }
