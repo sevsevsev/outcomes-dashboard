@@ -11,13 +11,13 @@
   color: var(--ink);
 }
 
-/* The map and its panel share one height, so a new readout never moves the map. */
-.sm-body { display: flex; gap: 24px; align-items: stretch; }
+/* The indicator list, the map and its panel share one height, so a new readout never moves the map. */
+.sm-body { display: flex; gap: 20px; align-items: stretch; }
 .sm-map { flex: 1 1 auto; min-width: 0; overflow-x: auto; }   /* a narrow screen scrolls the map sideways, not the page */
 .sm-bands { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 .sm-cols {
-  position: relative; display: grid; align-items: start; min-width: 680px;
-  grid-template-columns: minmax(170px, 210px) minmax(48px, 1fr) minmax(160px, 190px) minmax(48px, 1fr) minmax(180px, 220px);
+  position: relative; display: grid; align-items: start; min-width: 540px;
+  grid-template-columns: minmax(180px, 230px) minmax(24px, 1fr) minmax(190px, 220px) minmax(24px, 1fr) minmax(104px, 130px);
 }
 .sm-col { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .sm-head {
@@ -46,8 +46,6 @@
 .sm-value { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sm-value-long { white-space: normal; }
 .sm-note { font-size: 12px; line-height: 1.4; color: var(--muted); font-style: italic; }
-.sm-other { margin-top: 12px; }
-.sm-other .sm-name { color: var(--ink-2); font-weight: 500; }
 .is-on .sm-name { color: var(--ink); }
 .is-self { background: var(--wash); }
 .is-self .sm-name { font-weight: 600; }
@@ -56,7 +54,7 @@
 /* Model nodes sit beside what they join (placed by the script); a tinted rule carries the hue. */
 .sm-stack { position: relative; }
 .sm-node {
-  position: absolute; left: 0; right: 0; padding: 5px 8px 5px 10px; background: #fff;
+  position: absolute; left: 0; right: 0; padding: 4px 8px 4px 10px; background: #fff;
   border: 1px solid var(--line); border-left: 3px solid var(--hue-pale);
 }
 .sm-node .sm-name { font-size: 12.5px; line-height: 1.3; font-weight: 500; color: var(--ink); }
@@ -72,7 +70,7 @@
 .is-focus .sm-stubs { opacity: .4; }
 
 /* Side panel: what is pointed at or picked. Fixed width; its content scrolls inside the map's height. */
-.sm-panel { flex: 0 0 280px; position: relative; }
+.sm-panel { flex: 0 0 240px; position: relative; }
 .sm-panel-inner { position: absolute; inset: 0; overflow-y: auto; padding-right: 4px; }
 .sm-eyebrow {
   display: flex; align-items: center; gap: 8px;
@@ -128,9 +126,10 @@
 .sm-studies ol { padding-left: 18px; list-style: decimal; }
 .sm-studies li { font-size: 12px; }
 
-/* Narrow screens: the panel goes under the map, with its own height. */
+/* Narrow screens: the list, the map and the panel stack, each with its own height. */
 @media (max-width: 900px) {
   .sm-body { flex-direction: column; }
+  .sm-picker { flex-basis: auto; }
   .sm-panel { flex-basis: auto; }
   .sm-panel-inner { position: static; }
 }
@@ -144,8 +143,6 @@
 .sm-goals .sm-lane ~ .sm-goal .sm-line { padding-left: 0; }
 .sm-goal-hue { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 7px; vertical-align: 1px; text-indent: 0; }
 .sm-goals .sm-lane ~ .sm-goal .sm-name { padding-left: 15px; text-indent: -15px; }
-.sm-lane-row { margin-top: 0; }
-.sm-lane-row .sm-name { color: var(--muted); font-weight: 400; }
 .sm-lane-lines { margin: 8px 0 0; font-size: 13px; line-height: 1.45; }
 .sm-lane-lines dt { margin-top: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .sm-lane-lines dd { margin: 2px 0 0; color: var(--ink-2); }
@@ -153,3 +150,18 @@
 /* Research-associated links: nodes of their own kind, dashed, never read as a program model. */
 .sm-node-assoc { border-style: dashed; border-left-style: dashed; background: #fbfcfd; }
 .sm-node-assoc .sm-ev { font-style: italic; }
+
+/* The indicator list: picking one redraws the map for it. Same rows as the map's, a wash for the one shown. */
+.sm-picker { flex: 0 0 180px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sm-picker .sm-group { padding: 0 8px; }
+.sm-pickrow[aria-pressed="true"] { background: var(--wash); }
+.sm-pickrow[aria-pressed="true"] .sm-name { color: var(--ink); font-weight: 600; }
+.sm-pickrow.is-unreached .sm-name { color: var(--muted); }
+
+/* The rule between tested links and research associations, placed by the script like the nodes. */
+.sm-divider {
+  position: absolute; left: 0; right: 0; padding-top: 5px; border-top: 1px solid var(--line);
+  font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+}
+.sm-empty { margin: 0; padding: 5px 0; font-size: 13px; line-height: 1.45; color: var(--muted); font-style: italic; }
+.sm-inds .sm-value-long { margin-top: 2px; }

@@ -1,32 +1,31 @@
-// The District indicators map: the goals partners name on the left, the program
-// models the studies tested in the middle, and the District's SPOTlight
-// indicators on the right, joined by thin lines. Drawn in the browser so
-// pointing costs no round trip to Python (see spotlight_component.py).
+// The District indicators map, one indicator at a time: the SPOTlight indicators in a list on the left, and
+// for the one picked there, the goals partners name, the program models and research associations that join
+// them to it, and the indicator, joined by thin lines. Drawn in the browser so pointing costs no round trip to
+// Python (see spotlight_component.py). Showing one indicator keeps the map on one screen; all of them at once
+// ran to about 2,000 pixels.
 //
-// It follows the codebook wheel's habits: plain names, per-domain hues, pale at
-// rest and full hue only for what is pointed at or picked, and a side panel
-// that says what that is. The rows and model nodes are the targets, never the
-// lines, so a pointer resting on the map never sits on something that moves.
-// Line style says what kind of link it is (cause shown, correlation only, or by
-// definition), which the node and the panel also say in words.
+// It follows the codebook wheel's habits: plain names, per-domain hues, pale at rest and full hue only for what
+// is pointed at or picked, and a side panel that says what that is. The rows and model nodes are the targets,
+// never the lines, so a pointer resting on the map never sits on something that moves. Line style says what kind
+// of link it is (cause shown, correlation only, by definition, or research-associated), which the node and the
+// panel also say in words. Tested links sit above a rule and research associations below it, never mixed.
 //
-// Lines are one width by default. The "Line width" switch can make a goal's
-// line into its model as thick as the number of programs naming the goal; the
-// lines from models to indicators always stay one width, so nothing stacks up
-// at an indicator into something that reads like a total.
+// Lines are one width by default. The "Line width" switch can make a goal's line into its model as thick as the
+// number of programs naming the goal; the lines from models to the indicator always stay one width, so nothing
+// stacks up at the indicator into something that reads like a total.
 //
-// With `data.scope` (one program, or the partners at one school), the goals
-// named there stay dark and the rest of the map goes pale, so the shape never
-// changes and the gaps stay in view.
+// With `data.scope` (one program, or the partners at one school), the goals named there stay dark and the rest
+// go pale, so the gaps stay in view; indicators none of whose links that scope names go pale in the list.
 //
-// A click (or Enter, or a tap) pins a row or node; clicking it again, clicking
-// empty space or Escape unpins. While something is pinned, pointing elsewhere
-// changes nothing, so the panel never flickers. Each pin goes to Python as the
-// "selection" state, which filters the table below. `data.sig` changes only
-// when what is drawn changes, so reruns caused by a pick leave the map alone.
+// Picking an indicator in the list redraws the map for it. In the map, a click (or Enter, or a tap) pins a row or
+// node; clicking it again, clicking empty space or Escape unpins. While something is pinned, pointing elsewhere
+// changes nothing, so the panel never flickers. Each pin goes to Python as the "selection" state, which filters
+// the table below; with nothing pinned, the selection is the shown indicator. Every selection carries `focus`, the
+// shown indicator, so a rerun reopens it. `data.sig` changes only when what is drawn changes, so reruns caused by
+// a pick leave the map alone.
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const NODE_GAP = 10;        // least space between two model nodes
+const NODE_GAP = 6;         // least space between two model nodes
 const STUB = 34;            // length of the dotted stub beside a row with no link
 const DASH = { cause: null, correlation: '6 4', definition: '1.5 4', associated: '9 3 2 3' };
 const KIND = {
@@ -109,7 +108,7 @@ function buildModel(data) {
 
 /** What a pick lights: the rows, nodes and line segments ("in" goal->link, "out" link->indicator). */
 function litBy(model, item) {
-  const lit = { goal: new Set(), link: new Set(), indicator: new Set(), lane: new Set(), other: false, seg: new Set() };
+  const lit = { goal: new Set(), link: new Set(), indicator: new Set(), seg: new Set() };
   if (!item) return null;
   const take = (l, goalIds, indIds) => {
     lit.link.add(l.id);
@@ -125,10 +124,6 @@ function litBy(model, item) {
   } else if (item.kind === 'indicator') {
     lit.indicator.add(item.id);
     for (const l of model.linksOfInd.get(item.id) || []) take(l, l.goals, [item.id]);
-  } else if (item.kind === 'lane') {
-    lit.lane.add(item.id);
-  } else if (item.kind === 'other') {
-    lit.other = true;
   }
   return lit;
 }
@@ -141,21 +136,96 @@ function mount(root, sm, data) {
   sm.sig = data.sig;
   sm.model = model;
   sm.hover = null;
-  if (firstMount && data.selected && data.selected.kind) sm.pick = data.selected;
+  if (firstMount) {
+    // The last pick carries the indicator it was made on, so a rerun reopens the same one.
+    const sel = data.selected && data.selected.kind ? data.selected : null;
+    sm.focus = (sel && (sel.focus || (sel.kind === 'indicator' ? sel.id : null))) || data.focus;
+    sm.pick = sel && !(sel.kind === 'indicator' && sel.id === sm.focus) ? sel : null;
+  }
+  if (!model.indicators.has(sm.focus)) { sm.focus = data.focus; sm.pick = null; }
   root.replaceChildren();
-  sm.rows = { goal: new Map(), link: new Map(), indicator: new Map(), lane: new Map(), other: null };
-  const scope = data.scope;
 
   const map = el('div', 'sm-map');
+  sm.map = map;
+  const panel = el('aside', 'sm-panel');
+  panel.setAttribute('aria-live', 'polite');
+  sm.panel = panel;
+
+  const body = el('div', 'sm-body');
+  body.append(indicatorList(sm), map, panel);
+  root.append(widthSwitch(sm, data.scope), body, howToRead());
+
+  if (!sm.keys) {
+    sm.keys = true;
+    root.addEventListener('keydown', e => { if (e.key === 'Escape') setPick(sm, null); });
+  }
+  renderMap(sm);
+}
+
+/** The 13 indicators, grouped as the SPOTlight groups them; picking one redraws the map for it alone. */
+function indicatorList(sm) {
+  const { model } = sm;
+  const { data } = model;
+  const nav = el('nav', 'sm-picker');
+  nav.setAttribute('aria-label', `District indicators, ${data.year}`);
+  nav.append(el('div', 'sm-head', `District indicators, ${data.year}`));
+  sm.listRows = new Map();
+  let group = null;
+  for (const i of data.indicators) {
+    if (i.group !== group) {
+      group = i.group;
+      nav.append(el('div', 'sm-group', group));
+    }
+    const row = el('button', `sm-row sm-pickrow${i.reached || i.associated ? '' : ' is-unreached'}${model.indIn(i.id) ? '' : ' is-out'}`);
+    row.type = 'button';
+    row.setAttribute('aria-label', `${i.name}, ${data.year}: ${i.value}. ${noteOf(i) || 'Show its links.'}`);
+    const line = el('span', 'sm-line');
+    line.append(el('span', 'sm-name', i.name));
+    if (i.value.length <= 8) line.append(el('span', 'sm-value', i.value));
+    row.append(line);
+    row.addEventListener('click', () => setFocus(sm, i.id));
+    sm.listRows.set(i.id, row);
+    nav.append(row);
+  }
+  return nav;
+}
+
+const noteOf = i => (i.reached ? '' : i.associated ? 'No tested program model yet; some goals are associated with it.'
+  : 'No strong study links a partner goal to this yet.');
+
+/** The pick that stands for the shown indicator when nothing in the map is picked. */
+const focusPick = sm => ({ kind: 'indicator', id: sm.focus, focus: sm.focus });
+
+function setFocus(sm, id) {
+  if (sm.focus === id && !sm.pick) return;
+  sm.focus = id;
+  sm.pick = null;
+  sm.hover = null;
+  renderMap(sm);
+  sm.send('selection', focusPick(sm));
+}
+
+/** Draws the map for the shown indicator: its goals, the links that join them to it, and the indicator. */
+function renderMap(sm) {
+  const { model, map } = sm;
+  const { data } = model;
+  const scope = data.scope;
+  for (const [id, row] of sm.listRows) row.setAttribute('aria-pressed', String(id === sm.focus));
+  const ind = model.indicators.get(sm.focus);
+  const all = ind ? model.linksOfInd.get(ind.id) || [] : [];
+  // Tested links first, research associations after a rule of their own, never mixed.
+  sm.links = [...all.filter(l => !l.associated), ...all.filter(l => l.associated)];
+  const shown = new Set(sm.links.flatMap(l => l.goals));
+  const goals = data.goals.filter(g => shown.has(g.id));
+  sm.rows = { goal: new Map(), link: new Map(), indicator: new Map() };
+
   const svg = svgEl('svg', { class: 'sm-bands', 'aria-hidden': 'true' });
   const cols = el('div', 'sm-cols');
-  map.append(cols);
-  sm.map = map;
   sm.cols = cols;
   sm.svg = svg;
 
-  // Goals, grouped by the District priority (lane) they serve, from the outcome crosswalk; without it, in
-  // codebook order under their domains. Each lane ends with one row for its goals that have no link.
+  // Goals, grouped by the District priority (lane) they serve, from the outcome crosswalk; without it, under
+  // their domains. Only the goals a link joins to this indicator: the rest live in the Priority grid above.
   const goalCol = el('div', 'sm-col sm-goals');
   goalCol.append(el('div', 'sm-head', 'Goals partners name'));
   const goalRow = g => {
@@ -178,21 +248,15 @@ function mount(root, sm, data) {
   };
   if (model.lanes.size) {
     for (const lane of model.lanes.values()) {
+      const inLane = goals.filter(g => g.lane === lane.id);
+      if (!inLane.length) continue;
       goalCol.append(el('div', 'sm-dom sm-lane', lane.name));
-      data.goals.filter(g => g.lane === lane.id).forEach(goalRow);
-      if (!lane.goals.length) continue;
-      const n = lane.goals.length;
-      const words = lane.linked ? plural(n, 'more goal', 'more goals') : plural(n, 'goal', 'goals');
-      const row = button('sm-row sm-other sm-lane-row', { kind: 'lane', id: lane.id }, sm,
-        `${lane.name}: ${words} with no indicator link.`);
-      row.append(el('span', 'sm-name', words));
-      sm.rows.lane.set(lane.id, row);
-      goalCol.append(row);
+      inLane.forEach(goalRow);
     }
-    data.goals.filter(g => !model.lanes.has(g.lane)).forEach(goalRow);
+    goals.filter(g => !model.lanes.has(g.lane)).forEach(goalRow);
   } else {
     let domain = null;
-    for (const g of data.goals) {
+    for (const g of goals) {
       if (g.domain !== domain) {
         domain = g.domain;
         const head = el('div', 'sm-dom');
@@ -204,21 +268,14 @@ function mount(root, sm, data) {
       goalRow(g);
     }
   }
-  if (data.otherGoals && !model.lanes.size) {
-    const other = button('sm-row sm-other', { kind: 'other', id: 'other' }, sm);
-    other.append(el('span', 'sm-name', `${data.otherGoals} other goals have no link to an indicator`),
-      el('span', 'sm-note', 'The Board counts them toward its guardrails: a well-rounded education and safe, welcoming schools.'));
-    sm.rows.other = other;
-    goalCol.append(other);
-  }
 
-  // Program models: one node per recommended link, placed beside what it joins (see place).
+  // Program models and research associations: one node per link, placed beside the goals it joins (see place).
   const linkCol = el('div', 'sm-col sm-links');
   linkCol.append(el('div', 'sm-head', 'Model or association'));
   const stack = el('div', 'sm-stack');
   linkCol.append(stack);
   sm.stack = stack;
-  for (const l of data.links) {
+  for (const l of sm.links) {
     const node = button(`sm-node${l.associated ? ' sm-node-assoc' : ''}${model.linkIn(l) ? '' : ' is-out'}`,
       { kind: 'link', id: l.id }, sm,
       `${l.name}. ${kindLine(l)}. ${l.associated ? 'Associated only, never credit.' : 'A possible link only.'}`);
@@ -228,54 +285,38 @@ function mount(root, sm, data) {
     sm.rows.link.set(l.id, node);
     stack.append(node);
   }
+  sm.divider = null;
+  if (sm.links.some(l => l.associated)) {
+    sm.divider = el('div', 'sm-divider', sm.links.some(l => !l.associated)
+      ? 'Research associations · never credit' : 'Research associations only · never credit');
+    stack.append(sm.divider);
+  }
+  if (!sm.links.length && ind) linkCol.append(el('p', 'sm-empty', 'The research review found no study strong enough to link a partner goal to this indicator.'));
 
-  // Indicators, grouped as the SPOTlight groups them.
+  // The one indicator, beside the middle of the links that reach it.
   const indCol = el('div', 'sm-col sm-inds');
-  indCol.append(el('div', 'sm-head', `District indicators, ${data.year}`));
-  let group = null;
-  for (const i of data.indicators) {
-    if (i.group !== group) {
-      group = i.group;
-      indCol.append(el('div', 'sm-group', group));
-    }
-    const out = !model.indIn(i.id);   // in a scoped view, unreached indicators go pale too
-    const note = i.reached ? '' : i.associated ? 'No tested program model yet; some goals are associated with it.'
-      : 'No strong study links a partner goal to this yet.';
-    const row = button(`sm-row sm-ind${i.reached || i.associated ? '' : ' is-unreached'}${out ? ' is-out' : ''}`,
-      { kind: 'indicator', id: i.id }, sm, `${i.name}, ${data.year}: ${i.value}.${note ? ` ${note}` : ''}`);
-    const line = el('span', 'sm-line');
-    const short = i.value.length <= 8;
-    line.append(el('span', 'sm-name', i.name));
-    if (short) line.append(el('span', 'sm-value', i.value));
-    row.append(line);
-    if (!short) row.append(el('span', 'sm-value sm-value-long', i.value));
-    if (note) row.append(el('span', 'sm-note', note));
-    sm.rows.indicator.set(i.id, row);
+  indCol.append(el('div', 'sm-head', 'Indicator'));
+  sm.indRow = null;
+  if (ind) {
+    const row = button(`sm-row sm-ind${ind.reached || ind.associated ? '' : ' is-unreached'}${model.indIn(ind.id) ? '' : ' is-out'}`,
+      { kind: 'indicator', id: ind.id }, sm, `${ind.name}, ${data.year}: ${ind.value}.`);
+    row.append(el('span', 'sm-name', ind.name), el('span', 'sm-value sm-value-long', `${data.year}: ${ind.value}`));
+    sm.rows.indicator.set(ind.id, row);
+    sm.indRow = row;
     indCol.append(row);
   }
 
   cols.append(svg, goalCol, el('div', 'sm-gutter'), linkCol, el('div', 'sm-gutter'), indCol);
   cols.addEventListener('click', e => { if (!e.target.closest('button')) setPick(sm, null); });
+  map.replaceChildren(cols);
+  markPick(sm);
 
-  const panel = el('aside', 'sm-panel');
-  panel.setAttribute('aria-live', 'polite');
-  sm.panel = panel;
-
-  const body = el('div', 'sm-body');
-  body.append(map, panel);
-  root.append(widthSwitch(sm, scope), body, howToRead());
-
-  if (!sm.keys) {
-    sm.keys = true;
-    root.addEventListener('keydown', e => { if (e.key === 'Escape') setPick(sm, null); });
-  }
   const relayout = () => { place(sm); draw(sm); };
   if (sm.observer) sm.observer.disconnect();
   sm.observer = new ResizeObserver(relayout);
   sm.observer.observe(cols);
   document.fonts?.ready?.then(relayout);
   relayout();
-  paint(sm);
 }
 
 /** "3 statements" for a program, "2 partners" for a school; '' when nobody there names the goal. */
@@ -306,11 +347,11 @@ function widthSwitch(sm, scope) {
     group.append(b);
   }
   bar.append(group,
-    el('span', 'sm-switch-note', 'Only the lines from goals to program models change; lines into indicators stay one width, so they never add up.'));
+    el('span', 'sm-switch-note', 'Only the lines from goals to program models change; lines into the indicator stay one width, so they never add up.'));
   return bar;
 }
 
-/** How to read a link: the three line styles, each with what it means in a sentence. */
+/** How to read a link: the line styles, each with what it means in a sentence. */
 function howToRead() {
   const box = el('div', 'sm-legend');
   box.append(el('div', 'sm-legend-head', 'How to read a link'));
@@ -347,46 +388,62 @@ function setHover(sm, item) {
   if (!sm.pick) paint(sm);
 }
 
+function markPick(sm) {
+  const item = sm.pick;
+  for (const [kind, rows] of Object.entries(sm.rows)) {
+    for (const [id, row] of rows) row.setAttribute('aria-pressed', String(!!item && item.kind === kind && item.id === id));
+  }
+  paint(sm);
+}
+
+/** Pins a goal, link or the indicator; null unpins, which leaves the shown indicator as the pick. */
 function setPick(sm, item) {
   const was = sm.pick;
   sm.pick = item;
-  for (const [kind, rows] of Object.entries(sm.rows)) {
-    if (!rows) continue;
-    const list = rows instanceof Map ? rows : new Map([['other', rows]]);
-    for (const [id, row] of list) row.setAttribute('aria-pressed', String(!!item && item.kind === kind && item.id === id));
+  markPick(sm);
+  if ((was && was.kind) !== (item && item.kind) || (was && was.id) !== (item && item.id)) {
+    sm.send('selection', item ? { ...item, focus: sm.focus } : focusPick(sm));
   }
-  paint(sm);
-  if ((was && was.kind) !== (item && item.kind) || (was && was.id) !== (item && item.id)) sm.send('selection', item);
 }
 
 // ---------------------------------------------------------------- layout
 
 const rel = (box, base) => ({ top: box.top - base.top, bottom: box.bottom - base.top, left: box.left - base.left, right: box.right - base.left });
 
-/** Sets each model node's height beside the rows it joins, keeping them in order and apart. */
+/** Sets each node's height beside the goals it joins, tested ones first, then the associations under their rule;
+ * then sets the indicator beside the middle of the column. */
 function place(sm) {
-  const { model, stack } = sm;
+  const { stack } = sm;
   const base = stack.getBoundingClientRect();
   const centre = row => { const r = rel(row.getBoundingClientRect(), base); return (r.top + r.bottom) / 2; };
-  const nodes = model.data.links.map(l => {
-    const ends = [...l.goals.map(g => sm.rows.goal.get(g)), ...l.indicators.map(i => sm.rows.indicator.get(i))].filter(Boolean);
+  const nodes = sm.links.map(l => {
+    const ends = l.goals.map(g => sm.rows.goal.get(g)).filter(Boolean);
     const want = ends.reduce((s, r) => s + centre(r), 0) / Math.max(1, ends.length);
     const node = sm.rows.link.get(l.id);
-    return { node, want, h: node.offsetHeight };
-  }).sort((a, b) => a.want - b.want);
-  const colH = Math.max(...[...sm.rows.goal.values(), ...sm.rows.lane.values(), ...sm.rows.indicator.values(), sm.rows.other].filter(Boolean)
-    .map(r => rel(r.getBoundingClientRect(), base).bottom));
+    return { node, want, h: node.offsetHeight, assoc: !!l.associated };
+  });
+  const sorted = [...nodes.filter(n => !n.assoc).sort((a, b) => a.want - b.want),
+    ...nodes.filter(n => n.assoc).sort((a, b) => a.want - b.want)];
+  const colH = Math.max(0, ...[...sm.rows.goal.values()].map(r => rel(r.getBoundingClientRect(), base).bottom));
   let y = 0;
-  for (const n of nodes) { n.top = Math.max(n.want - n.h / 2, y); y = n.top + n.h + NODE_GAP; }
-  // When the nodes need more room than the rows, the column grows rather than letting nodes overlap.
-  let limit = Math.max(colH, nodes.reduce((s, n) => s + n.h + NODE_GAP, -NODE_GAP));
-  for (let k = nodes.length - 1; k >= 0; k--) {
-    const n = nodes[k];
-    n.top = Math.max(0, Math.min(n.top, limit - n.h));
-    limit = n.top - NODE_GAP;
+  let ruled = false;
+  for (const n of sorted) {
+    let least = y;
+    if (n.assoc && !ruled && sm.divider) {
+      ruled = true;
+      const dh = sm.divider.offsetHeight;
+      least = y + (y ? 8 : 0) + dh + 4;
+      n.top = Math.max(n.want - n.h / 2, least);
+      sm.divider.style.top = `${Math.round(n.top - dh - 4)}px`;
+    } else {
+      n.top = Math.max(n.want - n.h / 2, least);
+    }
+    y = n.top + n.h + NODE_GAP;
   }
-  for (const n of nodes) n.node.style.top = `${Math.round(n.top)}px`;
-  stack.style.height = `${Math.ceil(Math.max(colH, y))}px`;
+  for (const n of sorted) n.node.style.top = `${Math.round(n.top)}px`;
+  const h = Math.ceil(Math.max(colH, y - NODE_GAP, 0));
+  stack.style.height = `${h}px`;
+  if (sm.indRow) sm.indRow.style.marginTop = `${Math.max(0, Math.round(h / 2 - sm.indRow.offsetHeight / 2))}px`;
 }
 
 function curve(x0, y0, x1, y1) {
@@ -416,7 +473,7 @@ function draw(sm) {
   };
   const bands = svgEl('g', { class: 'sm-bandset' });
   const ends = svgEl('g', { class: 'sm-ends' });
-  for (const l of model.data.links) {
+  for (const l of sm.links) {
     const n = box(sm.rows.link.get(l.id));
     const add = (key, d, hue, endAt, width, out) => {
       const path = svgEl('path', { d, class: 'sm-band', 'stroke-dasharray': DASH[l.kind] ?? null });
@@ -434,24 +491,17 @@ function draw(sm) {
       add(`in|${g}|${l.id}`, curve(r.right + 3, mid(r), n.left, mid(n)), goal?.hue, [r.right + 3, mid(r)],
         goal ? widthOf(goal) : null, !model.goalIn(g));
     }
-    for (const i of l.indicators) {
-      const row = sm.rows.indicator.get(i);
-      if (!row) continue;
-      const r = box(row);
-      add(`out|${l.id}|${i}`, curve(n.right, mid(n), r.left - 3, mid(r)), l.hue, [r.left - 3, mid(r)], null,
+    if (sm.indRow) {
+      const r = box(sm.indRow);
+      add(`out|${l.id}|${sm.focus}`, curve(n.right, mid(n), r.left - 3, mid(r)), l.hue, [r.left - 3, mid(r)], null,
         !model.linkIn(l));
     }
   }
-  // A short dotted stub beside each row with no link, so the gap is drawn, not left blank.
+  // A short dotted stub beside an indicator no link reaches, so the gap is drawn, not left blank.
   const stubs = svgEl('g', { class: 'sm-stubs' });
-  for (const i of model.data.indicators) {
-    if (i.reached || i.associated) continue;
-    const r = box(sm.rows.indicator.get(i.id));
+  if (sm.indRow && !sm.links.length) {
+    const r = box(sm.indRow);
     stubs.append(svgEl('line', { x1: r.left - 3 - STUB, y1: mid(r), x2: r.left - 3, y2: mid(r), class: 'sm-stub' }));
-  }
-  if (sm.rows.other) {
-    const r = box(sm.rows.other);
-    stubs.append(svgEl('line', { x1: r.right + 3, y1: mid(r), x2: r.right + 3 + STUB, y2: mid(r), class: 'sm-stub' }));
   }
   svg.append(stubs, bands, ends);
   paint(sm);
@@ -463,18 +513,13 @@ function paint(sm) {
   const item = sm.pick || sm.hover;
   const lit = litBy(sm.model, item);
   sm.map.classList.toggle('is-focus', !!lit);
-  for (const [kind, rows] of [['goal', sm.rows.goal], ['link', sm.rows.link], ['indicator', sm.rows.indicator], ['lane', sm.rows.lane]]) {
+  for (const [kind, rows] of [['goal', sm.rows.goal], ['link', sm.rows.link], ['indicator', sm.rows.indicator]]) {
     for (const [id, row] of rows) {
       const on = !!lit && lit[kind].has(id);
       row.classList.toggle('is-on', on);
       row.classList.toggle('is-dim', !!lit && !on);
       row.classList.toggle('is-self', !!item && item.kind === kind && item.id === id);
     }
-  }
-  if (sm.rows.other) {
-    sm.rows.other.classList.toggle('is-on', !!lit && lit.other);
-    sm.rows.other.classList.toggle('is-dim', !!lit && !lit.other);
-    sm.rows.other.classList.toggle('is-self', !!lit && lit.other);
   }
   const front = [];
   for (const s of sm.segs || []) {
@@ -505,27 +550,11 @@ function readout(sm, item) {
   };
   const section = (title, ...kids) => { const s = el('div', 'sm-sec'); s.append(el('div', 'sm-sec-head', title), ...kids); return s; };
   const text = (t, cls = '') => el('p', `sm-text ${cls}`.trim(), t);
-  const guardrail = () => {
-    const g = data.guardrail || {};
-    const kids = [text(g.summary)];
-    if (g.quote) kids.push(el('p', 'sm-quote', `“${g.quote}”`));
-    if (g.url) {
-      const a = el('a', 'sm-link', 'Board of Education Bylaw 003.1, Goals and Guardrails');
-      a.href = g.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
-      kids.push(a);
-    }
-    return kids;
-  };
   const laneLines = (name, serves) => {
     const dl = el('dl', 'sm-lane-lines');
     if (name) dl.append(el('dt', null, 'District priority'), el('dd', 'sm-strong', name));
     if (serves) dl.append(el('dt', null, 'Serves'), el('dd', null, serves));
     return dl;
-  };
-  const bylaw = () => {
-    const a = el('a', 'sm-link', 'Board of Education Bylaw 003.1, Goals and Guardrails');
-    a.href = data.bylaw; a.target = '_blank'; a.rel = 'noopener noreferrer';
-    return a;
   };
   const linkLine = l => {
     const li = el('li');
@@ -545,8 +574,6 @@ function readout(sm, item) {
     return div;
   };
   const who = scope ? (scope.kind === 'school' ? 'No partner there' : scope.label) : '';
-  const tested = data.links.filter(l => !l.associated);
-  const assoc = data.links.filter(l => l.associated);
   // Research associations always come with the review's caution, and in a list of their own.
   const assocSection = (title, ls, line) => {
     const list = el('ul', 'sm-list');
@@ -554,22 +581,10 @@ function readout(sm, item) {
     return section(title, list, text(data.associatedCaution, 'sm-caution'), text(data.associatedNote, 'sm-caution'));
   };
 
-  if (!item) {
-    if (scope) {
-      inner.append(eyebrow('Showing'), el('div', 'sm-title', scope.label),
-        text(`Goals in dark type are the linked goals ${scope.kind === 'school' ? 'these partners name' : 'this program names'}. ` +
-          `Pale goals are linked goals ${scope.kind === 'school' ? 'no partner there names' : 'it does not name'}, so the gaps stay in view.`),
-        text(data.possible, 'sm-caution'));
-    } else {
-      inner.append(eyebrow('District indicators'),
-        el('div', 'sm-title', 'Which partner goals could help move the District’s indicators'),
-        text(`Tested program models: ${plural(tested.length, 'model links', 'models link')} partner goals to ${data.indicators.filter(i => i.reached).length} of the ${data.indicators.length} indicators.`),
-        text(`Research associations, counted apart: ${plural(assoc.length, 'association ties', 'associations tie')} partner goals to ${data.indicators.filter(i => i.associated).length} indicators. These never earn credit.`),
-        text(data.possible, 'sm-caution'));
-    }
-    if (model.lanes.size) inner.append(el('p', 'sm-hint', 'Goals are grouped by the District priority they serve. Pick a priority’s other goals to see what they serve.'));
-    inner.append(el('p', 'sm-hint', 'Point at or pick a goal, a program model or an indicator to see why it is linked and what a program would have to run.'));
-  } else if (item.kind === 'goal') {
+  // With nothing picked or pointed at, the panel reads out the indicator the map shows.
+  const atRest = !item;
+  if (atRest) item = focusPick(sm);
+  if (item.kind === 'goal') {
     const g = model.goals.get(item.id);
     const all = model.linksOfGoal.get(item.id) || [];
     const ls = all.filter(l => !l.associated);
@@ -717,31 +732,14 @@ function readout(sm, item) {
         return li;
       }));
     }
-  } else if (item.kind === 'lane') {
-    const lane = model.lanes.get(item.id);
-    // Most goals in a lane serve the same thing, which the lane's description already says; name only the others.
-    const tally = new Map();
-    for (const g of lane.goals) tally.set(g.serves, (tally.get(g.serves) || 0) + 1);
-    const [usual, often] = [...tally.entries()].sort((a, b) => b[1] - a[1])[0] || [];
-    const shared = often > 1 ? usual : null;
-    const list = el('ul', 'sm-list');
-    for (const g of lane.goals) {
-      const li = el('li');
-      li.append(el('b', null, g.name));
-      if (g.serves && g.serves !== shared) li.append(el('div', 'sm-sub', `Serves: ${g.serves}`));
-      list.append(li);
+    if (atRest) {
+      if (scope) {
+        inner.append(text(`Goals in dark type are the linked goals ${scope.kind === 'school' ? 'these partners name' : 'this program names'}. ` +
+          `Pale goals are linked goals ${scope.kind === 'school' ? 'no partner there names' : 'it does not name'}, so the gaps stay in view.`));
+      }
+      if (all.length) inner.append(text(data.possible, 'sm-caution'));
+      inner.append(el('p', 'sm-hint', 'Point at or pick a goal or a program model to see why it is linked and what a program would have to run. Pick another indicator from the list to see its links.'));
     }
-    inner.append(eyebrow('District priority'), el('div', 'sm-title', lane.name), text(lane.description));
-    if (lane.quote) inner.append(el('p', 'sm-quote', `“${lane.quote}”`));
-    if (lane.quote && data.bylaw) inner.append(bylaw());
-    if (shared) inner.append(laneLines(null, shared));
-    inner.append(section(lane.linked ? 'Its goals with no link of either kind' : 'Its goals', list));
-    if (lane.id === 'names-indicator' || lane.id === 'step-toward-indicator') {
-      inner.append(text('The research review has not tied these goals to an indicator through a program model that studies tested.', 'sm-caution'));
-    }
-  } else if (item.kind === 'other') {
-    inner.append(eyebrow('Goals with no link to an indicator'),
-      el('div', 'sm-title', `${data.otherGoals} other goals`), ...guardrail());
   }
   panel.replaceChildren(inner);
 }

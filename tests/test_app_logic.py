@@ -776,6 +776,29 @@ def test_spotlight_map_data_draws_each_link_once_and_never_totals():
     assert charts.spotlight_map_data(reach, {}, {}, {}, n_goals=0) == {}
 
 
+def test_spotlight_map_opens_on_one_indicator():
+    """The map shows one indicator at a time: the first a tested link reaches, or, for a program or school,
+    the first that scope names a linked goal for, through a tested link before a research association."""
+    from outcomes_data import (codebook_domain_names, codebook_goal_names, load_spotlight_links,
+                               spotlight_indicator_reach)
+    links = load_spotlight_links()
+    rows = pd.DataFrame({app.COL_SUBCAT: ["Y1.3 Mathematics"], app.COL_ORG_VIEW: ["A"], app.COL_PROGRAM: ["Tutors"]})
+    reach = spotlight_indicator_reach(rows, links, codebook_goal_names())
+    data = charts.spotlight_map_data(reach, links, codebook_domain_names(), {}, n_goals=99)
+    assert data["focus"] == "S1"   # Student attendance, the first indicator a tested link reaches
+
+    def scoped(goals: dict) -> str:
+        scope = {"kind": "program", "label": "A: Tutors", "goals": goals}
+        return charts.spotlight_map_data(reach, links, codebook_domain_names(), {}, n_goals=99, scope=scope)["focus"]
+
+    assert scoped({"Y1.3": {"count": 1}}) == "S7"   # school-day math tutoring reaches the grade 3 math test
+    # Grades and on-track status reaches Dropouts only through a research association, and the four-year
+    # graduation rate through a tested link, so the tested one wins although Dropouts comes first.
+    assert scoped({"Y1.15": {"count": 1}}) == "S4"
+    assert scoped({"Y1.10": {"count": 1}}) == "S5"   # research association only: still opens on it
+    assert scoped({}) == "S1"
+
+
 def test_spotlight_pick_codes():
     """A pick stands for the goals it covers: a goal itself, a link its goals, an indicator its links' goals."""
     from outcomes_data import load_spotlight_links, spotlight_pick_codes

@@ -1564,9 +1564,10 @@ def school_scope(everything: pd.DataFrame, relationships: pd.DataFrame, ulcs: st
 
 
 def indicator_map(reach: list[dict], links: dict, scope: Optional[dict] = None, key: str = "ind_map") -> Optional[dict]:
-    """The goals, program models and indicators as one linked map; returns the pick, if any.
+    """The indicator list and the map for one indicator at a time; returns the pick.
 
-    With a `scope`, the goals that program or school's partners name stand out and the rest go pale.
+    Until something in the map is picked, the pick is the indicator it shows. With a `scope`, the goals that
+    program or school's partners name stand out and the rest go pale.
     """
     scope_id = "" if not scope else f"_{slug(scope['label'])}"
     key = f"{key}_{st.session_state.get('ind_nonce', 0)}{scope_id}"
@@ -1576,7 +1577,8 @@ def indicator_map(reach: list[dict], links: dict, scope: Optional[dict] = None, 
                                      scope=scope, crosswalk=cached_crosswalk(), goal_names=cached_goal_names())
     pick = spotlight_map(data, key=key, on_change=lambda: st.session_state.update(ind_focus="map"))
     st.session_state[last_key] = pick
-    return pick
+    # The map always shows one indicator; until something is picked, that indicator is the pick.
+    return pick or ({"kind": "indicator", "id": data["focus"], "focus": data["focus"]} if data.get("focus") else None)
 
 
 def indicator_block(r: dict, goals: dict, year: str, caution: str = "") -> str:
