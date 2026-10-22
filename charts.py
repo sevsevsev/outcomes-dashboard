@@ -864,6 +864,7 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
     indicators = [{"id": r["id"], "group": r["group"], "name": r["name"], "wording": r["wording"],
                    "value": r["value"], "reached": bool(r["links"]), "associated": bool(r.get("associated"))}
                   for r in reach]
+    focus = spotlight_default_focus(indicators, out_links, goals if scope else None)
     guard = links.get("guardrails", {})
     scope_out = {"kind": scope["kind"], "label": scope["label"]} if scope else None
     sig = hashlib.sha1(json.dumps([goals, [i["id"] for i in indicators], scope_out],
@@ -878,5 +879,23 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
         "associatedNote": SPOTLIGHT_ASSOCIATED_NOTE,
         "guardrail": {"summary": SPOTLIGHT_NO_LINK, "quote": guard.get("quote", ""),
                       "url": guard.get("url", "")},
-        "selected": selected,
+        "selected": selected, "focus": focus,
     }
+
+
+def spotlight_default_focus(indicators: list[dict], links: list[dict], scoped_goals: Optional[list[dict]] = None) -> str:
+    """The indicator the map opens on: the first, in SPOTlight order, that a tested link reaches.
+
+    With `scoped_goals` (a program or school view), the first whose links join a goal named there, so the
+    map opens on something that scope names, through a tested link before a research association; failing
+    that, the first reached one, then the first of all.
+    """
+    reached = [i["id"] for i in indicators if i["reached"]]
+    if scoped_goals is not None:
+        here = {g["id"] for g in scoped_goals if g.get("here")}
+        for associated in (False, True):
+            for ind in [i["id"] for i in indicators]:
+                if any(ind in link["indicators"] and bool(link.get("associated")) == associated
+                       and here.intersection(link["goals"]) for link in links):
+                    return ind
+    return reached[0] if reached else (indicators[0]["id"] if indicators else "")
