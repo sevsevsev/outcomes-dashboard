@@ -427,9 +427,11 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
 
     # --- Organization and program names ---------------------------------------
     if COL_SOURCE_FILE in df.columns:
-        parsed = df[COL_SOURCE_FILE].map(parse_filename)
-        file_org = parsed.str[0]
-        file_program = parsed.str[1]
+        # Build the two columns directly: pandas 3 no longer allows .str[0] on a
+        # column of tuples.
+        parsed = [parse_filename(name) for name in df[COL_SOURCE_FILE]]
+        file_org = pd.Series([org for org, _ in parsed], index=df.index, dtype="string")
+        file_program = pd.Series([program for _, program in parsed], index=df.index, dtype="string")
     else:
         file_org = pd.Series(pd.NA, index=df.index)
         file_program = pd.Series(pd.NA, index=df.index)
