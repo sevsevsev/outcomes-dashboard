@@ -49,11 +49,13 @@ from outcomes_data import (
     SPOTLIGHT_EVIDENCE,
     SPOTLIGHT_MODEL_NAMES,
     SPOTLIGHT_NO_LINK,
+    SPOTLIGHT_LINE_STYLES,
     SPOTLIGHT_POSSIBLE,
     SUNBURST_SEP,
     _without_codes,
     crosswalk_code_lanes,
     crosswalk_lanes,
+    spotlight_group_label,
     subcategory_sort_key,
 )
 
@@ -768,6 +770,10 @@ def spotlight_link_kind(link: dict) -> str:
     return "correlation" if link.get("contribution") == "predicts" else "cause"
 
 
+# An indicator value that is a bare count of students (Dropouts: "1,680"), not a percentage.
+_BARE_COUNT = re.compile(r"[\d,]+")
+
+
 def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, str], definitions: dict,
                        n_goals: int, selected: Optional[dict] = None, scope: Optional[dict] = None,
                        crosswalk: Optional[dict] = None, goal_names: Optional[dict[str, str]] = None) -> dict:
@@ -861,8 +867,10 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
             "studies": [str(c) for c in link.get("studies") or []],
             "hue": hue_of.get(link["codes"][0]),
         })
-    indicators = [{"id": r["id"], "group": r["group"], "name": r["name"], "wording": r["wording"],
-                   "value": r["value"], "reached": bool(r["links"]), "associated": bool(r.get("associated"))}
+    indicators = [{"id": r["id"], "group": spotlight_group_label(r["group"]), "name": r["name"], "wording": r["wording"],
+                   "value": f"{r['value']} students" if _BARE_COUNT.fullmatch(r["value"]) else r["value"],
+                   "valueShort": r["value"],
+                   "reached": bool(r["links"]), "associated": bool(r.get("associated"))}
                   for r in reach]
     focus = spotlight_default_focus(indicators, out_links, goals if scope else None)
     guard = links.get("guardrails", {})
@@ -874,7 +882,8 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
         "otherGoals": max(0, n_goals - len(goals)), "lanes": lanes,
         "bylaw": ((crosswalk or {}).get("source") or {}).get("url", ""),
         "year": links.get("spotlightYear", ""), "scope": scope_out,
-        "possible": SPOTLIGHT_POSSIBLE,
+        "possible": SPOTLIGHT_POSSIBLE, "report": links.get("report", ""),
+        "kinds": {kind: {"word": word, "explain": explain} for kind, (word, explain) in SPOTLIGHT_LINE_STYLES.items()},
         "associatedCaution": links.get("associatedCaution", ""), "associatedRule": links.get("associatedRule", ""),
         "associatedNote": SPOTLIGHT_ASSOCIATED_NOTE,
         "guardrail": {"summary": SPOTLIGHT_NO_LINK, "quote": guard.get("quote", ""),

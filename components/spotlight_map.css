@@ -93,28 +93,11 @@
 .sm-muted { color: var(--muted); }
 .sm-sub { font-size: 12px; color: var(--muted); line-height: 1.4; }
 
-/* "How to read a link": the three line styles, each with a sentence on what it means. */
-.sm-legend { margin-top: 22px; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 28px;
-  font-size: 12.5px; line-height: 1.5; color: var(--ink-2); max-width: 1080px; }
-.sm-legend-head, .sm-switch-label {
-  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
-}
-.sm-legend-head { grid-column: 1 / -1; }
-.sm-key { display: flex; gap: 10px; align-items: flex-start; }
-.sm-key svg { flex: none; margin-top: 5px; }
-.sm-key b { font-weight: 600; color: var(--ink); }
-.sm-key-note { grid-column: 1 / -1; margin: 0; color: var(--muted); }
-
-/* The "Line width" switch above the map: a quiet segmented control like the page's own. */
-.sm-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 14px; }
-.sm-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 8px; background: rgba(226, 232, 240, .6); }
-.sm-seg-btn {
-  all: unset; cursor: pointer; padding: 4px 10px; border-radius: 6px; font-size: 13px; color: #475569;
-}
-.sm-seg-btn[aria-checked="true"] { background: #fff; color: var(--ink); font-weight: 500;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, .08), 0 0 0 1px rgba(15, 23, 42, .04); }
-.sm-seg-btn:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; }
-.sm-switch-note { font-size: 12px; color: var(--muted); }
+/* The one-line key above the map: the four line styles and what a grey indicator means. */
+.sm-key-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; margin: 0 0 14px;
+  font-size: 12.5px; color: var(--ink-2); }
+.sm-key { display: inline-flex; align-items: center; gap: 7px; }
+.sm-key-swatch { font-size: 12px; font-weight: 500; color: var(--muted); opacity: .7; }
 
 /* A scoped view (one program, one school): what is not named there goes pale but keeps its place. */
 .is-out { opacity: .42; }

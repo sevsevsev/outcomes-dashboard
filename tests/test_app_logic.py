@@ -799,6 +799,30 @@ def test_spotlight_map_opens_on_one_indicator():
     assert scoped({}) == "S1"
 
 
+def test_district_indicators_page_wording():
+    """Group headings never read like bare numbers, a count of students says so, the line styles have one
+    wording that the map reads from the data, and the review date is written out."""
+    from outcomes_data import (SPOTLIGHT_LINE_STYLES, codebook_domain_names, codebook_goal_names,
+                               load_spotlight_links, spotlight_group_label, spotlight_indicator_reach)
+    assert spotlight_group_label("Goals 1 to 3") == "Board goals 1 to 3"
+    assert spotlight_group_label("Goal 4") == "Board goal 4"
+    assert spotlight_group_label("Conditions for success") == "Conditions for success"
+    links = load_spotlight_links()
+    rows = pd.DataFrame({app.COL_SUBCAT: ["Y1.3 Mathematics"], app.COL_ORG_VIEW: ["A"], app.COL_PROGRAM: ["Tutors"]})
+    reach = spotlight_indicator_reach(rows, links, codebook_goal_names())
+    data = charts.spotlight_map_data(reach, links, codebook_domain_names(), {}, n_goals=99)
+    inds = {i["id"]: i for i in data["indicators"]}
+    assert inds["S3"]["value"] == f"{inds['S3']['valueShort']} students"   # Dropouts is a count, not a rate
+    assert inds["S1"]["value"].endswith("%")
+    assert not any(i["group"].startswith("Goal") for i in data["indicators"])
+    assert set(data["kinds"]) == set(SPOTLIGHT_LINE_STYLES) == {"cause", "correlation", "definition", "associated"}
+    assert data["kinds"]["correlation"]["word"] == "Tested, correlation only"
+    assert app.long_date("2026-10-20") == "October 20, 2026"
+    assert app.long_date("soon") == "soon"
+    assert app.lower_first("Programs often attract") == "programs often attract"
+    assert app.lower_first("SPOTlight") == "SPOTlight"
+
+
 def test_spotlight_pick_codes():
     """A pick stands for the goals it covers: a goal itself, a link its goals, an indicator its links' goals."""
     from outcomes_data import load_spotlight_links, spotlight_pick_codes

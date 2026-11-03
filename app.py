@@ -106,7 +106,6 @@ from outcomes_data import (
     load_crosswalk,
     lane_program_counts,
     priority_grid_data,
-    priority_pick_codes,
     codebook_domain_names,
     codebook_goal_names,
     codebook_scheme,
@@ -128,8 +127,12 @@ from outcomes_data import (
     spotlight_scope_goals,
     spotlight_indicator_names,
     SPOTLIGHT_ASSOCIATED_NAMES,
+    SPOTLIGHT_LINE_STYLES,
     SPOTLIGHT_MODEL_NAMES,
     spotlight_all_links,
+    spotlight_group_label,
+    long_date,
+    lower_first,
     split_code,
     subcategory_coverage,
     sunburst_nodes,
@@ -518,7 +521,7 @@ DISPLAY_LABELS = {
     COL_DOMAIN: "Domain",
     COL_SUBCAT: "Goal",
     COL_POP: "For",
-    COL_CONF: "Confidence",
+    COL_CONF: "Coding confidence",
     COL_QA: "QA status",
     COL_NOTES: "Coder notes",
     COL_SOURCE_FILE: "Source file",
@@ -529,7 +532,7 @@ DISPLAY_COLUMNS = [COL_ORG_VIEW, COL_OUTCOME, COL_SUBCAT, COL_POP, COL_CONF, COL
 # names and outcomes get room, short columns stay narrow.
 # Organization to confidence fits the 1,180 px a 1280 px screen leaves; program and full statement scroll.
 COLUMN_WIDTHS = {COL_ORG_VIEW: 230, COL_PROGRAM: 200, COL_OUTCOME: 380, COL_FULL: 320, COL_SUBCAT: 220,
-                 COL_POP: 130, COL_CONF: 100, COL_NOTES: 260, COL_QA: 110, COL_SOURCE_FILE: 260}
+                 COL_POP: 130, COL_CONF: 150, COL_NOTES: 260, COL_QA: 110, COL_SOURCE_FILE: 260}
 # Columns dropped from a table when every row has the same value, since the selection already says it.
 REPEATABLE = [COL_ORG_VIEW, COL_PROGRAM, COL_SUBCAT, COL_POP, COL_CONF]
 
@@ -1116,7 +1119,7 @@ def page_review(df: pd.DataFrame) -> None:
         plot(charts.build_confidence_bar(conf_counts), key="v3_conf_bar")
         f1, f2 = st.columns([3, 2])
         confidences = f1.pills(
-            "Confidence", present, selection_mode="multi",
+            "Coding confidence", present, selection_mode="multi",
             default=[c for c in ("low", "none") if c in present] or present, key="v3_conf",
             format_func=lambda c: f"{c.title()} ({int(conf_counts.get(c, 0)):,})",
         )
@@ -1391,15 +1394,22 @@ def school_partner_list(portfolio: pd.DataFrame, school_name: str, ulcs: str) ->
 def page_indicators(df: pd.DataFrame, everything: pd.DataFrame) -> None:
     """The District's SPOTlight indicators, the goals that could help move each one, and who names those goals.
 
-    `df` is the filtered data; `everything` is the whole file, which the school view uses so that a filter
-    never makes a school look as if no partner there names a goal.
+    The page answers one question: pick an indicator, see which partner goals could help move it, through which
+    tested program model, and how many programs name those goals. Each caution is said once at the top and once
+    where it applies, not on every block. `df` is the filtered data; `everything` is the whole file, which the
+    school view uses so that a filter never makes a school look as if no partner there names a goal.
     """
     links = cached_spotlight()
-    year, reviewed = links.get("spotlightYear", ""), links.get("reviewedOn", "")
+    year = links.get("spotlightYear", "")
+    review = html.escape(long_date(links.get("reviewedOn", "")))
+    if links.get("report"):
+        review = (f"<a href='{html.escape(links['report'])}' target='_blank' rel='noopener noreferrer'>"
+                  f"research review of {review}</a>")
+    else:
+        review = f"research review of {review}"
     page_header("District indicators",
-                f"Which partner goals could help move the indicators on the District's {year} SPOTlight, according "
-                f"to the research review of {reviewed}. The studies tested specific program models, so a link "
-                "applies to a program only once someone confirms the program runs that model.")
+                f"Which partner goals could help move each indicator on the District's {html.escape(year)} "
+                f"SPOTlight, based on the {review}.")
     if not links:
         st.info("The indicator links file is missing. Run `scripts/build_spotlight_links.py` to copy it from the "
                 "coder repo.")
@@ -1410,98 +1420,80 @@ def page_indicators(df: pd.DataFrame, everything: pd.DataFrame) -> None:
     reach = cached_indicator_reach(df)
     tested = [r for r in reach if r["links"]]
     associated_only = [r["name"] for r in reach if not r["links"] and r.get("associated")]
-    unreached = [r["name"] for r in reach if not r["links"] and not r.get("associated")]
     lines = [
         f"Tested program models link partner goals to **{len(tested)} of {len(reach)}** SPOTlight indicators. "
-        "No program's model has been confirmed yet, so the counts beside the map show only how many programs "
-        "name each goal.",
+        "These are possible links: no partner has been confirmed to run a tested model yet, so no goal earns "
+        "credit toward an indicator.",
     ]
     if links.get("associated"):
         lines.append(
-            f"Separately, research associates partner goals with **{sum(bool(r.get('associated')) for r in reach)}** "
-            "indicators. An association never earns credit: " + links.get("associatedCaution", "").rstrip(".") + ".")
+            f"Research also associates partner goals with **{sum(bool(r.get('associated')) for r in reach)}** "
+            "indicators. Associations never earn credit: " + lower_first(links.get("associatedCaution", "")))
     if associated_only:
         lines.append(f"These have research associations but no tested program model yet: {'; '.join(associated_only)}.")
-    if unreached:
-        lines.append(f"For **{len(unreached)}**, the review found no study strong enough to link a goal: "
-                     f"{'; '.join(unreached)}.")
     findings(lines)
-    grid_pick = district_priorities(df)
     scope, rows = indicator_scope(df, everything)
     pick = indicator_map(reach, links, scope)
-    # The grid and the map both narrow the table; the one picked last decides it.
-    if grid_pick and (not pick or st.session_state.get("ind_focus") == "grid"):
-        pick = {**grid_pick, "grid": True}
-    guard = links.get("guardrails", {})
-    if guard and not cached_crosswalk():
-        st.markdown(
-            f"<p class='lanes'>The Board of Education counts goals without an indicator link toward its guardrails: "
-            f"“{html.escape(guard.get('quote', ''))}” "
-            f"(<a href='{html.escape(guard.get('url', ''))}' target='_blank' rel='noopener noreferrer'>Bylaw "
-            f"003.1</a>). <a href='{html.escape(links.get('report', ''))}' target='_blank' "
-            f"rel='noopener noreferrer'>Read the full review</a>.</p>", unsafe_allow_html=True)
-    elif links.get("report"):
-        st.markdown(f"<p class='lanes'><a href='{html.escape(links['report'])}' target='_blank' "
-                    "rel='noopener noreferrer'>Read the full research review</a>.</p>", unsafe_allow_html=True)
 
     crosswalk = cached_crosswalk()
-    codes = (priority_pick_codes(pick, crosswalk) if pick and pick.get("grid")
-             else spotlight_pick_codes(pick, links, crosswalk))
+    codes = spotlight_pick_codes(pick, links, crosswalk)
     goal_codes = rows[COL_SUBCAT].map(lambda label: split_code(label)[0])
     rows = rows[goal_codes.isin(codes)] if pick else rows[goal_codes.isin(
         {c for link in spotlight_all_links(links) for c in link["codes"]})]
     where = " naming a goal with a tested or research-associated link"
     if pick:
         e = html.escape
-        lane_names = {lane["id"]: lane["name"] for lane in crosswalk.get("lanes", [])}
-        lane_id, _, domain = pick["id"].partition("|")
         name = {"goal": lambda: cached_goal_names().get(pick["id"], pick["id"]),
-                "cell": lambda: lane_names.get(lane_id, lane_id),
-                "lane": lambda: lane_names.get(pick["id"], pick["id"]),
                 "link": lambda: SPOTLIGHT_MODEL_NAMES.get(pick["id"]) or SPOTLIGHT_ASSOCIATED_NAMES.get(pick["id"], pick["id"]),
-                "indicator": lambda: spotlight_indicator_names(links).get(pick["id"], pick["id"])}.get(pick["kind"])
-        where = (f" naming <b>{e(name())}</b>" if pick["kind"] == "goal"
-                 else f" naming a goal in <b>{e(name())}</b>" if pick.get("grid") and pick["kind"] == "lane"
-                 else (f" naming a goal from <b>{e(cached_domain_names().get(domain, domain))}</b> in "
-                       f"<b>{e(name())}</b>") if pick["kind"] == "cell"
-                 else f" naming a goal with no indicator link in <b>{e(name())}</b>" if pick["kind"] == "lane"
-                 else f" naming a goal in <b>{e(name())}</b>" if pick["kind"] == "link"
-                 else f" naming a goal that could help move <b>{e(name())}</b>" if codes
-                 else " naming a goal linked to this pick: none")
+                "indicator": lambda: spotlight_indicator_names(links).get(pick["id"], pick["id"])}.get(pick["kind"],
+                                                                                                    lambda: pick["id"])
+        if pick["kind"] == "indicator" and codes:
+            # Tested and research-associated goals are counted apart, never as one number.
+            tested_codes = {c for link in links.get("links", []) if pick["id"] in link["indicators"] for c in link["codes"]}
+            n_tested = int(goal_codes.loc[rows.index].isin(tested_codes).sum())
+            n_assoc = len(rows) - n_tested
+            where = (f" linked to <b>{e(name())}</b>: {n_tested:,} name a goal with a tested link"
+                     + (f", {n_assoc:,} more name only a goal research associates with it" if n_assoc else ""))
+        else:
+            where = (f" naming <b>{e(name())}</b>" if pick["kind"] == "goal"
+                     else f" naming a goal in <b>{e(name())}</b>" if pick["kind"] == "link"
+                     else " naming a goal linked to this pick: none")
     if scope:
         where += f" ({html.escape(scope['label'])})"
     outcomes_panel(rows, where, key="ind_map", nonce_key="ind_nonce" if pick else None)
 
     groups: dict[str, list[dict]] = {}
     for r in reach:
-        groups.setdefault(r["group"], []).append(r)
+        groups.setdefault(spotlight_group_label(r["group"]), []).append(r)
     by_code = {}
     for r in reach:
         by_code.update({g["code"]: g for g in r["goals"]})
+    with st.expander("What the line styles mean"):
+        st.markdown("".join(f"<p class='lanes'><b>{html.escape(word)}.</b> {html.escape(text)}</p>"
+                            for word, text in SPOTLIGHT_LINE_STYLES.values()), unsafe_allow_html=True)
     with st.expander("Every link as text"):
         for group, indicators in groups.items():
             st.markdown(f"<p class='sec-title'>{html.escape(group)}</p>"
                         + "".join(indicator_block(r, by_code, year, links.get("associatedCaution", ""))
                                 for r in indicators), unsafe_allow_html=True)
+    district_priorities(df)
 
 
-def district_priorities(df: pd.DataFrame) -> Optional[dict]:
-    """The District priorities grid: lanes under the Board's headings by domain; returns the pick, if any.
+def district_priorities(df: pd.DataFrame) -> None:
+    """The District priorities grid, in a closed section at the foot of the page: lanes by domain.
 
-    Programs that share one logic model count once. The counts follow the filter bar. They are never totalled,
-    ranked or colored by size: a program can name goals in several lanes, and a lane says what programs work
-    toward. The Clear selection button under the table resets the grid along with the map.
+    It answers a different question from the map (where goals sit across the Board's priorities), so it sits
+    below the map and does not filter the table. Programs that share one logic model count once. The counts
+    follow the filter bar. They are never totalled, ranked or colored by size: a program can name goals in
+    several lanes, and a lane says what programs work toward.
     """
     data = priority_grid_data(df, cached_crosswalk(), cached_domain_names())
     if not data:
-        return None
-    key = f"ind_grid_{st.session_state.get('ind_nonce', 0)}"
-    last_key = f"{key}_last"
-    data["selected"] = st.session_state.get(last_key)
-    data["sig"] = hashlib.sha1(json.dumps([data["lanes"], data["cells"]], sort_keys=True).encode()).hexdigest()[:16]
-    pick = priority_grid(data, key=key, on_change=lambda: st.session_state.update(ind_focus="grid"))
-    st.session_state[last_key] = pick
-    return pick
+        return
+    with st.expander("District priorities by domain"):
+        data["filtersTable"] = False
+        data["sig"] = hashlib.sha1(json.dumps([data["lanes"], data["cells"]], sort_keys=True).encode()).hexdigest()[:16]
+        priority_grid(data, key="ind_grid")
 
 
 SCOPE_ALL, SCOPE_PROGRAM, SCOPE_SCHOOL = "All partners", "One program", "Partners at a school"
@@ -1771,7 +1763,7 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
             "Rows with no organization name are not counted as one.\n"
             "- **Overall overlap** between peers is shared goals divided by all goals either organization "
             "targets.\n"
-            "- **Confidence** is the coder's own rating; *none* means it could not code the statement."
+            "- **Coding confidence** is the coder's own rating; *none* means it could not code the statement."
         )
     df = df.assign(**{COL_ORG_VIEW: df[ORG_GROUPING_OPTIONS[grouping]]})
 
