@@ -32,6 +32,7 @@ from outcomes_data import (
     COL_ORG_VIEW,
     COL_SUBCAT,
     COL_OUTCOME,
+    outcome_payload,
     DOMAIN_ONLY_SUFFIX,
     MEASURE_COLUMNS,
     MEASURE_ORGS,
@@ -245,14 +246,6 @@ def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_t
 # Academics' orange, and A2 sat 12 degrees from Career's red. Both now get hues of their own.
 DOMAIN_HUES = [28, 350, 262, 214, 158, 190, 4, 232, 44, 292, 128, 72, 320]
 NOUNS = {MEASURE_PROGRAMS: "programs", MEASURE_ORGS: "organizations"}
-HOVER_SAMPLE_CHARS = 240   # longer sample statements are cut; the readout clamps them to three lines anyway
-
-
-def _clip(text: str, limit: int) -> str:
-    """A sample statement cut at a word break, with "…" so the reader sees it goes on."""
-    return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
-
-
 def is_coded_domain(domain: str) -> bool:
     """False for the placeholder domain of rows the coder could not place."""
     return domain != UNCODED_DOMAIN
@@ -321,7 +314,8 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
             "hue": DOMAIN_HUES[int(row.domain_index) % len(DOMAIN_HUES)] if coded and row.domain_index >= 0 else None,
             "value": size, "count": int(getattr(row, size_col)),
             "programs": int(row.programs), "organizations": int(row.organizations), "outcomes": int(row.outcomes),
-            "samples": [_clip(" ".join(str(t).split()), HOVER_SAMPLE_CHARS) for t in row.sample_list],
+            # The partner's whole sentence, with where this slice's parts sit (the browser cuts it to fit).
+            "samples": [outcome_payload(t) for t in row.sample_list],
         })
     n_domains = int(nodes.loc[nodes["level"] == "domain", "domain"].map(is_coded_domain).sum())
     sig = hashlib.sha1(json.dumps([measure, layout, [(n["id"], n["value"], n["count"]) for n in out]]).encode()).hexdigest()

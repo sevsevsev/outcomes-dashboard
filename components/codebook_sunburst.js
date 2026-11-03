@@ -379,7 +379,12 @@ function prepareSearch(model, data) {
     if (n.level === 'root') continue;
     names.set(n.id, { title: norm(`${n.code || ''} ${n.eyebrow} ${n.title}`), terms: norm(terms[n.id]) });
   }
-  return { texts: (s.texts || []).map(norm), raw: s.texts || [], rows: s.rows || {}, names };
+  // Each coded outcome is its partner's sentence plus where its part sits ({t, m, c}, see
+  // outcome_payload); the search looks through the sentence and any part the coder reworded.
+  const sentences = s.sentences || [];
+  const raw = (s.texts || []).map(x => (typeof x === 'string' ? { t: x, m: [], c: [] }
+    : { t: sentences[x.s] ?? '', m: x.m || [], c: x.c || [] }));
+  return { texts: raw.map(x => norm([x.t, ...x.c].join(' '))), raw, rows: s.rows || {}, names };
 }
 
 /** Which slices hold the query, and how much of each. Sets sb.hits (null when the box is empty). */
@@ -470,24 +475,73 @@ function updateNote(sb) {
 
 /** Up to `n` distinct statements among `rows` that contain the query, with the words marked. */
 function matchingSamples(sb, rows, n = 3) {
-  const out = [];
-  const seen = new Set();
+  // One entry per sentence: the parts of a split sentence that match are marked together.
+  const bySentence = new Map();
   for (const r of rows) {
-    if (!sb.hits.textHit[r[0]] || seen.has(r[0])) continue;
-    seen.add(r[0]);
-    out.push(sb.search.raw[r[0]]);
-    if (out.length >= n) break;
+    if (!sb.hits.textHit[r[0]]) continue;
+    const x = sb.search.raw[r[0]];
+    let o = bySentence.get(x.t);
+    if (!o) {
+      if (bySentence.size >= n) continue;
+      o = { t: x.t, m: [], c: [] };
+      bySentence.set(x.t, o);
+    }
+    for (const m of x.m) if (!o.m.some(y => y[0] === m[0])) o.m.push(m);
+    for (const c of x.c) if (!o.c.includes(c)) o.c.push(c);
   }
-  return out;
+  return [...bySentence.values()];
 }
 
-function marked(text, w) {
-  const li = el('li');
-  const pattern = new RegExp('\\b(' + w.map(escapeRe).join('|') + ')', 'gi');
-  const clipped = text.length > 220 ? text.slice(0, 217).trimEnd() + '…' : text;
-  li.append('“');
-  clipped.split(pattern).forEach((part, i) => li.append(i % 2 ? el('mark', '', part) : document.createTextNode(part)));
-  li.append('”');
+const OUTCOME_CHARS = 200;   // longer sentences are cut around their coded part
+
+/** One outcome in the panel: the partner's whole sentence (cut around its coded part when long), the
+ *  part marked inside it, and search words marked too. A part the coder reworded, so it is not in the
+ *  sentence word for word, follows on its own line as "Coded part: …". The partner's words are never
+ *  rewritten. */
+function outcomeItem(p, w) {
+  if (typeof p === 'string') p = { t: p, m: [], c: [] };
+  const t = p.t || '';
+  const marks = (p.m || []).slice().sort((x, y) => x[0] - y[0]);
+  const source = w && w.length ? '\\b(' + w.map(escapeRe).join('|') + ')' : null;
+  const split = source ? new RegExp(source, 'gi') : null;
+  // What must stay in view: the first search word when searching, else the first coded part.
+  let focus = marks.length ? marks[0][0] : 0;
+  const hit = source ? new RegExp(source, 'i').exec(t) : null;
+  if (hit) focus = hit.index;
+  let start = 0, end = t.length;
+  if (t.length > OUTCOME_CHARS) {
+    if (focus > OUTCOME_CHARS * 0.4) start = t.lastIndexOf(' ', Math.max(0, focus - 30)) + 1;
+    end = Math.min(t.length, start + OUTCOME_CHARS);
+    if (end < t.length) {
+      const space = t.lastIndexOf(' ', end);
+      if (space > start) end = space;
+    }
+  }
+  const addText = (parent, text) => {
+    if (!split) { parent.append(text); return; }
+    text.split(split).forEach((x, i) => parent.append(i % 2 ? el('mark', '', x) : document.createTextNode(x)));
+  };
+  const li = el('li', 'sb-outcome');
+  const quote = el('span', 'sb-quote');
+  quote.append('“' + (start ? '…' : ''));
+  let pos = start;
+  for (const [s, e] of marks) {
+    const a = Math.max(s, start), b = Math.min(e, end);
+    if (b <= a || a < pos) continue;
+    addText(quote, t.slice(pos, a));
+    const part = el('span', 'sb-part');
+    addText(part, t.slice(a, b));
+    quote.append(part);
+    pos = b;
+  }
+  addText(quote, t.slice(pos, end));
+  quote.append((end < t.length ? '…' : '') + '”');
+  li.append(quote);
+  for (const c of p.c || []) {
+    const line = el('span', 'sb-coded', 'Coded part: ');
+    addText(line, c);
+    li.append(line);
+  }
   return li;
 }
 
@@ -1372,11 +1426,11 @@ function readout(sb, hovered) {
   const found = hits ? matchingSamples(sb, match.rows, focus.level === 'root' || focus.level === 'category' ? 2 : 3) : [];
   if (found.length) {
     const list = el('ul', 'sb-samples');
-    for (const s of found) list.append(marked(s, hits.words));
+    for (const s of found) list.append(outcomeItem(s, hits.words));
     children.push(el('div', 'sb-eyebrow sb-samples-head', 'Outcomes that match'), list);
   } else if (focus.samples && focus.samples.length && !(focus.level === 'root' && hits) && focus.level !== 'category' && !domainCats.length) {
     const list = el('ul', 'sb-samples');
-    for (const s of focus.samples) list.append(el('li', '', `“${s}”`));
+    for (const s of focus.samples) list.append(outcomeItem(s));
     children.push(el('div', 'sb-eyebrow sb-samples-head', 'Sample outcomes'), list);
   }
   children.push(el('div', 'sb-hint', hint(sb, hovered)));

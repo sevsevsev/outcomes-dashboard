@@ -53,16 +53,21 @@ from priority_component import priority_grid
 from spotlight_component import spotlight_map
 from sunburst_component import codebook_sunburst
 from outcomes_data import (
+    merge_outcome_keys,
+    outcome_html,
+    outcome_parts,
+    sentence_rows,
     CATEGORY_SEP,
     COL_ATOMIC,
     COL_CONF,
     COL_DOMAIN,
     COL_DOMAIN_NUM,
     COL_DOMAIN_SHORT,
-    COL_FULL,
     COL_GRANTEE,
     COL_NOTES,
     COL_OUTCOME,
+    COL_PART,
+    COL_SENTENCE,
     COL_ORG,
     COL_ORG_VIEW,
     COL_POP,
@@ -260,6 +265,10 @@ INK_2 = "#334155"     # slate-700, body text
 FAINT = "#94a3b8"     # slate-400
 WASH = "#f1f5f9"      # slate-100, the explorer's active-tab and hover fill
 ACCENT = charts.PRIMARY
+# One rule per part number (outcome_html numbers parts p1, p2 ... and their labels l1, l2 ...).
+PART_RULES = "\n".join(
+    f".outcome:has(.l{n}:hover, .l{n}:focus) :is(mark, .coded-part).p{n} {{ background: #c4d9f5; }}"
+    for n in range(1, 13))
 CSS = f"""
 <style>
 /* The browser's scroll anchoring shifts the page when a table below a chart changes; keep it still. */
@@ -321,6 +330,22 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 .statements li {{ margin-bottom: 0.35rem; background: #f8fafc; border-radius: 0.5rem; padding: 0.45rem 0.75rem;
                   color: {INK_2}; }}
 .none {{ color: {FAINT}; font-size: 0.875rem; margin: 0; }}
+
+/* A split statement: the partner's sentence with its coded parts marked (outcome_html). */
+mark.part {{ background: #e3ecf8; color: inherit; border-radius: 2px; padding: 0 1px;
+             -webkit-box-decoration-break: clone; box-decoration-break: clone; transition: background .15s ease; }}
+.coded-part {{ display: block; margin-top: 0.15rem; font-size: 0.8125rem; color: {MUTED}; border-radius: 2px;
+               transition: background .15s ease; }}
+.outcome-reading {{ max-width: 52rem; margin: 0.9rem 0 0 0; }}
+.outcome-reading .sentence {{ font-size: 0.9375rem; line-height: 1.6; color: {INK_2}; }}
+.outcome .labels {{ display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }}
+.outcome .label {{ font-size: 0.8125rem; line-height: 1.4; color: {INK_2}; background: #fff; border: 1px solid {HAIRLINE};
+                   border-radius: 999px; padding: 0.1rem 0.6rem; cursor: default; transition: border-color .15s ease; }}
+.outcome .label:hover, .outcome .label:focus {{ border-color: {ACCENT}; color: {INK}; outline: none; }}
+/* Pointing at a label, or tapping it, picks out its part: the others go plain. */
+.outcome:has(.label:hover, .label:focus) mark.part {{ background: transparent; }}
+{PART_RULES}
+.reading-hint {{ color: {FAINT}; font-size: 0.8125rem !important; margin: 0.6rem 0 0 0; }}
 
 /* District indicators: one block per indicator, each link's goals with how many programs name them. */
 .ind {{ margin: 0 0 1.4rem 0; max-width: 52rem; }}
@@ -506,61 +531,98 @@ def add_hover_value(fig, values: Sequence, template: str) -> None:
 # SHARED WIDGETS
 # =============================================================================
 
+GOALS = "goals"   # sentence_rows: one goal per coded part
 DISPLAY_LABELS = {
     COL_ORG_VIEW: "Organization",
     COL_ORG: "Organization",
     COL_GRANTEE: "Grantee (file name)",
     COL_PROGRAM: "Program",
-    COL_OUTCOME: "Outcome",
-    COL_FULL: "From the full statement",
-    COL_TEXT: "Original statement",
+    COL_TEXT: "Outcome statement",
+    COL_PART: "Coded part",
     COL_ATOMIC: "Atomic outcome",
     COL_DOMAIN: "Domain",
     COL_SUBCAT: "Goal",
+    GOALS: "Goals",
     COL_POP: "For",
     COL_CONF: "Confidence",
     COL_QA: "QA status",
     COL_NOTES: "Coder notes",
     COL_SOURCE_FILE: "Source file",
 }
-# Reading order: who, what they aim for, which goal it counts toward; context last.
-DISPLAY_COLUMNS = [COL_ORG_VIEW, COL_OUTCOME, COL_SUBCAT, COL_POP, COL_CONF, COL_PROGRAM, COL_FULL]
+# Reading order: who, what they aim for, which goals it counts toward; context last.
+# Lists show each partner sentence once (sentence_rows), with a goal for each coded part.
+DISPLAY_COLUMNS = [COL_ORG_VIEW, COL_TEXT, GOALS, COL_POP, COL_CONF, COL_PROGRAM]
 # Table cells can't wrap, so columns get pixel widths sized to what they hold:
 # names and outcomes get room, short columns stay narrow.
-# Organization to confidence fits the 1,180 px a 1280 px screen leaves; program and full statement scroll.
-COLUMN_WIDTHS = {COL_ORG_VIEW: 230, COL_PROGRAM: 200, COL_OUTCOME: 380, COL_FULL: 320, COL_SUBCAT: 220,
+# Organization to confidence fits the 1,180 px a 1280 px screen leaves; program scrolls.
+COLUMN_WIDTHS = {COL_ORG_VIEW: 230, COL_PROGRAM: 200, COL_TEXT: 420, COL_PART: 260, COL_SUBCAT: 220, GOALS: 260,
                  COL_POP: 130, COL_CONF: 100, COL_NOTES: 260, COL_QA: 110, COL_SOURCE_FILE: 260}
 # Columns dropped from a table when every row has the same value, since the selection already says it.
-REPEATABLE = [COL_ORG_VIEW, COL_PROGRAM, COL_SUBCAT, COL_POP, COL_CONF]
+REPEATABLE = [COL_ORG_VIEW, COL_PROGRAM, COL_SUBCAT, GOALS, COL_POP, COL_CONF]
 
 
 def pretty_population(code: str) -> str:
     return POPULATION_LABELS.get(code, code)
 
 
-def outcome_table(df: pd.DataFrame, columns: Sequence[str] = DISPLAY_COLUMNS, height="auto") -> None:
-    """Outcome rows as a scrollable table with readable headers."""
-    cols = [c for c in columns if c in df.columns]
-    if len(df) > 1:
-        cols = [c for c in cols if not (c in REPEATABLE and df[c].nunique() == 1)]
+def outcome_table(df: pd.DataFrame, columns: Sequence[str] = DISPLAY_COLUMNS, height="auto",
+                  key: Optional[str] = None):
+    """Outcome rows as a scrollable table with readable headers.
+
+    With the GOALS column (the default), each partner sentence is one row and
+    its coded parts' goals are its labels (sentence_rows); counts elsewhere
+    still take each part as one outcome. Without it, each coded outcome is a
+    row, with its sentence and, when the sentence was split, its coded part.
+    With `key`, a row can be picked; the selection event comes back, along
+    with the rows as shown.
+    """
+    grouped = GOALS in columns
+    frame = sentence_rows(df) if grouped else df
+    cols = [c for c in columns if c in frame.columns]
+    if len(frame) > 1:
+        same = lambda c: frame[c].map(lambda v: tuple(v) if isinstance(v, list) else v).nunique() == 1
+        cols = [c for c in cols if not (c in REPEATABLE and same(c))]
     # Columns with nothing in them (no split statements, an export without QA or notes) are left out.
-    for col in (COL_FULL, COL_QA, COL_NOTES):
-        if col in cols and not df[col].fillna("").astype(str).str.strip().astype(bool).any():
+    for col in (COL_PART, COL_QA, COL_NOTES):
+        if col in cols and not frame[col].fillna("").astype(str).str.strip().astype(bool).any():
             cols.remove(col)
     config = {c: st.column_config.TextColumn(DISPLAY_LABELS.get(c, c), width=COLUMN_WIDTHS.get(c)) for c in cols}
-    config[COL_OUTCOME] = st.column_config.TextColumn(
-        DISPLAY_LABELS[COL_OUTCOME], width=COLUMN_WIDTHS[COL_OUTCOME], help="The outcome as the coder categorized it.")
-    config[COL_FULL] = st.column_config.TextColumn(
-        DISPLAY_LABELS[COL_FULL], width=COLUMN_WIDTHS[COL_FULL],
-        help="Filled in only when the coder split a longer statement into separate outcomes.")
-    shown = df[cols].copy()
+    config[COL_TEXT] = st.column_config.TextColumn(
+        DISPLAY_LABELS[COL_TEXT], width=COLUMN_WIDTHS[COL_TEXT], help="The partner's words, as they wrote them.")
+    config[COL_PART] = st.column_config.TextColumn(
+        DISPLAY_LABELS[COL_PART], width=COLUMN_WIDTHS[COL_PART],
+        help="The part of the statement this row was coded on, when the coder split it into separate outcomes.")
+    config[GOALS] = st.column_config.ListColumn(
+        DISPLAY_LABELS[GOALS], width=COLUMN_WIDTHS[GOALS],
+        help="One goal for each outcome the coder found in the statement. Pick a row to see which words each "
+             "goal comes from.")
+    shown = frame[cols].copy()
     if COL_SUBCAT in shown:
         shown[COL_SUBCAT] = shown[COL_SUBCAT].map(goal_name)
+    if GOALS in shown:
+        shown[GOALS] = shown[GOALS].map(lambda goals: [goal_name(g) for g in goals])
     if COL_POP in shown:
-        shown[COL_POP] = shown[COL_POP].map(pretty_population)
+        shown[COL_POP] = shown[COL_POP].map(lambda v: ", ".join(pretty_population(p) for p in str(v).split(", ")))
     if COL_CONF in shown:
         shown[COL_CONF] = shown[COL_CONF].astype(str).str.title()
-    st.dataframe(shown, column_config=config, hide_index=True, height=height)
+    if key is None:
+        st.dataframe(shown, column_config=config, hide_index=True, height=height)
+        return None, frame
+    event = st.dataframe(shown, column_config=config, hide_index=True, height=height, key=key,
+                         on_select="rerun", selection_mode="single-row")
+    return event, frame
+
+
+def outcome_reading(row: pd.Series) -> None:
+    """A picked statement, in full: its coded parts marked, and one label per part (its goal).
+
+    Pointing at a label, or tapping it, highlights its part. A part the coder
+    reworded shows under the sentence as "Coded part: ...".
+    """
+    key = row[COL_OUTCOME]
+    parts = outcome_parts(key)[1]
+    labels = [goal_name(g) for g in row[GOALS]] if len(parts) > 1 else None
+    st.html(f"<div class='outcome outcome-reading'>{outcome_html(key, labels)}</div>")
 
 
 def download_button(df: pd.DataFrame, label: str, filename: str, key: str) -> None:
@@ -577,7 +639,10 @@ def outcomes_panel(rows: pd.DataFrame, where: str, key: str, nonce_key: Optional
     With `nonce_key`, a Clear selection button resets the charts keyed on it.
     """
     head, clear = st.columns([6, 1], vertical_alignment="center")
-    head.markdown(f"<p class='crumb'><b>{len(rows):,}</b> outcome statements{where}</p>", unsafe_allow_html=True)
+    sentences = rows[COL_SENTENCE].nunique() if COL_SENTENCE in rows else len(rows)
+    from_sentences = f", from {sentences:,} partner sentences" if sentences < len(rows) else ""
+    head.markdown(f"<p class='crumb'><b>{len(rows):,}</b> outcome statements{where}{from_sentences}</p>",
+                  unsafe_allow_html=True)
     if nonce_key:
         clear.button("Clear selection", key=f"{key}_clear", type="tertiary", on_click=clear_selection,
                      args=(nonce_key,))
@@ -590,8 +655,15 @@ def outcomes_panel(rows: pd.DataFrame, where: str, key: str, nonce_key: Optional
     # move the chart under the pointer so the next click missed its mark.
     with st.container(key=f"rows-{key}"):
         st.html(f"<style>.st-key-rows-{key} {{ min-height: {height + 60}px; }}</style>")
-        outcome_table(rows, height=height if len(rows) > 10 else "auto")
+        n_shown = rows[COL_SENTENCE].nunique() if COL_SENTENCE in rows else len(rows)
+        event, shown = outcome_table(rows, height=height if n_shown > 10 else "auto", key=f"{key}_table")
         download_button(rows, f"Download these {len(rows):,} (CSV)", f"outcomes_{key}.csv", key=f"{key}_dl")
+        picked = list(event.selection.rows) if event is not None and event.selection else []
+        if picked and picked[0] < len(shown):
+            outcome_reading(shown.iloc[picked[0]])
+        elif (shown["parts"] > 1).any():
+            st.markdown("<p class='reading-hint'>Pick a row to read the statement with the words behind each "
+                        "goal marked.</p>", unsafe_allow_html=True)
 
 
 def plain_label(text: str) -> str:
@@ -609,10 +681,12 @@ def describe(*parts: Optional[str], audience: Optional[str] = None) -> str:
 
 
 def statement_list(texts: Sequence[str]) -> str:
-    """Outcome statements as an HTML list (escaped), for side-by-side reading."""
+    """Outcome statements (outcome keys) as an HTML list (escaped), for side-by-side reading."""
     if len(texts) == 0:
         return "<p class='none'>None in this goal</p>"
-    return "<ul class='statements'>" + "".join(f"<li>{html.escape(str(t))}</li>" for t in texts) + "</ul>"
+    # Each sentence once, with the parts coded to this goal marked inside it.
+    return "<ul class='statements'>" + "".join(
+        f"<li class='outcome'>{outcome_html(t)}</li>" for t in merge_outcome_keys(texts)) + "</ul>"
 
 
 def selected_points(event) -> list[dict]:
@@ -1144,7 +1218,8 @@ def page_review(df: pd.DataFrame) -> None:
              "sorted by domain and goal." if len(filtered) > page_size else "Sorted by domain and goal.")
     with section(f"{len(filtered):,} outcomes to check", shown, key="review_table"):
         # What a reviewer checks first (outcome, goal, confidence, notes) comes before the context.
-        columns = [COL_ORG_VIEW, COL_OUTCOME, COL_SUBCAT, COL_CONF, COL_NOTES, COL_QA, COL_PROGRAM, COL_FULL,
+        # Each coded outcome is its own row here, since each is checked on its own.
+        columns = [COL_ORG_VIEW, COL_TEXT, COL_PART, COL_SUBCAT, COL_CONF, COL_NOTES, COL_QA, COL_PROGRAM,
                    COL_SOURCE_FILE]
         outcome_table(filtered.iloc[start:start + page_size], columns=columns, height=560)
         if n_pages > 1:

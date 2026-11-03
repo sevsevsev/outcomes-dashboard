@@ -16,7 +16,15 @@ The filter bar at the top of every page holds **Filters** (domain, audience, org
 
 ## Outcome text
 
-The coder splits compound statements into atomic outcomes and codes each one separately. The dashboard shows the atomic outcome as the main text. When a statement was split, the original appears in a "From the full statement" column for context.
+When a partner's sentence names more than one result, the coder splits it into parts and codes each part on its own row (`outcome_text_atomic`; `row_id` is shared by the parts of one sentence, `atomic_outcome_index` orders them). A part alone can read as nothing ("friends"), so the dashboard never shows one on its own:
+
+- Everywhere a coded outcome appears (tables, the side-by-side lists, the wheel's sample and matching outcomes, chart hovers), the partner's full sentence (`outcome_text_original`) is the main text.
+- The coded part is marked inside the sentence when it is there word for word, ignoring case, a leading number or "and"/"or", and trailing punctuation (bold in chart hovers, a pale blue tint elsewhere). When the coder reworded it, a small "Coded part: …" line follows the sentence instead. The partner's words are never rewritten.
+- The outcomes tables list each sentence once, with one goal label per part. Picking a row shows the sentence with its parts marked and its goal labels; pointing at or tapping a label highlights its part. The Review coding table keeps one row per coded outcome, with a "Coded part" column, since each part is checked on its own.
+- Counts don't change: each part is still one outcome for its goal. The line above a table says how many partner sentences its outcomes come from.
+- Searches match the sentence or the coded part.
+
+Sentences that were not split display as before. The helpers are `outcome_key`, `mark_parts`, `outcome_html` and `sentence_rows` in `outcomes_data.py`.
 
 ## Run it locally
 

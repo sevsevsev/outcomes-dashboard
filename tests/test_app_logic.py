@@ -5,6 +5,7 @@ Uses a small synthetic export, so the real CSV is not needed.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -198,16 +199,86 @@ def test_bundled_codebook_matches_coded_labels():
     assert CONF in set(codebook[app.COL_SUBCAT])
 
 
-def test_outcome_text_prefers_atomic_and_keeps_split_context():
-    raw = raw_rows().head(2).assign(
-        outcome_text_original=["Increased confidence, well-being and self-worth", "Students work in teams"],
-        outcome_text_atomic=["Increased well-being", "Students work in teams"],
+SPLIT = "Students in our program will gain math skills and make new friends."
+
+
+def split_rows():
+    """One sentence split into two parts (the first reworded by the coder), and one sentence left whole."""
+    raw = raw_rows().head(3).assign(
+        row_id=["s1", "s1", "s2"],
+        atomic_outcome_index=["1", "2", "1"],
+        outcome_text_original=[SPLIT, SPLIT, "Students work in teams"],
+        outcome_text_atomic=["Students will gain math skills", "and make new friends.", "Students work in teams"],
+        primary_subcategory=[CREATE, TEAM, TEAM],
     )
-    df = app.clean_outcomes(raw)
-    assert df.loc[0, app.COL_OUTCOME] == "Increased well-being"
-    assert df.loc[0, app.COL_FULL] == "Increased confidence, well-being and self-worth"
-    assert df.loc[1, app.COL_FULL] == ""  # not split, so no extra context
-    assert app.COL_OUTCOME not in app.to_export_frame(df).columns
+    return app.clean_outcomes(raw)
+
+
+def test_split_rows_keep_the_full_sentence_and_their_part():
+    df = split_rows()
+    assert list(df[app.COL_PART]) == ["Students will gain math skills", "and make new friends.", ""]
+    assert df.loc[0, app.COL_SENTENCE] == df.loc[1, app.COL_SENTENCE] != df.loc[2, app.COL_SENTENCE]
+    assert app.outcome_parts(df.loc[1, app.COL_OUTCOME]) == (SPLIT, ["and make new friends."])
+    assert app.outcome_parts(df.loc[2, app.COL_OUTCOME]) == ("Students work in teams", [])
+    exported = app.to_export_frame(df).columns
+    assert app.COL_OUTCOME not in exported and app.COL_PART not in exported and app.COL_SENTENCE not in exported
+
+
+def test_find_part_ignores_case_numbers_and_conjunctions_but_not_rewording():
+    assert app.find_part(SPLIT, "and Make new friends.") == (SPLIT.index("make"), SPLIT.index("."))
+    assert app.find_part("3. Art and joy", "3. art") == (3, 6)
+    assert app.find_part("Youth gain   joy", "or gain joy!") == (6, 16)
+    assert app.find_part(SPLIT, "Students will gain math skills") is None   # reworded: not in the sentence
+    assert app.find_part("Students start", "art") is None                    # only whole words
+
+
+def test_mark_parts_marks_found_parts_and_keeps_reworded_ones_aside():
+    found, missing = app.mark_parts(SPLIT, ["Students will gain math skills", "make new friends", "math skills"])
+    assert [SPLIT[s:e] for s, e, _ in found] == ["math skills", "make new friends"]
+    assert missing == [(0, "Students will gain math skills")]
+
+
+def test_outcome_html_marks_parts_labels_them_and_never_rewrites_the_sentence():
+    key = app.outcome_key(SPLIT, ["Students will gain math skills", "make new friends"])
+    out = app.outcome_html(key, labels=["Creative expression", "Teamwork"])
+    assert "<mark class='part p2'>make new friends</mark>" in out
+    assert "<span class='coded-part p1'>Coded part: Students will gain math skills</span>" in out
+    assert "<span class='label l1' tabindex='0'>Creative expression</span>" in out
+    plain = re.sub(r"<span class='(coded-part|labels).*", "", out)
+    assert re.sub(r"<[^>]+>", "", plain) == SPLIT
+    assert "&lt;b&gt;" in app.outcome_html("<b>bold</b>")
+
+
+def test_hover_shows_the_sentence_with_the_part_in_bold():
+    key = app.outcome_key(SPLIT, ["make new friends", "Students will gain math skills"])
+    hover = app._wrap_for_hover(key)
+    assert "<b>make new friends</b>" in hover and "<i>Coded part: Students will gain math skills</i>" in hover
+    long = "Word " * 80 + "make new friends at the end."
+    clipped = app._wrap_for_hover(app.outcome_key(long, ["make new friends"]))
+    assert "<b>make new friends</b>" in clipped and clipped.startswith("…")
+
+
+def test_samples_show_a_split_sentence_once_with_all_its_parts():
+    df = split_rows()
+    picked = app.sample_outcomes(df[app.COL_OUTCOME])
+    assert [app.outcome_parts(k) for k in picked] == [
+        (SPLIT, ["Students will gain math skills", "and make new friends."]), ("Students work in teams", [])]
+
+
+def test_sentence_rows_list_each_sentence_once_and_keep_counts():
+    df = split_rows()
+    rows = app.sentence_rows(df)
+    assert list(rows[app.COL_TEXT]) == [SPLIT, "Students work in teams"]
+    assert rows.loc[0, "goals"] == [CREATE, TEAM] and rows.loc[1, "goals"] == [TEAM]
+    assert rows["parts"].sum() == len(df)
+    # Counts stay one per coded outcome: the split sentence adds one to each of its goals.
+    assert df.groupby(app.COL_SUBCAT).size().to_dict() == {CREATE: 1, TEAM: 2}
+
+
+def test_text_search_finds_the_sentence_or_the_coded_part():
+    df = split_rows()
+    assert len(app.filter_outcomes(df, text_query="our program")) == 2          # in the sentence only
+    assert len(app.filter_outcomes(df, text_query="students will gain")) == 1   # in the reworded part only
 
 
 def test_program_labels_name_the_program_only_when_an_org_has_several(df):
@@ -344,7 +415,8 @@ def test_chart_search_index_lists_each_goals_statements_with_program_and_org(df)
     nodes = app.sunburst_nodes(frame)
     index = app.chart_search_index(frame, nodes, {"3.1.4": "self-efficacy belief", "3": "social emotional"})
     conf = index["rows"][SEL + app.SUNBURST_SEP + CONF]
-    assert sorted(index["texts"][t] for t, _, _ in conf) == ["Increased student confidence", "Youth feel confident"]
+    assert sorted(index["sentences"][index["texts"][t]["s"]] for t, _, _ in conf) == [
+        "Increased student confidence", "Youth feel confident"]
     # Two programs at two organizations, as the chart counts them.
     assert len({p for _, p, _ in conf}) == 2 and len({o for _, _, o in conf}) == 2
     assert set(index["rows"]) <= set(nodes["id"])
@@ -422,8 +494,8 @@ def test_codebook_sunburst_data_sizes_domains_by_their_goals_and_reads_exact_cou
     # Same domain, same hue on both rings; the Uncoded domain has none (the chart draws it grey).
     assert nodes[SEL]["hue"] == conf["hue"] is not None
     assert nodes[app.UNCODED_DOMAIN]["hue"] is None
-    # Plain-text samples, and JSON-safe values throughout (the browser parses this).
-    assert all(isinstance(t, str) and "<br>" not in t for t in conf["samples"])
+    # Samples are whole sentences with where their parts sit, and JSON-safe throughout (the browser parses this).
+    assert all(isinstance(t["t"], str) and "<br>" not in t["t"] and t["m"] == [] for t in conf["samples"])
     json.dumps(data, allow_nan=False)
     # The signature follows the counts, not the selection.
     again = charts.codebook_sunburst_data(app.sunburst_nodes(frame), app.MEASURE_PROGRAMS,
