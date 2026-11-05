@@ -131,8 +131,8 @@ function mount(root, sm, data) {
   sm.panel = panel;
 
   const body = el('div', 'sm-body');
-  body.append(indicatorList(sm), map, panel);
-  root.append(keyLine(), body);
+  body.append(map, panel);
+  root.append(indicatorPicker(sm), keyLine(), body);
 
   if (!sm.keys) {
     sm.keys = true;
@@ -141,34 +141,49 @@ function mount(root, sm, data) {
   renderMap(sm);
 }
 
-/** The 13 indicators, grouped as the SPOTlight groups them; picking one redraws the map for it alone. */
-function indicatorList(sm) {
+/** A dropdown of the 13 indicators, grouped as the SPOTlight groups them, with one line under it that keeps
+    the overview the old list gave: which have no link yet (Severin, 2026-11-05). */
+function indicatorPicker(sm) {
   const { model } = sm;
   const { data } = model;
-  const nav = el('nav', 'sm-picker');
-  nav.setAttribute('aria-label', `District indicators, ${data.year}`);
-  nav.append(el('div', 'sm-head', `District indicators, ${data.year}`));
-  sm.listRows = new Map();
+  const wrap = el('div', 'sm-picker');
+  const id = 'sm-pick-indicator';
+  const label = el('label', 'sm-picker-label', 'District indicator');
+  label.htmlFor = id;
+  const select = el('select', 'sm-select');
+  select.id = id;
   let group = null;
+  let og = null;
   for (const i of data.indicators) {
     if (i.group !== group) {
       group = i.group;
-      nav.append(el('div', 'sm-group', group));
+      og = el('optgroup');
+      og.label = group;
+      select.append(og);
     }
-    const row = el('button', `sm-row sm-pickrow${i.reached || i.associated ? '' : ' is-unreached'}${model.indIn(i.id) ? '' : ' is-out'}`);
-    row.type = 'button';
-    row.setAttribute('aria-label', `${i.name}, ${data.year}: ${i.value}. ${noteOf(i) || 'Show its links.'}`);
-    const line = el('span', 'sm-line');
-    line.append(el('span', 'sm-name', i.name));
-    const short = i.valueShort || i.value;
-    if (short.length <= 8) line.append(el('span', 'sm-value', short));
-    row.append(line);
-    row.addEventListener('click', () => setFocus(sm, i.id));
-    sm.listRows.set(i.id, row);
-    nav.append(row);
+    const bits = [i.name, i.valueShort || i.value];
+    if (!i.reached && !i.associated) bits.push('no link yet');
+    else if (!i.reached) bits.push('associations only');
+    if (!model.indIn(i.id)) bits.push('not named here');
+    const opt = el('option', null, bits.join(' · '));
+    opt.value = i.id;
+    og.append(opt);
   }
-  return nav;
+  select.addEventListener('change', () => setFocus(sm, select.value));
+  sm.select = select;
+  const all = data.indicators;
+  // The page summary already gives the tested count, so this line names only the indicators with no link yet.
+  const none = all.filter(i => !i.reached && !i.associated).map(i => i.name);
+  const line = none.length ? `No link to partner goals yet: ${listWords(none)}.` : '';
+  const row = el('div', 'sm-picker-row');
+  row.append(label, select);
+  wrap.append(row);
+  if (line) wrap.append(el('p', 'sm-picker-note', line));
+  return wrap;
 }
+
+// Semicolons, since some indicator names carry commas of their own.
+const listWords = xs => xs.join('; ');
 
 const noteOf = i => (i.reached ? '' : i.associated ? 'No tested program model yet; some goals are associated with it.'
   : 'No strong study links a partner goal to this yet.');
@@ -190,7 +205,7 @@ function renderMap(sm) {
   const { model, map } = sm;
   const { data } = model;
   const scope = data.scope;
-  for (const [id, row] of sm.listRows) row.setAttribute('aria-pressed', String(id === sm.focus));
+  if (sm.select) sm.select.value = sm.focus;
   const ind = model.indicators.get(sm.focus);
   const all = ind ? model.linksOfInd.get(ind.id) || [] : [];
   // Tested links first, research associations after a rule of their own, never mixed.
@@ -290,7 +305,7 @@ function hereWords(scope, n) {
   return scope.kind === 'school' ? plural(n, 'partner', 'partners') : plural(n, 'statement', 'statements');
 }
 
-/** The line styles in one line, the indicator list's grey, and nothing more: picking a link explains it. */
+/** The line styles in one line and nothing more: picking a link explains it. */
 function keyLine() {
   const bar = el('div', 'sm-key-line');
   for (const kind of ['cause', 'correlation', 'definition', 'associated']) {
@@ -300,9 +315,6 @@ function keyLine() {
     item.append(s, el('span', null, KIND[kind]?.word || kind));
     bar.append(item);
   }
-  const grey = el('span', 'sm-key sm-key-grey');
-  grey.append(el('span', 'sm-key-swatch', 'Aa'), el('span', null, 'Grey indicator: no link yet'));
-  bar.append(grey);
   return bar;
 }
 

@@ -1631,7 +1631,7 @@ def school_scope(everything: pd.DataFrame, relationships: pd.DataFrame, ulcs: st
 
 
 def indicator_map(reach: list[dict], links: dict, scope: Optional[dict] = None, key: str = "ind_map") -> Optional[dict]:
-    """The indicator list and the map for one indicator at a time; returns the pick.
+    """The indicator dropdown and the map for one indicator at a time; returns the pick.
 
     Until something in the map is picked, the pick is the indicator it shows. With a `scope`, the goals that
     program or school's partners name stand out and the rest go pale.

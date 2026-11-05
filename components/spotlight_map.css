@@ -11,7 +11,7 @@
   color: var(--ink);
 }
 
-/* The indicator list, the map and its panel share one height, so a new readout never moves the map. */
+/* The map and its panel share one height, so a new readout never moves the map. */
 .sm-body { display: flex; gap: 20px; align-items: stretch; }
 .sm-map { flex: 1 1 auto; min-width: 0; overflow-x: auto; }   /* a narrow screen scrolls the map sideways, not the page */
 .sm-bands { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
@@ -112,7 +112,6 @@
 /* Narrow screens: the list, the map and the panel stack, each with its own height. */
 @media (max-width: 900px) {
   .sm-body { flex-direction: column; }
-  .sm-picker { flex-basis: auto; }
   .sm-panel { flex-basis: auto; }
   .sm-panel-inner { position: static; }
 }
@@ -134,12 +133,16 @@
 .sm-node-assoc { border-style: dashed; border-left-style: dashed; background: #fbfcfd; }
 .sm-node-assoc .sm-ev { font-style: italic; }
 
-/* The indicator list: picking one redraws the map for it. Same rows as the map's, a wash for the one shown. */
-.sm-picker { flex: 0 0 180px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.sm-picker .sm-group { padding: 0 8px; }
-.sm-pickrow[aria-pressed="true"] { background: var(--wash); }
-.sm-pickrow[aria-pressed="true"] .sm-name { color: var(--ink); font-weight: 600; }
-.sm-pickrow.is-unreached .sm-name { color: var(--muted); }
+/* The indicator dropdown above the map, with its one-line overview. */
+.sm-picker { margin: 0 0 12px; }
+.sm-picker-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sm-picker-label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.sm-select {
+  font: inherit; font-size: 15px; color: var(--ink); background: #fff; min-width: 0; width: 460px; max-width: 100%;
+  border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 30px 6px 10px; cursor: pointer;
+}
+.sm-select:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; }
+.sm-picker-note { margin: 6px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
 
 /* The rule between tested links and research associations, placed by the script like the nodes. */
 .sm-divider {
