@@ -2,9 +2,10 @@
 The District indicators map as a Streamlit component (st.components.v2).
 
 Drawn in the browser by components/spotlight_map.js, like the codebook wheel
-(sunburst_component.py): goals on the left, the program models the studies
-tested in the middle, the District's SPOTlight indicators on the right, with a
-side panel for whatever is pointed at or picked. Pointing costs no rerun; only
+(sunburst_component.py): the District's SPOTlight indicators in a list, and for
+the one picked there, its goals, the program models and research associations
+that join them to it, and the indicator, with a side panel for whatever is
+pointed at or picked. Pointing costs no rerun; only
 a pick comes back to Python, to filter the table below.
 """
 
@@ -25,9 +26,10 @@ _map = st.components.v2.component(
 
 
 def spotlight_map(data: dict, key: str, on_change: Optional[Callable[[], None]] = None) -> Optional[dict]:
-    """Draw the map; return the pick as {"kind": "goal" | "link" | "indicator" | "other", "id"}, or None.
+    """Draw the map; return the pick as {"kind": "goal" | "link" | "indicator", "id", "focus"}, or None.
 
-    `data` comes from charts.spotlight_map_data. A new `key` starts the map afresh, with nothing picked.
+    `focus` is the indicator shown when the pick was made. `data` comes from charts.spotlight_map_data. A new
+    `key` starts the map afresh, on `data["focus"]` with nothing picked.
     """
     result = _map(key=key, data=data, default={"selection": data.get("selected")},
                   on_selection_change=on_change or (lambda: None))

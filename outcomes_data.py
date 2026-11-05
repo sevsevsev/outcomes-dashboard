@@ -20,6 +20,7 @@ import json
 import os
 import re
 import textwrap
+from datetime import date
 from pathlib import Path
 from typing import IO, Iterable, Optional, Sequence, Union
 
@@ -1013,6 +1014,46 @@ SPOTLIGHT_EVIDENCE = {"strong": "Strong evidence", "good": "Good evidence", "sug
                       "thin": "Thin evidence", "definitional": "By definition"}
 SPOTLIGHT_POSSIBLE = ("These are possible links. One counts for a program only after someone confirms the program "
                       "runs the model the study tested. Naming a goal is not enough.")
+# What each line style on the District indicators map means: the map's key and side panel and the page's
+# "What the line styles mean" section all read this one wording, keyed by charts.spotlight_link_kind.
+SPOTLIGHT_LINE_STYLES = {
+    "cause": ("Cause shown",
+              "Studies that compared similar students or schools found that this kind of program, or this change in "
+              "students, moves what the indicator measures. How sure that is depends on the evidence level."),
+    "correlation": ("Tested, correlation only",
+                    "Students who do well on this goal tend to do well on the indicator, but no study shows that a "
+                    "program causes the change. It is a warning sign worth watching, not proof of an effect."),
+    "definition": ("By definition",
+                   "The indicator counts this outcome directly, so a program helps only if school records show the "
+                   "change for its own students. It says nothing about which kinds of program work."),
+    "associated": ("Research-associated",
+                   "Long-term studies find that this outcome is associated with the indicator. They do not show that "
+                   "a program building it moves the indicator, so it never earns credit."),
+}
+
+
+def long_date(iso: str) -> str:
+    """ "2026-10-20" -> "October 20, 2026"; anything else passes through."""
+    try:
+        d = date.fromisoformat(iso)
+    except (TypeError, ValueError):
+        return iso
+    return f"{d:%B} {d.day}, {d.year}"
+
+
+def lower_first(text: str) -> str:
+    """A sentence to follow a colon: its first letter lower case, unless the first word is an acronym."""
+    if len(text) > 1 and text[0].isupper() and not text[1].isupper():
+        return text[0].lower() + text[1:]
+    return text
+
+
+def spotlight_group_label(group: str) -> str:
+    """A SPOTlight group heading as the page shows it: "Goals 1 to 3" -> "Board goals 1 to 3", "Goal 4" ->
+    "Board goal 4", so a bare number never reads like a code. Other headings pass through."""
+    return re.sub(r"^Goal(s?) ", r"Board goal\1 ", group)
+
+
 SPOTLIGHT_NO_LINK = ("The research review found no study strong enough to link this goal to a SPOTlight indicator. "
                      "The Board of Education counts goals like this one toward its guardrails: a well-rounded "
                      "education and safe, welcoming schools.")
