@@ -204,8 +204,8 @@ function renderMap(sm) {
   sm.cols = cols;
   sm.svg = svg;
 
-  // Goals, grouped by the District priority (lane) they serve, from the outcome crosswalk; without it, under
-  // their domains. Only the goals a link joins to this indicator: the rest live in the Priority grid above.
+  // Goals under their codebook domains, in codebook order. The District priority a goal serves shows in the
+  // side panel, not as a group here (Severin, 2026-11-05). Only the goals a link joins to this indicator.
   const goalCol = el('div', 'sm-col sm-goals');
   goalCol.append(el('div', 'sm-head', 'Goals partners name'));
   const goalRow = g => {
@@ -213,28 +213,13 @@ function renderMap(sm) {
     const row = button(`sm-row sm-goal${model.goalIn(g.id) ? '' : ' is-out'}`, { kind: 'goal', id: g.id }, sm,
       `${g.name}. ${scope ? `${here || 'Not named here'}.` : `${programs(g.programs)}.`}`);
     const line = el('span', 'sm-line');
-    const name = el('span', 'sm-name', g.name);
-    if (model.lanes.size) {
-      const sw = el('span', 'sm-swatch sm-goal-hue');
-      sw.style.background = swatch(g.hue);
-      sw.title = g.domainName;
-      name.prepend(sw);
-    }
-    line.append(name);
+    line.append(el('span', 'sm-name', g.name));
     if (scope && g.here) line.append(el('span', 'sm-value', here));
     row.append(line);
     sm.rows.goal.set(g.id, row);
     goalCol.append(row);
   };
-  if (model.lanes.size) {
-    for (const lane of model.lanes.values()) {
-      const inLane = goals.filter(g => g.lane === lane.id);
-      if (!inLane.length) continue;
-      goalCol.append(el('div', 'sm-dom sm-lane', lane.name));
-      inLane.forEach(goalRow);
-    }
-    goals.filter(g => !model.lanes.has(g.lane)).forEach(goalRow);
-  } else {
+  {
     let domain = null;
     for (const g of goals) {
       if (g.domain !== domain) {
