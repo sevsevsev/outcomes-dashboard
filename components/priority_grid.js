@@ -13,7 +13,8 @@
 // Rows and dots are the targets. Pointing previews in the side panel; a click
 // (or Enter, or a tap) pins, and clicking the same thing again, or Escape,
 // unpins. While something is pinned, pointing elsewhere changes nothing. Each
-// pin goes to Python as the "selection" state, which filters the table below.
+// pin goes to Python as the "selection" state; with `data.filtersTable` false (the
+// District indicators page, where the grid sits in a closed section), it filters nothing.
 // `data.sig` changes only when what is drawn changes.
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -72,8 +73,9 @@ function mount(root, pg, data) {
   const panel = el('div', 'pg-panel');
   panel.setAttribute('aria-live', 'polite');
   body.append(chart, panel);
-  root.append(el('p', 'pg-title', 'District priorities'),
-    el('p', 'pg-sub', 'The number beside each priority is the programs naming a goal in it. A dot shows the ' +
+  // In a closed section, the section's own label is the title.
+  if (data.filtersTable !== false) root.append(el('p', 'pg-title', 'District priorities'));
+  root.append(el('p', 'pg-sub', 'The number beside each priority is the programs naming a goal in it. A dot shows the ' +
       'programs naming a goal from that domain in that priority.'), body);
   pg.panel = panel;
 
@@ -200,7 +202,7 @@ function describe(pg, focus) {
     p.append(el('p', 'pg-k', 'How to read this'),
       el('p', null, 'Each goal in the codebook serves one District priority. A dot shows how many programs name a ' +
         'goal from that domain in that priority. Point at a dot or a priority to see its goals; click to keep it ' +
-        'open and narrow the table below.'),
+        (data.filtersTable === false ? 'open.' : 'open and narrow the table below.')),
       el('p', 'pg-muted', 'A program counts everywhere it names a goal, so the numbers never add up to a total. ' +
         'They say what programs work toward, not what they achieve. Programs that share one logic model count once.'));
     if (data.bylaw) p.append(bylaw(data.bylaw));
