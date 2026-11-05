@@ -1183,15 +1183,55 @@ def load_crosswalk(path: Union[str, Path] = CROSSWALK_V3_PATH) -> dict:
         return {}
 
 
+# Plainer names and descriptions for the crosswalk's lanes, shown wherever the dashboard names a District priority
+# (Severin, 2026-11-05: the file's names mixed what the SPOTlight measures, Board goals and who benefits). Keyed by
+# lane id; a lane missing here keeps the file's own name and description.
+LANE_PLAIN = {
+    "names-indicator": ("SPOTlight: measured directly",
+                        "The District measures this outcome on its SPOTlight: reading, math, science, attendance, "
+                        "graduation or the career and technical education industry test."),
+    "step-toward-indicator": ("SPOTlight: linked by research",
+                              "Studies find that students who do well on this outcome tend to do better on a SPOTlight "
+                              "measure later: grades and on-track status, engagement, persistence, mindsets, "
+                              "suspensions, school readiness."),
+    "college-career-goal": ("Board goal: college and career ready",
+                            "Part of the Board goal that every student graduates college and career ready. Apart from "
+                            "graduation, the SPOTlight does not measure it."),
+    "guardrail-safe-welcoming": ("Board guardrail: safe, welcoming, healthy schools",
+                                 "Part of the Board guardrail for safe, welcoming and healthy schools with social, "
+                                 "emotional and mental health supports."),
+    "guardrail-well-rounded": ("Board guardrail: a well-rounded education",
+                               "Part of the Board guardrail for a well-rounded education with co-curricular "
+                               "opportunities, including arts and athletics."),
+    "guardrail-family-partners": ("Board guardrail: families as partners",
+                                  "Part of the Board guardrail that welcomes parents and guardians as partners in "
+                                  "their child's school community."),
+    "family-outcome": ("Beyond students: results for families",
+                       "A result for parents and caregivers: well-being, skills and basic needs. It matters in its "
+                       "own right, so it is not judged by student measures."),
+    "quality-condition": ("Beyond students: program and staff conditions",
+                          "A result for staff, programs, access or systems. It is not a student result, so it is not "
+                          "judged by student measures."),
+}
+
+
+def lane_name(lane: dict) -> str:
+    return LANE_PLAIN.get(lane["id"], (lane["name"], ""))[0]
+
+
+def lane_description(lane: dict) -> str:
+    return LANE_PLAIN.get(lane["id"], ("", lane.get("description", "")))[1]
+
+
 def crosswalk_lanes(crosswalk: dict) -> list[dict]:
-    """The lanes in the file's order, each {id, name, description, quote (Board text or "")}."""
-    return [{"id": lane["id"], "name": lane["name"], "description": lane.get("description", ""),
+    """The lanes in the file's order, each {id, name, description, quote (Board text or "")}, with plain names."""
+    return [{"id": lane["id"], "name": lane_name(lane), "description": lane_description(lane),
              "quote": (lane.get("quote") or {}).get("text", "")} for lane in crosswalk.get("lanes", [])]
 
 
 def crosswalk_code_lanes(crosswalk: dict) -> dict[str, dict]:
-    """Code or domain ("Y1.3", "Y4") -> {lane (id), laneName, serves}."""
-    names = {lane["id"]: lane["name"] for lane in crosswalk.get("lanes", [])}
+    """Code or domain ("Y1.3", "Y4") -> {lane (id), laneName (plain), serves}."""
+    names = {lane["id"]: lane_name(lane) for lane in crosswalk.get("lanes", [])}
     return {c["code"]: {"lane": c["lane"], "laneName": names.get(c["lane"], c["lane"]), "serves": c.get("serves", "")}
             for c in crosswalk.get("codes", [])}
 
@@ -1245,7 +1285,7 @@ def lane_program_counts(df: pd.DataFrame, crosswalk: dict) -> list[dict]:
 PRIORITY_GROUPS = [
     ("Board goals and SPOTlight indicators", ("names-indicator", "step-toward-indicator", "college-career-goal")),
     ("Board guardrails", ("guardrail-safe-welcoming", "guardrail-well-rounded", "guardrail-family-partners")),
-    ("Valued on their own terms", ("family-outcome", "quality-condition")),
+    ("Beyond students", ("family-outcome", "quality-condition")),
 ]
 
 
