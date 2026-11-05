@@ -77,6 +77,8 @@ COL_CONF = "primary_confidence"
 COL_SOURCE_FILE = "source_filename"
 COL_QA = "qa_status"
 COL_ATOMIC = "outcome_text_atomic"
+COL_ROW_ID = "row_id"                   # one per partner sentence: shared by all of its parts
+COL_ATOMIC_INDEX = "atomic_outcome_index"
 COL_NOTES = "notes"
 COL_PARTNER_ID = "partner_id"       # district files carry a partner ID instead of an organization name
 COL_SOURCE_TYPE = "source_type"     # where the outcome text came from (logic_model, program_description, ...)
@@ -91,8 +93,10 @@ REQUIRED_COLUMNS = [COL_TEXT, COL_DOMAIN, COL_SUBCAT, COL_POP, COL_CONF]
 COL_GRANTEE = "grantee_from_filename"   # organization parsed from the logic model's file name
 COL_ORG_VIEW = "org_view"               # whichever organization column the user chose to group by
 COL_DOMAIN_NUM = "domain_number"        # 3 for "Domain 3. ...", used for sorting
-COL_OUTCOME = "outcome"                 # the coded (atomic) outcome, falling back to the original text
-COL_FULL = "full_statement"             # the original statement, only when the coder split it
+COL_OUTCOME = "outcome"                 # what a list or hover shows: the sentence, plus its coded part (outcome_key)
+COL_PART = "coded_part"                 # the part of a split sentence this row was coded on; "" when not split
+COL_SENTENCE = "sentence_id"            # the same for every part of one partner sentence (row_id when present)
+COL_PART_INDEX = "part_index"           # a part's position in its sentence (1, 2, 3 ...), for ordering
 COL_DOMAIN_SHORT = "domain_short"       # "3. Social & Emotional Learning" for compact axis labels
 COL_PROGRAM_LABEL = "program_label"     # "Org" or "Org: Program" when an organization has several
 COL_PRIORITY = "priority"               # the plain-language priority a row's goal belongs to (PRIORITIES)
@@ -247,6 +251,139 @@ def intent_note(sources: Iterable[str] = (SOURCE_LOGIC_MODEL,)) -> str:
         return INTENT_NOTE
     named = labels[0] if len(labels) == 1 else ", ".join(labels[:-1]) + " and " + labels[-1]
     return f"Outcomes that programs <b>intend</b>, taken from their {named}. They are not measured results."
+
+
+# =============================================================================
+# OUTCOME TEXT
+# -----------------------------------------------------------------------------
+# A split sentence is shown whole, with the part a row was coded on marked
+# inside it. The partner's words are never rewritten: when the coder reworded
+# a part (so it is not in the sentence word for word), the part goes on a
+# line of its own under the sentence instead.
+# =============================================================================
+
+# Joins a sentence and its coded parts into one string (COL_OUTCOME), so the
+# samplers can take a plain Series and still know which part to mark.
+OUTCOME_SEP = "\x1f"
+# What the part search ignores: a leading list number ("3.", "2)") or bullet,
+# a leading "and" / "or", and trailing punctuation.
+_PART_LEAD = re.compile(r"^\s*(?:\(?\d+[.)]|[-–•*])\s*")
+_PART_CONJ = re.compile(r"^(?:and|or)\b\s*", re.IGNORECASE)
+_PART_TRAIL = re.compile(r"[\s.,;:!?]+$")
+_WORD_CHAR = r"[^\W_]"
+
+
+def outcome_key(sentence: object, parts: Sequence[str] = ()) -> str:
+    """The sentence and its coded parts as one string; just the sentence when it was not split."""
+    parts = [p for p in parts if p]
+    return OUTCOME_SEP.join([str(sentence), *parts])
+
+
+def outcome_parts(key: object) -> tuple[str, list[str]]:
+    """(sentence, coded parts) from an outcome_key; no parts for a sentence that was not split."""
+    sentence, *parts = str(key).split(OUTCOME_SEP)
+    return sentence, parts
+
+
+def merge_outcome_keys(keys: Iterable[object]) -> list[str]:
+    """Distinct sentences in first-seen order, each with every coded part seen for it (in order)."""
+    merged: dict[str, list[str]] = {}
+    for key in keys:
+        if not isinstance(key, str) or not key:
+            continue
+        sentence, parts = outcome_parts(key)
+        if not sentence.strip():
+            continue
+        seen = merged.setdefault(sentence, [])
+        seen.extend(p for p in parts if p not in seen)
+    return [outcome_key(s, ps) for s, ps in merged.items()]
+
+
+def find_part(sentence: str, part: str, start: int = 0) -> Optional[tuple[int, int]]:
+    """Where a coded part sits in its sentence, as (start, end), or None when it isn't there word for word.
+
+    Case, runs of spaces, a leading number or bullet, a leading "and" / "or" and
+    trailing punctuation are ignored, and the match must start and end on word
+    breaks (so "art" is not found in "start"). The search begins at `start`
+    and wraps round to the beginning.
+    """
+    core = _PART_TRAIL.sub("", _PART_CONJ.sub("", _PART_LEAD.sub("", str(part)))).strip()
+    if not core:
+        return None
+    words = [re.escape(w) for w in core.split()]
+    pattern = re.compile(rf"(?<!{_WORD_CHAR})" + r"\s+".join(words) + rf"(?!{_WORD_CHAR})", re.IGNORECASE)
+    match = pattern.search(sentence, start) or (pattern.search(sentence) if start else None)
+    return match.span() if match else None
+
+
+def mark_parts(sentence: str, parts: Sequence[str]) -> tuple[list[tuple[int, int, int]], list[tuple[int, str]]]:
+    """Find each part in the sentence: ([(start, end, part number)], [(part number, part) not found]).
+
+    Parts are looked for in order, each after the one before, so two parts with
+    the same words mark different places. A part that would overlap one
+    already marked counts as not found. Part numbers count from 0.
+    """
+    found, missing, cursor = [], [], 0
+    for i, part in enumerate(parts):
+        span = find_part(sentence, part, cursor)
+        if span and not any(s < span[1] and span[0] < e for s, e, _ in found):
+            found.append((span[0], span[1], i))
+            cursor = span[1]
+        else:
+            missing.append((i, part))
+    return sorted(found), missing
+
+
+def outcome_payload(key: object) -> dict:
+    """An outcome for the browser components: {"t": sentence, "m": [[start, end], ...], "c": [parts not in it]}."""
+    sentence, parts = outcome_parts(key)
+    found, missing = mark_parts(sentence, parts)
+    return {"t": sentence, "m": [[s, e] for s, e, _ in found], "c": [p for _, p in missing]}
+
+
+def outcome_html(key: object, labels: Optional[Sequence[str]] = None) -> str:
+    """One outcome as escaped HTML: the sentence with its parts marked, then "Coded part: ..." for reworded ones.
+
+    Each part's marks carry class "p<n>" (n from 1). With `labels` (one per
+    part, e.g. its goal), a row of labels follows; pointing at or tapping
+    (focusing) label n highlights part n, through the .outcome CSS in app.py.
+    """
+    sentence, parts = outcome_parts(key)
+    found, missing = mark_parts(sentence, parts)
+    out, pos = [], 0
+    for start, end, i in found:
+        out.append(html.escape(sentence[pos:start]))
+        out.append(f"<mark class='part p{i + 1}'>{html.escape(sentence[start:end])}</mark>")
+        pos = end
+    out.append(html.escape(sentence[pos:]))
+    body = f"<span class='sentence'>{''.join(out)}</span>"
+    for i, part in missing:
+        body += f"<span class='coded-part p{i + 1}'>Coded part: {html.escape(part)}</span>"
+    if labels:
+        body += "<span class='labels'>" + "".join(
+            f"<span class='label l{i + 1}' tabindex='0'>{html.escape(str(label))}</span>"
+            for i, label in enumerate(labels)) + "</span>"
+    return body
+
+
+def clip_around(text: str, spans: Sequence[tuple[int, int]], limit: int) -> tuple[str, int]:
+    """Cut `text` to about `limit` characters, keeping the first span in view: (text, characters cut from the front).
+
+    Cuts fall on spaces and are shown with "…". A sentence that fits comes back whole.
+    """
+    if len(text) <= limit:
+        return text, 0
+    first = spans[0][0] if spans else 0
+    start = 0 if first < limit * 0.6 else max(0, first - 30)
+    if start:
+        space = text.rfind(" ", 0, start)
+        start = space + 1 if space > 0 else start
+    end = start + limit
+    if end < len(text):
+        space = text.rfind(" ", start, end)
+        end = space if space > start else end
+    clipped = ("…" if start else "") + text[start:end].rstrip(" ,;:") + ("…" if end < len(text) else "")
+    return clipped, start - (1 if start else 0)
 
 
 # =============================================================================
@@ -458,16 +595,22 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
     df[COL_TEXT] = df[COL_TEXT].fillna("")
 
     # --- Outcome text ---------------------------------------------------------
-    # The coder splits compound statements ("Increased confidence, well-being
-    # and self-worth") into atomic outcomes ("Increased well-being"), and each
-    # row is coded on its atomic outcome. Show that as the outcome, and keep the
-    # original only as context on rows that came from a split. About half of
-    # the atomic outcomes are rewrites rather than exact excerpts, so they
-    # cannot simply be highlighted inside the original.
+    # The coder splits a sentence that names several results ("Students will
+    # gain math skills and make new friends") into parts and codes each part
+    # on its own row. A part alone can read as nothing ("friends"), so lists
+    # and hovers show the partner's full sentence and mark the part inside it
+    # (see outcome_key and mark_parts). Counts stay one per row.
     atomic = df[COL_ATOMIC].fillna("") if COL_ATOMIC in df.columns else pd.Series("", index=df.index)
-    df[COL_OUTCOME] = atomic.where(atomic.str.len() > 0, df[COL_TEXT])
-    was_split = df[COL_OUTCOME].str.strip().str.casefold() != df[COL_TEXT].str.strip().str.casefold()
-    df[COL_FULL] = df[COL_TEXT].where(was_split, "")
+    was_split = (atomic.str.strip().str.len() > 0) & (
+        atomic.str.strip().str.casefold() != df[COL_TEXT].str.strip().str.casefold())
+    df[COL_PART] = atomic.where(was_split, "")
+    row_id = df[COL_ROW_ID].fillna("") if COL_ROW_ID in df.columns else pd.Series("", index=df.index)
+    # A row without an ID is its own sentence; the text joins the ID in case two sources reuse IDs.
+    df[COL_SENTENCE] = row_id.where(row_id.str.len() > 0, "#" + df.index.astype(str)) + OUTCOME_SEP + df[COL_TEXT]
+    index = (pd.to_numeric(df[COL_ATOMIC_INDEX], errors="coerce") if COL_ATOMIC_INDEX in df.columns
+             else pd.Series(np.nan, index=df.index))
+    df[COL_PART_INDEX] = index.fillna(df.groupby(COL_SENTENCE).cumcount() + 1).astype(int)
+    df[COL_OUTCOME] = [outcome_key(t, [p] if p else []) for t, p in zip(df[COL_TEXT], df[COL_PART])]
 
     # --- Helper columns -------------------------------------------------------
     df[COL_DOMAIN_NUM] = df[COL_DOMAIN].map(_domain_number)
@@ -584,7 +727,7 @@ def to_export_frame(df: pd.DataFrame) -> pd.DataFrame:
     this frame to organization coordinates on `organization` or
     `grantee_from_filename`.
     """
-    internal = {COL_ORG_VIEW, COL_DOMAIN_NUM, COL_DOMAIN_SHORT, COL_OUTCOME, COL_FULL}
+    internal = {COL_ORG_VIEW, COL_DOMAIN_NUM, COL_DOMAIN_SHORT, COL_OUTCOME, COL_PART, COL_SENTENCE, COL_PART_INDEX}
     return df[[c for c in df.columns if c not in internal]]
 
 
@@ -595,24 +738,48 @@ def to_export_frame(df: pd.DataFrame) -> pd.DataFrame:
 # =============================================================================
 
 
-def _wrap_for_hover(text: str) -> str:
-    """Escape, shorten and line-wrap one outcome statement for a Plotly hover box."""
-    text = " ".join(str(text).split())
-    if len(text) > HOVER_MAX_CHARS:
-        text = text[: HOVER_MAX_CHARS - 1].rstrip() + "…"
-    lines = textwrap.wrap(html.escape(text), HOVER_WRAP_WIDTH) or [""]
+def _wrap_for_hover(key: str) -> str:
+    """One outcome for a Plotly hover box: the sentence (cut to fit) with its coded parts in bold, wrapped.
+
+    A part the coder reworded follows on its own line, as "Coded part: ...".
+    """
+    sentence, parts = outcome_parts(key)
+    sentence = " ".join(sentence.split())
+    found, missing = mark_parts(sentence, parts)
+    text, shift = clip_around(sentence, [(s, e) for s, e, _ in found], HOVER_MAX_CHARS)
+    # Words are wrapped first and bolded after, so a tag never straddles a line break.
+    bold = [False] * len(text)
+    for s, e, _ in found:
+        for i in range(max(0, s - shift), min(len(text), e - shift)):
+            bold[i] = True
+    lines, pos = [], 0
+    for line in textwrap.wrap(text, HOVER_WRAP_WIDTH, break_on_hyphens=False) or [""]:
+        start = text.find(line, pos)
+        pos = start + len(line)
+        out, run, on = [], "", False
+        for ch, b in zip(line, bold[start:pos]):
+            if b != on:
+                out.append(f"<b>{html.escape(run)}</b>" if on else html.escape(run))
+                run, on = "", b
+            run += ch
+        out.append(f"<b>{html.escape(run)}</b>" if on else html.escape(run))
+        lines.append("".join(out))
+    for _, part in missing:
+        part = " ".join(part.split())
+        lines += [f"<i>{html.escape(line)}</i>" for line in textwrap.wrap("Coded part: " + part, HOVER_WRAP_WIDTH)]
     return "<br>   ".join(lines)
 
 
 def sample_outcomes(texts: pd.Series, n: int = HOVER_SAMPLE_SIZE, seed: int = 0) -> list[str]:
-    """A few distinct, non-empty outcome statements, picked the same way on every run.
+    """A few distinct sentences (as outcome keys, see outcome_key), picked the same way on every run.
 
-    A fixed seed keeps the same chart showing the same samples (users are less
-    likely to distrust a chart whose examples change on every rerun). This is
-    called once per bar, slice or cell, so it avoids pandas' slower
-    `Series.sample`.
+    Parts of one sentence merge, so a sentence split into three parts shows
+    once with all three marked. A fixed seed keeps the same chart showing the
+    same samples (users are less likely to distrust a chart whose examples
+    change on every rerun). This is called once per bar, slice or cell, so it
+    avoids pandas' slower `Series.sample`.
     """
-    unique = list(dict.fromkeys(t for t in texts if isinstance(t, str) and t))
+    unique = merge_outcome_keys(texts)
     if len(unique) <= n:
         return unique
     picks = np.random.RandomState(seed).choice(len(unique), size=n, replace=False)
@@ -1180,7 +1347,7 @@ def spotlight_scope_goals(rows: pd.DataFrame, counter=len, names_col: Optional[s
         if names_col:
             entry["names"] = sorted(group[names_col].dropna().astype(str).unique(), key=str.casefold)
         if samples:
-            entry["samples"] = [" ".join(str(t).split()) for t in group[COL_OUTCOME].dropna().unique()[:samples]]
+            entry["samples"] = [" ".join(outcome_parts(k)[0].split()) for k in merge_outcome_keys(group[COL_OUTCOME])[:samples]]
         out[code] = entry
     return out
 
@@ -1240,7 +1407,10 @@ def load_codebook_categories(path: Union[str, Path] = CODEBOOK_TERMS_V3_PATH) ->
 def chart_search_index(df: pd.DataFrame, nodes: pd.DataFrame, terms: Optional[dict] = None) -> dict:
     """What the sunburst's search box looks through, all of it searched in the browser.
 
-    * texts - every distinct outcome statement in `df`, once
+    * sentences - every distinct partner sentence in `df`, once
+    * texts - every distinct coded outcome in `df`, once: {"s": its sentence's
+              index, "m": where its part sits, "c": its part when reworded}
+              (see outcome_payload)
     * rows  - goal node id -> one [text, program, organization] triple per
               outcome statement under that goal (indexes; organization is -1
               when unknown), so the browser can count matching programs,
@@ -1253,7 +1423,13 @@ def chart_search_index(df: pd.DataFrame, nodes: pd.DataFrame, terms: Optional[di
     """
     terms = terms or {}
     goal_ids = df[COL_DOMAIN].astype(str) + SUNBURST_SEP + df[COL_SUBCAT].astype(str)
-    text_idx, texts = pd.factorize(df[COL_OUTCOME].fillna("").astype(str))
+    # Each entry is one row's sentence with that row's part marked (outcome_payload); the browser
+    # searches the sentence and any reworded part, so either text finds it.
+    text_idx, keys = pd.factorize(df[COL_OUTCOME].fillna("").astype(str))
+    payloads = [outcome_payload(k) for k in keys]
+    sentences = list(dict.fromkeys(p["t"] for p in payloads))
+    at = {t: i for i, t in enumerate(sentences)}
+    texts = [{"s": at[p["t"]], "m": p["m"], "c": p["c"]} for p in payloads]
     prog_idx, _ = pd.factorize(pd.Series(list(zip(df[COL_ORG_VIEW], df[COL_PROGRAM])), index=df.index))
     org_idx, _ = pd.factorize(df[COL_ORG_VIEW].where(df[COL_ORG_VIEW] != UNKNOWN_ORG))
     triples = pd.DataFrame({"id": goal_ids.to_numpy(), "t": text_idx, "p": prog_idx, "o": org_idx})
@@ -1262,8 +1438,47 @@ def chart_search_index(df: pd.DataFrame, nodes: pd.DataFrame, terms: Optional[di
     for node in nodes.itertuples(index=False):
         if node.level != "root" and node.code in terms:
             node_terms[node.id] = terms[node.code]
-    return {"texts": list(texts), "rows": rows, "terms": node_terms}
+    return {"sentences": sentences, "texts": texts, "rows": rows, "terms": node_terms}
 
+
+def sentence_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """One row per partner sentence in `df`, for tables that list statements: a split sentence shows once.
+
+    Columns: the sentence id, the organization view and program, COL_TEXT (the
+    sentence), COL_OUTCOME (its outcome_key with every part in `df`, in part
+    order), "goals" (one goal per part, in the same order), "parts" (how many
+    coded outcomes it holds), and COL_POP and COL_CONF (each distinct value,
+    joined with ", "). Sentences keep the order of their first row. Counts
+    elsewhere stay one per coded outcome; only the listing changes.
+    """
+    columns = [COL_SENTENCE, COL_ORG_VIEW, COL_PROGRAM, COL_TEXT, COL_OUTCOME, "goals", "parts", COL_POP, COL_CONF]
+    if df.empty:
+        return pd.DataFrame(columns=columns)
+    ordered = df.assign(_order=pd.factorize(df[COL_SENTENCE])[0]).sort_values(["_order", COL_PART_INDEX],
+                                                                               kind="stable")
+    # One pass over the rows (a groupby with Python functions per sentence is ten times slower).
+    out: dict[int, dict] = {}
+    for order, sid, org, program, text, part, goal, pop, conf in zip(
+            ordered["_order"], ordered[COL_SENTENCE], ordered[COL_ORG_VIEW], ordered[COL_PROGRAM],
+            ordered[COL_TEXT], ordered[COL_PART], ordered[COL_SUBCAT], ordered[COL_POP], ordered[COL_CONF]):
+        row = out.get(order)
+        if row is None:
+            row = out[order] = {COL_SENTENCE: sid, COL_ORG_VIEW: org, COL_PROGRAM: program, COL_TEXT: text,
+                                "_parts": [], "goals": [], "parts": 0, "_pops": {}, "_confs": set()}
+        row["parts"] += 1
+        row["_pops"][str(pop)] = None
+        row["_confs"].add(conf)
+        if not part:
+            row["goals"] = row["goals"] or [goal]   # not split: the sentence is its one outcome
+        elif part not in row["_parts"]:
+            row["_parts"].append(part)               # each distinct part once, its goal beside it
+            row["goals"].append(goal)
+    for row in out.values():
+        row[COL_OUTCOME] = outcome_key(row[COL_TEXT], row.pop("_parts"))
+        row[COL_POP] = ", ".join(row.pop("_pops"))
+        confs = row.pop("_confs")
+        row[COL_CONF] = ", ".join(c for c in CONFIDENCE_ORDER if c in confs)
+    return pd.DataFrame(list(out.values()), columns=columns)
 
 def distinct_counts_by(df: pd.DataFrame, column: str) -> pd.DataFrame:
     """Outcomes and distinct organizations for each value of `column` (e.g. per domain)."""
