@@ -13,7 +13,7 @@
 
 /* Three columns hung from the top: nothing below the wheel moves when the panel's content changes. */
 .pw { display: flex; gap: 20px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
-.pw-figure { flex: 0 1 640px; min-width: 300px; }
+.pw-figure { flex: 0 1 640px; min-width: 300px; container-type: inline-size; }
 /* Right of the wheel: the outside-the-Portrait list, then the side panel, together as tall as the wheel. */
 .pw-side { flex: 0 1 400px; min-width: 280px; height: 700px; display: flex; flex-direction: column; gap: 14px; }
 .pw-svg { display: block; width: 100%; height: auto; overflow: visible; }
@@ -25,21 +25,25 @@
 .pw-slice-shape { stroke: #fff; stroke-width: 6; stroke-linejoin: round; transition: opacity .2s ease, filter .2s ease; }
 .pw-comp-shape { stroke: #fff; stroke-width: 3; transition: fill .2s ease, opacity .2s ease, filter .2s ease; }
 .pw-slice:hover .pw-slice-shape, .pw-comp:hover .pw-comp-shape { filter: brightness(.93); }
-.pw-slice:focus-visible .pw-slice-shape, .pw-comp:focus-visible .pw-comp-shape { stroke: var(--ink); stroke-width: 2.5; }
+/* Focus: a dark 4px edge, which the white gaps around every shape set off from any slice colour. */
+.pw-slice:focus-visible .pw-slice-shape, .pw-comp:focus-visible .pw-comp-shape { stroke: #0f172a; stroke-width: 4; }
 .pw-slice.is-dim .pw-slice-shape, .pw-comp.is-dim .pw-comp-shape { opacity: .3; }
-.pw-slice.is-dim .pw-slice-label, .pw-comp.is-dim text { opacity: .45; }
+/* Faded parts are still buttons, so their words stay readable: only the fill fades, and white words turn navy. */
+.pw-slice.is-dim .pw-slice-label { color: #0b1640 !important; opacity: .8; }
+.pw-slice.is-dim .pw-slice-label svg { stroke: #0b1640; }
+.pw-comp.is-dim text { opacity: .8; }
 .pw-slice-label {
   box-sizing: border-box; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: 4px; text-align: center; transition: opacity .2s ease;
 }
-.pw-slice-title { font-size: 14px; line-height: 1.25; font-weight: 500; }
+.pw-slice-title { font-size: 13px; line-height: 1.2; font-weight: 500; }
 .pw-slice-title b { font-weight: 700; }
-.pw-slice-n { margin-top: 2px; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pw-slice-n { margin-top: 1px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pw-ring-text, .pw-ring-n { fill: var(--ink, #0b1640); pointer-events: none; user-select: none; transition: opacity .2s ease; }
 .pw-ring-text { font-weight: 600; }
 .pw-ring-n { font-weight: 700; font-variant-numeric: tabular-nums; }
 .pw-half { pointer-events: none; }
-.pw-half-text { font-size: 17px; font-weight: 600; letter-spacing: .01em; pointer-events: none; user-select: none; }
+.pw-half-text { font-size: 16px; font-weight: 600; letter-spacing: .01em; pointer-events: none; user-select: none; }
 .pw-centre { cursor: default; }
 .pw-centre-text {
   height: 100%; display: flex; align-items: center; justify-content: center; text-align: center;
@@ -141,9 +145,9 @@
 .pw-burst-row.is-zero .pw-burst-name { font-weight: 500; color: var(--muted); }
 .pw-burst-row.is-zero .pw-burst-count { color: var(--muted); }
 .pw-ray { cursor: pointer; }
-.pw-ray-line { stroke-width: 6; stroke-linecap: round; }
-.pw-ray.is-zero .pw-ray-line { stroke-width: 2; stroke-dasharray: 3 4; }
-.pw-ray.is-on .pw-ray-line { stroke-width: 8; }
+.pw-ray-line { stroke-width: 2.5; stroke-linecap: round; }
+.pw-ray.is-zero .pw-ray-line { stroke-width: 1.5; stroke-dasharray: 2 3; }
+.pw-ray.is-on .pw-ray-line { stroke-width: 4; }
 .pw-leader { fill: none; stroke: #cbd5e1; stroke-width: 1.2; }
 .pw-ray.is-on .pw-leader { stroke: var(--ink-2); }
 
@@ -155,4 +159,10 @@
 @media (max-width: 1000px) {
   .pw-side { flex: 1 1 100%; height: auto; }
   .pw-panel { max-height: 640px; }
+}
+
+/* Phone width: ring names would be about 6px, so the ring shows counts only and the list under the wheel
+   (the side panel's resting index) carries every name. */
+@container (max-width: 520px) {
+  .pw-ring-text { display: none; }
 }
