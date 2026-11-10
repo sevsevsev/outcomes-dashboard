@@ -244,13 +244,31 @@ INTENT_NOTE = ("Outcomes that programs <b>intend</b>, taken from their logic mod
                "They are not measured results.")
 
 
+def source_documents(sources: Iterable[str] = (SOURCE_LOGIC_MODEL,)) -> str:
+    """The documents the loaded outcomes came from, in words: "logic models and program descriptions"."""
+    labels = [SOURCE_LABELS.get(s, s.replace("_", " ")) for s in sorted(set(sources), key=str)]
+    if not labels:
+        return SOURCE_LABELS[SOURCE_LOGIC_MODEL]
+    return labels[0] if len(labels) == 1 else ", ".join(labels[:-1]) + " and " + labels[-1]
+
+
 def intent_note(sources: Iterable[str] = (SOURCE_LOGIC_MODEL,)) -> str:
     """INTENT_NOTE, naming the documents the loaded outcomes actually came from."""
-    labels = [SOURCE_LABELS.get(s, s.replace("_", " ")) for s in sorted(set(sources), key=str)]
-    if not labels or labels == [SOURCE_LABELS[SOURCE_LOGIC_MODEL]]:
+    named = source_documents(sources)
+    if named == SOURCE_LABELS[SOURCE_LOGIC_MODEL]:
         return INTENT_NOTE
-    named = labels[0] if len(labels) == 1 else ", ".join(labels[:-1]) + " and " + labels[-1]
     return f"Outcomes that programs <b>intend</b>, taken from their {named}. They are not measured results."
+
+
+def status_line(shown: int, total: int, organizations: int, sources: Iterable[str] = (SOURCE_LOGIC_MODEL,),
+                filtered_to: str = "") -> str:
+    """The one line at the top of every page: how much is showing, where it comes from, and that these are
+    intended outcomes, not results. It is the only place the app says so, so every page carries it."""
+    orgs = f"<b>{organizations:,}</b> {'organization' if organizations == 1 else 'organizations'}"
+    what = (f"Filtered to {filtered_to}: <b>{shown:,}</b> of {total:,} intended outcomes" if filtered_to
+            else f"<b>{shown:,}</b> intended outcomes")
+    return (f"{what} from {orgs}' {source_documents(sources)} "
+            "<span class='quiet'>· not measured results</span>")
 
 
 # =============================================================================
@@ -832,16 +850,23 @@ def population_group(code: str) -> str:
     return POPULATION_GROUPS.get(code, OTHER_POPULATION)
 
 
-def hierarchy_counts(df: pd.DataFrame) -> pd.DataFrame:
-    """One row per (domain, subcategory) with outcome and organization counts and hover samples.
+def _program_ids(df: pd.DataFrame) -> pd.DataFrame:
+    """`df` with a `_program` column naming each row's program within its organization, as
+    `count_programs` counts them, so a groupby can count programs with "nunique"."""
+    return df.assign(_program=df[COL_ORG_VIEW].astype(str) + "\x1e" + df[COL_PROGRAM].astype(str))
 
-    Columns: outcomes (rows), organizations (distinct organizations), and
-    samples (a hover snippet of outcome statements).
+
+def hierarchy_counts(df: pd.DataFrame) -> pd.DataFrame:
+    """One row per (domain, subcategory) with outcome, program and organization counts and hover samples.
+
+    Columns: outcomes (rows), programs (distinct programs within an organization),
+    organizations (distinct organizations), and samples (a hover snippet of outcome statements).
     """
     return (
-        df.groupby([COL_DOMAIN, COL_SUBCAT], observed=True)
+        _program_ids(df).groupby([COL_DOMAIN, COL_SUBCAT], observed=True)
         .agg(
             outcomes=(COL_TEXT, "size"),
+            programs=("_program", "nunique"),
             organizations=(COL_ORG_VIEW, count_organizations),
             samples=(COL_OUTCOME, sample_outcome_texts),
         )
@@ -872,7 +897,11 @@ def split_code(label: str) -> tuple[str, str]:
 
 
 def goal_name(label: object) -> str:
-    """A goal's plain name for display: "Y1.3 Mathematics" -> "Mathematics". The code stays in exports."""
+    """A goal's plain name for display: "Y1.3 Mathematics" -> "Mathematics". The code stays in exports.
+
+    A statement the coder placed in a domain without a goal reads "No specific goal"."""
+    if label == UNASSIGNED_SUBCAT:
+        return "No specific goal"
     return split_code(str(label))[1]
 
 
@@ -1755,10 +1784,11 @@ def domain_summary(df: pd.DataFrame) -> pd.DataFrame:
     coded = df[df[COL_DOMAIN] != UNCODED_DOMAIN]
     if coded.empty:
         return pd.DataFrame(columns=[COL_DOMAIN, COL_DOMAIN_SHORT, COL_DOMAIN_NUM, "organizations", "outcomes",
-                                     "samples"])
+                                     "programs", "samples"])
     return (
-        coded.groupby([COL_DOMAIN, COL_DOMAIN_SHORT, COL_DOMAIN_NUM], observed=True)
+        _program_ids(coded).groupby([COL_DOMAIN, COL_DOMAIN_SHORT, COL_DOMAIN_NUM], observed=True)
         .agg(organizations=(COL_ORG_VIEW, count_organizations), outcomes=(COL_TEXT, "size"),
+             programs=("_program", "nunique"),
              samples=(COL_OUTCOME, sample_outcome_texts))
         .reset_index()
         .sort_values(["organizations", "outcomes", COL_DOMAIN_NUM], ascending=[False, False, True])
@@ -1774,11 +1804,12 @@ def priority_summary(df: pd.DataFrame) -> pd.DataFrame:
     """
     coded = df[df[COL_PRIORITY] != UNCODED_PRIORITY]
     if coded.empty:
-        return pd.DataFrame(columns=[COL_PRIORITY, "organizations", "outcomes", "samples"])
+        return pd.DataFrame(columns=[COL_PRIORITY, "organizations", "outcomes", "programs", "samples"])
     order = {label: i for i, (label, _) in enumerate(PRIORITIES)}
     summary = (
-        coded.groupby(COL_PRIORITY)
+        _program_ids(coded).groupby(COL_PRIORITY)
         .agg(organizations=(COL_ORG_VIEW, count_organizations), outcomes=(COL_TEXT, "size"),
+             programs=("_program", "nunique"),
              samples=(COL_OUTCOME, sample_outcome_texts))
         .reset_index()
     )
@@ -1794,7 +1825,7 @@ def goal_summary(df: pd.DataFrame) -> pd.DataFrame:
     """One row per coded subcategory: domain, organizations, outcomes and samples, most organizations first."""
     coded = df[(df[COL_SUBCAT] != UNASSIGNED_SUBCAT) & (df[COL_DOMAIN] != UNCODED_DOMAIN)]
     if coded.empty:
-        return pd.DataFrame(columns=[COL_DOMAIN, COL_SUBCAT, "organizations", "outcomes", "samples"])
+        return pd.DataFrame(columns=[COL_DOMAIN, COL_SUBCAT, "organizations", "outcomes", "programs", "samples"])
     counts = hierarchy_counts(coded)
     counts["_order"] = counts[COL_SUBCAT].map(subcategory_sort_key)
     return (

@@ -88,7 +88,7 @@ def test_findings_say_how_much_of_the_school_is_covered():
     rows = sc.school_outcomes(df, rel, "1010", labels)
     text = " ".join(sc.school_findings("Bartram", portfolio, rows, "2025-26"))
     assert "**3 partners** run **4 programs**" in text
-    assert "**2 of 3** have coded outcomes" in text and "**1** is listed as not yet coded" in text
+    assert "on file for **2 of 3**" in text and "the other **1** is listed at the bottom" in text
     empty = sc.school_findings("Nowhere", portfolio.iloc[0:0], rows.iloc[0:0])
     assert "No partner programs" in empty[0]
 
