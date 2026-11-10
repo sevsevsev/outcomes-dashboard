@@ -16,7 +16,9 @@ Pages (top navigation):
 2. Find peers        - peers for an organization, organizations by goal, program comparison
 3. Partners at a school - a school's partners, coded or not, and where their outcomes meet
 4. District indicators - which goals may reach the District's SPOTlight indicators (internal only)
-5. Review coding     - paginated explorer for checking the coder's categorizations
+5. Portrait of a Graduate - which parts of the District's Portrait of a Graduate partner goals name, from
+   statements coded straight to the Portrait (testing version; internal only)
+6. Review coding     - paginated explorer for checking the coder's categorizations
 
 Each page opens on a few plain-language findings and simple ranked charts.
 Clicking a bar or dot narrows the charts and the table below it, so readers
@@ -48,7 +50,9 @@ import pandas as pd
 import streamlit as st
 
 import charts
+import portrait
 import schools
+from portrait_component import portrait_wheel
 from priority_component import priority_grid
 from spotlight_component import spotlight_map
 from sunburst_component import codebook_sunburst
@@ -152,11 +156,15 @@ PLACE_KEYS = {"f_zip": schools.COL_ZIP, "f_council": schools.COL_COUNCIL, "f_net
 FILTER_KEYS = ["f_domains", "f_pops", "f_orgs", "f_conf", *PLACE_KEYS, "f_schools"]
 # Filters a page leaves out: peers compares organizations, the school page lists every partner at one
 # school, and the review page has its own confidence control. The values are kept for the other pages.
-UNUSED_FILTERS = {"peers": {"f_orgs"}, "schools": {"f_orgs", *PLACE_KEYS, "f_schools"}, "review": {"f_conf"}}
+UNUSED_FILTERS = {"peers": {"f_orgs"}, "schools": {"f_orgs", *PLACE_KEYS, "f_schools"}, "review": {"f_conf"},
+                  # The Portrait page has its own codebook: 3.x domains, audiences and confidence don't apply there.
+                  "portrait": {"f_domains", "f_pops", "f_conf"}}
 ALL_DOMAINS = "All domains"
 MAX_PROGRAMS = 6
 DEFAULT_PROGRAMS = 4
 UPLOAD_KEY = "uploaded_csv"          # (file name, bytes) of a CSV uploaded this session
+PORTRAIT_UPLOAD_KEY = "uploaded_portrait_csv"   # the same for the Portrait of a Graduate export
+PORTRAIT_ENV_VAR = "PORTRAIT_CSV"
 READ_ERRORS = (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError)
 VIEWS = ["Wheel", "Ranked"]
 # What the first ranked chart groups by: plain priorities, or the codebook's own domains.
@@ -321,6 +329,12 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 .status b {{ color: {INK}; font-weight: 600; font-variant-numeric: tabular-nums; }}
 .status .quiet {{ color: {MUTED}; }}
 .crumb {{ font-size: 0.9375rem !important; margin: 0; color: {MUTED}; }}
+/* Portrait of a Graduate page: a quiet testing banner, the one-line share, the framework credit. */
+.portrait-banner {{ margin: 0.25rem 0 0.75rem; padding: 0.55rem 0.9rem; border: 1px solid {HAIRLINE}; border-radius: 0.5rem;
+                    background: #f8fafc; color: #334155; font-size: 0.875rem !important; }}
+.portrait-share {{ margin: 0 0 0.75rem; color: {INK}; font-size: 1rem !important; line-height: 1.5; }}
+.portrait-credit {{ margin: 2.5rem 0 0; padding-top: 0.75rem; border-top: 1px solid {HAIRLINE}; color: {MUTED};
+                    font-size: 0.8125rem !important; }}
 .crumb b {{ color: {INK}; font-weight: 600; font-variant-numeric: tabular-nums; }}
 
 .goal-name {{ font-weight: 600; font-size: 0.9375rem !important; margin: 0.8rem 0 0.2rem 0; color: {INK}; }}
@@ -1659,6 +1673,72 @@ def indicator_block(r: dict, goals: dict, year: str, caution: str = "") -> str:
 
 
 # =============================================================================
+# PORTRAIT OF A GRADUATE
+# =============================================================================
+
+
+@st.cache_data
+def cached_portrait_reference() -> pd.DataFrame:
+    return portrait.load_reference()
+
+
+@st.cache_data(show_spinner=False)
+def cached_portrait_wheel(df: pd.DataFrame) -> dict:
+    return portrait.wheel_data(df, cached_portrait_reference())
+
+
+def portrait_uploader() -> None:
+    """Takes the Portrait export on its own page; it stays in this browser session like the main file."""
+    uploaded = st.file_uploader("Portrait of a Graduate coded outcomes CSV", type="csv", key="portrait_upload",
+                                label_visibility="collapsed")
+    if uploaded is not None and st.session_state.get(PORTRAIT_UPLOAD_KEY) != (uploaded.name, uploaded.getvalue()):
+        remember_upload(uploaded, PORTRAIT_UPLOAD_KEY)
+        st.rerun()
+
+
+def page_portrait(df: Optional[pd.DataFrame], version: str) -> None:
+    """Which parts of the District's Portrait of a Graduate partner programs name, from statements coded
+    straight to the Portrait. Beside the 3.x wheel, never mixed with it (portrait.py has the counting rules)."""
+    st.markdown(f"<p class='portrait-banner'>{html.escape(portrait.TESTING_BANNER.format(version=version))}</p>",
+                unsafe_allow_html=True)
+    if df is None:
+        with section("Load the Portrait of a Graduate coding", key="portrait-load"):
+            st.markdown("This page reads the coder's Portrait of a Graduate export, "
+                        "such as `coded_outcomes_portrait_0.1.0_combined.csv`. It is a separate file from the "
+                        "codebook 3.x export the other pages read, and its counts are never mixed with theirs. "
+                        "The file stays in this browser session.")
+            portrait_uploader()
+        st.caption(f"Running locally? Put the file in `data/` with \"portrait\" in its name, or set "
+                   f"`{PORTRAIT_ENV_VAR}` to its path.")
+        portrait_credit()
+        return
+    if df.empty:
+        st.warning("No outcomes match the current filters. Clear some of them to see results.")
+        portrait_credit()
+        return
+
+    data = dict(cached_portrait_wheel(df))
+    st.markdown(f"<p class='portrait-share'>{html.escape(portrait.share_sentence(data['share']))}</p>",
+                unsafe_allow_html=True)
+    key = f"pw_{st.session_state.get('pw_nonce', 0)}"
+    last_key = f"{key}_last"
+    data["selected"] = st.session_state.get(last_key)
+    pick = portrait_wheel(data, key=key)
+    st.session_state[last_key] = pick
+
+    rows = portrait.pick_rows(df, pick)
+    name = portrait.pick_name(pick, cached_portrait_reference())
+    where = f" in <b>{html.escape(name)}</b>" if name else ""
+    with section(key="portrait-rows"):
+        outcomes_panel(rows, where, key="pw", nonce_key="pw_nonce" if pick else None)
+    portrait_credit()
+
+
+def portrait_credit() -> None:
+    st.markdown(f"<p class='portrait-credit'>{html.escape(portrait.CREDIT)}</p>", unsafe_allow_html=True)
+
+
+# =============================================================================
 # DATA, FILTER BAR, NAVIGATION
 # =============================================================================
 
@@ -1673,10 +1753,24 @@ def _read_or_report(loader: Callable[[], pd.DataFrame], source: str) -> Optional
     return None
 
 
-def remember_upload(uploaded) -> None:
-    """Keep an uploaded file for the rest of the session, so switching pages doesn't lose it."""
-    if uploaded is not None:
-        st.session_state[UPLOAD_KEY] = (uploaded.name, uploaded.getvalue())
+def remember_upload(uploaded, key: str = UPLOAD_KEY) -> None:
+    """Keep an uploaded file for the rest of the session, so switching pages doesn't lose it.
+
+    A file of Portrait of a Graduate rows only goes to the Portrait page's slot, whichever uploader took it,
+    so it never stands in for the codebook 3.x file the other pages read.
+    """
+    if uploaded is None:
+        return
+    value = (uploaded.name, uploaded.getvalue())
+    if key == UPLOAD_KEY:
+        try:
+            frame = load_from_bytes(value[1])
+        except (*READ_ERRORS, MissingColumnsError):
+            frame = None
+        if frame is not None and len(frame) and portrait.is_portrait(frame).all():
+            key = PORTRAIT_UPLOAD_KEY
+            st.session_state["portrait_routed"] = uploaded.name
+    st.session_state[key] = value
 
 
 def load_data() -> tuple[Optional[pd.DataFrame], str]:
@@ -1693,6 +1787,25 @@ def load_data() -> tuple[Optional[pd.DataFrame], str]:
         return None, ""
 
 
+def load_portrait(main: Optional[pd.DataFrame], main_source: str) -> tuple[Optional[pd.DataFrame], str]:
+    """The Portrait of a Graduate rows and where they came from: a Portrait file uploaded this session, else
+    Portrait rows inside the main file (told apart by codebook_version), else a local Portrait export
+    (PORTRAIT_CSV, or data/*portrait*.csv). (None, "") when there are none."""
+    if PORTRAIT_UPLOAD_KEY in st.session_state:
+        name, data = st.session_state[PORTRAIT_UPLOAD_KEY]
+        frame = _read_or_report(lambda: load_from_bytes(data), f"**{name}**")
+        if frame is not None:
+            return portrait.split_by_codebook(frame)[1], name
+    if main is not None and portrait.is_portrait(main).any():
+        return portrait.split_by_codebook(main)[1], main_source
+    path = portrait.find_local_file()
+    if path is not None:
+        frame = _read_or_report(lambda: load_from_path(str(path)), f"**{path.name}**")
+        if frame is not None:
+            return portrait.split_by_codebook(frame)[1], path.name
+    return None, ""
+
+
 def welcome_screen() -> None:
     """Shown until a CSV is available: explains what to upload."""
     page_header(APP_TITLE, "Explore outcomes coded from partner programs' logic models: where the portfolio "
@@ -1703,8 +1816,11 @@ def welcome_screen() -> None:
             f"Use the CSV exported by the Qualitative Outcomes Coder, such as `{DATA_FILENAME}`. "
             "The file stays in this browser session and is not saved once you close the tab."
         )
+        if st.session_state.get("portrait_routed"):
+            st.info(f"{st.session_state['portrait_routed']} holds Portrait of a Graduate coding, so it is kept for "
+                    "the Portrait of a Graduate page. Upload the codebook 3.x export here for the other pages.")
         uploaded = st.file_uploader("Coded outcomes CSV", type="csv", label_visibility="collapsed")
-        if uploaded is not None:
+        if uploaded is not None and (uploaded.name, uploaded.getvalue()) != st.session_state.get(PORTRAIT_UPLOAD_KEY):
             remember_upload(uploaded)
             st.rerun()
     st.caption(
@@ -1779,13 +1895,21 @@ def place_filters(df: pd.DataFrame) -> Optional[pd.Series]:
     return schools.at_schools(with_ids, relationships, codes)
 
 
-def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
-    """One row above every page: what is showing, a Filters menu and a Data menu. Returns the filtered frame."""
-    # Streamlit drops a widget's value on any run that doesn't draw it. Writing the values back keeps
-    # a filter that this page leaves out (UNUSED_FILTERS) for the next page.
+def keep_filters() -> None:
+    """Streamlit drops a widget's value on any run that doesn't draw it; writing the values back keeps them."""
     for key in FILTER_KEYS:
         if key in st.session_state:
             st.session_state[key] = st.session_state[key]
+
+
+def filter_bar(df: pd.DataFrame, source: str, page_key: str, upload_key: str = UPLOAD_KEY) -> pd.DataFrame:
+    """One row above every page: what is showing, a Filters menu and a Data menu. Returns the filtered frame.
+
+    The Portrait of a Graduate page passes its own rows and upload slot, so its line counts Portrait
+    statements and "Load a different CSV" replaces the Portrait file.
+    """
+    # Keep a filter that this page leaves out (UNUSED_FILTERS) for the next page.
+    keep_filters()
     unused = UNUSED_FILTERS.get(page_key, set())
     bar = st.container(key="filterbar")
     status, clear_col, filters_col, data_col = bar.columns([8, 0.7, 1.1, 0.9], vertical_alignment="center")
@@ -1801,9 +1925,9 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
         )
         replacement = st.file_uploader("Load a different CSV", type="csv", key="replace_upload")
         # Compare contents as well as names: a fresh export often keeps the old file's name.
-        if replacement is not None and st.session_state.get(UPLOAD_KEY) != (replacement.name,
+        if replacement is not None and st.session_state.get(upload_key) != (replacement.name,
                                                                              replacement.getvalue()):
-            remember_upload(replacement)
+            remember_upload(replacement, upload_key)
             st.rerun()
         st.markdown(
             "**About the measures**\n\n"
@@ -1829,24 +1953,29 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str) -> pd.DataFrame:
     # The pickers still run when it is closed (hidden by CSS): Streamlit forgets a widget it doesn't draw.
     panel = bar.container(key="filterpanel_open" if is_open else "filterpanel_closed")
     with panel:
-        first_row = ["domains", "pops"]
+        # The Portrait page's rows use another codebook, so the 3.x domain, audience and confidence pickers
+        # stay with the other pages.
+        first_row = [] if page_key == "portrait" else ["domains", "pops"]
         # The peers page compares organizations with each other, so an
         # organization filter there would hide the peers being searched for.
         # The schools page lists every partner at a school, so it has none either.
         if page_key not in ("peers", "schools"):
             first_row.append("orgs")
         # The review page has its own confidence control.
-        if page_key != "review":
+        if page_key not in ("review", "portrait"):
             first_row.append("conf")
         cols = dict(zip(first_row, st.columns(4)))
-        domains = domain_order(df)
-        keep_valid("f_domains", domains)
-        chosen_domains = cols["domains"].multiselect("Domains", domains, key="f_domains",
-                                                     placeholder="All domains", format_func=plain_domain)
-        pops = sorted(df[COL_POP].unique(), key=pretty_population)
-        keep_valid("f_pops", pops)
-        chosen_pops = cols["pops"].multiselect("Who the outcome is for", pops, format_func=pretty_population,
-                                               key="f_pops", placeholder="Everyone")
+        chosen_domains = chosen_pops = None
+        if "domains" in cols:
+            domains = domain_order(df)
+            keep_valid("f_domains", domains)
+            chosen_domains = cols["domains"].multiselect("Domains", domains, key="f_domains",
+                                                         placeholder="All domains", format_func=plain_domain)
+        if "pops" in cols:
+            pops = sorted(df[COL_POP].unique(), key=pretty_population)
+            keep_valid("f_pops", pops)
+            chosen_pops = cols["pops"].multiselect("Who the outcome is for", pops, format_func=pretty_population,
+                                                   key="f_pops", placeholder="Everyone")
         chosen_orgs = None
         if "orgs" in cols:
             orgs = sorted(df[COL_ORG_VIEW].unique(), key=str.casefold)
@@ -1888,7 +2017,11 @@ def main() -> None:
     st.markdown(CSS, unsafe_allow_html=True)
 
     df, source = load_data()
-    if df is None:
+    portrait_df, portrait_source = load_portrait(df, source)
+    if df is not None:
+        # Portrait of a Graduate rows never join a codebook 3.x count: they live on their own page.
+        df = portrait.split_by_codebook(df)[0]
+    if df is None or df.empty:
         welcome_screen()
         st.stop()
 
@@ -1902,6 +2035,8 @@ def main() -> None:
                            url_path="schools"),
         "indicators": st.Page(lambda: page_indicators(holder["df"], df), title="District indicators",
                               url_path="district-indicators"),
+        "portrait": st.Page(lambda: page_portrait(holder.get("portrait"), holder.get("portrait_version", "")),
+                            title="Portrait of a Graduate", url_path="portrait-of-a-graduate"),
         "review": st.Page(lambda: page_review(holder["df"]), title="Review coding", url_path="review-coding"),
     }
     # The default page is served at "/" and its own url_path is ignored, so links to /system-map (and /aims) opened
@@ -1914,7 +2049,15 @@ def main() -> None:
     PAGES.update(pages)
     current = st.navigation([*pages.values(), alias, alias_aims], position="top")
     page_key = next((k for k, p in pages.items() if p.url_path == current.url_path), "map")
-    holder["df"] = filter_bar(df, source, page_key)
+    if page_key == "portrait":
+        holder["portrait_version"] = portrait.codebook_version(portrait_df) if portrait_df is not None \
+            else portrait.DEFAULT_VERSION
+        if portrait_df is not None:
+            holder["portrait"] = filter_bar(portrait_df, portrait_source, page_key, upload_key=PORTRAIT_UPLOAD_KEY)
+        else:
+            keep_filters()
+    else:
+        holder["df"] = filter_bar(df, source, page_key)
     current.run()
 
 
