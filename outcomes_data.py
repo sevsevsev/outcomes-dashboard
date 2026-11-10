@@ -1872,7 +1872,7 @@ def portfolio_findings(df: pd.DataFrame, coverage: Optional[pd.DataFrame] = None
     if len(priorities) > 1:
         top = priorities.iloc[0]
         findings.append(
-            f"**{top[COL_PRIORITY]}** is the most widely shared aim: "
+            f"**{top[COL_PRIORITY]}** is the most common outcome area among partners: "
             f"**{int(top['organizations'])} of {n_orgs}** organizations name at least one outcome in it."
         )
         counts = priorities.set_index(COL_PRIORITY)["organizations"]

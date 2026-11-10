@@ -415,7 +415,7 @@ def _listed(names: Iterable[str]) -> str:
 
 
 def school_findings(school: str, portfolio: pd.DataFrame, rows: pd.DataFrame, year: str = "") -> list[str]:
-    """Two or three sentences: who is at the school, how many the outcome picture covers, and the common aim."""
+    """Two or three sentences: who is at the school, how many the outcome picture covers, and the most common outcome area."""
     n = len(portfolio)
     if n == 0:
         return [f"No partner programs are recorded at **{school}**{' for ' + year if year else ''}."]
@@ -440,7 +440,7 @@ def school_findings(school: str, portfolio: pd.DataFrame, rows: pd.DataFrame, ye
         per_aim = aims.groupby(COL_PRIORITY)[COL_PARTNER].nunique().sort_values(ascending=False, kind="stable")
         top = per_aim[per_aim == per_aim.iloc[0]].index.tolist()[:3]
         count = int(per_aim.iloc[0])
-        found.append(f"The most common aim is **{_listed(top)}**, named by **{count} of {k}** of those partners.")
+        found.append(f"The most common outcome area is **{_listed(top)}**, named by **{count} of {k}** of those partners.")
     return found
 
 

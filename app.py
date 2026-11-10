@@ -1279,7 +1279,7 @@ def page_schools(df: pd.DataFrame, everything: pd.DataFrame) -> None:
     """
     # A lede like the other pages', which also keeps the school picker off the title.
     page_header("Partners at a school",
-                "Pick a school to see every partner program there and what each partner aims for.")
+                "Pick a school to see every partner program there and the outcomes each one intends.")
     tables, names = school_tables()
     relationships = tables.get(schools.RELATIONSHIPS)
     if relationships is None:
@@ -1322,7 +1322,7 @@ def page_schools(df: pd.DataFrame, everything: pd.DataFrame) -> None:
         findings([
             f"**{with_partners} schools** host partner programs" + (f" in {year}." if year else "."),
             f"At **{joined['schools']}** of them, at least one partner has coded outcomes. "
-            "Pick a school to see who works there and what they aim for.",
+            "Pick a school to see who works there and the outcomes they intend.",
         ])
         return
 
