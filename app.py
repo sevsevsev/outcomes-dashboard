@@ -1816,9 +1816,12 @@ def welcome_screen() -> None:
             f"Use the CSV exported by the Qualitative Outcomes Coder, such as `{DATA_FILENAME}`. "
             "The file stays in this browser session and is not saved once you close the tab."
         )
-        if st.session_state.get("portrait_routed"):
-            st.info(f"{st.session_state['portrait_routed']} holds Portrait of a Graduate coding, so it is kept for "
-                    "the Portrait of a Graduate page. Upload the codebook 3.x export here for the other pages.")
+        if PORTRAIT_UPLOAD_KEY in st.session_state:
+            name = st.session_state[PORTRAIT_UPLOAD_KEY][0]
+            st.info(f"{name} is loaded on the Portrait of a Graduate page. This page and the others read the "
+                    "codebook 3.x export: upload it here and both stay loaded.")
+            if "portrait" in PAGES:
+                st.page_link(PAGES["portrait"], label="Open the Portrait of a Graduate page")
         uploaded = st.file_uploader("Coded outcomes CSV", type="csv", label_visibility="collapsed")
         if uploaded is not None and (uploaded.name, uploaded.getvalue()) != st.session_state.get(PORTRAIT_UPLOAD_KEY):
             remember_upload(uploaded)
@@ -2021,23 +2024,29 @@ def main() -> None:
     if df is not None:
         # Portrait of a Graduate rows never join a codebook 3.x count: they live on their own page.
         df = portrait.split_by_codebook(df)[0]
-    if df is None or df.empty:
+    has_main = df is not None and not df.empty
+    if not has_main and portrait_df is None:
         welcome_screen()
         st.stop()
 
-    # Pages read the filtered frame from here once the filter bar has run.
+    # Pages read the filtered frame from here once the filter bar has run. With only a Portrait file loaded,
+    # the Portrait page works and every other page asks for the codebook 3.x export.
     holder: dict[str, pd.DataFrame] = {}
+
+    def needs_main(show):
+        return show if has_main else welcome_screen
+
     pages = {
-        "map": st.Page(lambda: page_system_map(holder["df"]), title="Explore intended outcomes", url_path="intended-outcomes",
-                       default=True),
-        "peers": st.Page(lambda: page_find_peers(holder["df"]), title="Find peers", url_path="find-peers"),
-        "schools": st.Page(lambda: page_schools(holder["df"], df), title="Partners at a school",
+        "map": st.Page(needs_main(lambda: page_system_map(holder["df"])), title="Explore intended outcomes",
+                       url_path="intended-outcomes", default=True),
+        "peers": st.Page(needs_main(lambda: page_find_peers(holder["df"])), title="Find peers", url_path="find-peers"),
+        "schools": st.Page(needs_main(lambda: page_schools(holder["df"], df)), title="Partners at a school",
                            url_path="schools"),
-        "indicators": st.Page(lambda: page_indicators(holder["df"], df), title="District indicators",
+        "indicators": st.Page(needs_main(lambda: page_indicators(holder["df"], df)), title="District indicators",
                               url_path="district-indicators"),
         "portrait": st.Page(lambda: page_portrait(holder.get("portrait"), holder.get("portrait_version", "")),
                             title="Portrait of a Graduate", url_path="portrait-of-a-graduate"),
-        "review": st.Page(lambda: page_review(holder["df"]), title="Review coding", url_path="review-coding"),
+        "review": st.Page(needs_main(lambda: page_review(holder["df"])), title="Review coding", url_path="review-coding"),
     }
     # The default page is served at "/" and its own url_path is ignored, so links to /system-map (and /aims) opened
     # "Page not found". Hidden pages at those addresses hand over to the landing page.
@@ -2056,7 +2065,7 @@ def main() -> None:
             holder["portrait"] = filter_bar(portrait_df, portrait_source, page_key, upload_key=PORTRAIT_UPLOAD_KEY)
         else:
             keep_filters()
-    else:
+    elif has_main:
         holder["df"] = filter_bar(df, source, page_key)
     current.run()
 
