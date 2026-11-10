@@ -21,10 +21,12 @@
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const SIZE = 720;
 const C = SIZE / 2;
-const R = { centre: 66, sliceIn: 76, sliceOut: 210, compIn: 215, compOut: 306, halfIn: 313, halfOut: 352 };
-const RING_FONT = [12, 11];   // competency names: the normal size, then the size tried when a name won't fit
-const RING_LINE = 1.22;          // line height, in ems
-const RING_LINES = 5;            // a competency name wraps onto at most this many lines
+const R = { centre: 60, sliceIn: 68, sliceOut: 198, compIn: 203, compOut: 316, halfIn: 322, halfOut: 356 };
+const RING_FONT = [12, 11.5, 11, 10.5];   // competency names: the normal size, then smaller ones tried in turn
+const RING_LINE = 1.15;          // line height, in ems
+const RING_LINES = 6;            // a competency name wraps onto at most this many lines (never cut short)
+const RING_PAD = 8;              // clear space between ring text and the ring's arcs and dividers
+const RING_COUNT_PX = 11;        // the "N programs" line under each competency name
 const OUTCOME_CHARS = 200;       // longer sentences are cut around their coded part
 
 // Lucide icons (ISC licence), drawn in the slice's label colour.
@@ -211,7 +213,7 @@ function mount(root, pw) {
   for (const h of halves) {
     wheel.append(svgEl('path', { d: sector(R.halfIn, R.halfOut, h.a0, h.a1), fill: h.fill, class: 'pw-half' }));
     const id = pathId(`half-${h.key}`);
-    defs.append(svgEl('path', { id, d: arc((R.halfIn + R.halfOut) / 2 - 5.5, h.text[0], h.text[1]) }));
+    defs.append(svgEl('path', { id, d: arc((R.halfIn + R.halfOut) / 2 - 5, h.text[0], h.text[1]) }));
     const t = svgEl('text', { class: 'pw-half-text', fill: data.navy });
     const tp = svgEl('textPath', { href: `#${id}`, startOffset: '50%', 'text-anchor': 'middle' }, data.halves[h.key]);
     t.append(tp);
@@ -225,12 +227,13 @@ function mount(root, pw) {
       'aria-label': `${s.name}: ${programs(s.programs)} naming a goal in this slice` });
     g.append(svgEl('path', { d: sector(R.sliceIn, R.sliceOut, a0, a1), fill: s.color, class: 'pw-slice-shape' }));
     // The slice's icon, name and count, centred in the slice.
-    const [cx, cy] = point(143, mid);
-    const w = Math.abs(Math.cos((mid * Math.PI) / 180)) < 0.1 ? 118 : 136, hgt = 132;   // side slices are narrower
+    // Sized so the box stays inside the wedge with room to spare: side slices are narrower at this radius.
+    const [cx, cy] = point(134, mid);
+    const w = Math.abs(Math.cos((mid * Math.PI) / 180)) < 0.1 ? 100 : 116, hgt = 116;
     const fo = svgEl('foreignObject', { x: f(cx - w / 2), y: f(cy - hgt / 2), width: w, height: hgt, class: 'pw-fo' });
     const box = el('div', 'pw-slice-label');
     box.style.color = s.ink;
-    const icon = svgEl('svg', { viewBox: '0 0 24 24', width: 26, height: 26, fill: 'none', stroke: s.ink,
+    const icon = svgEl('svg', { viewBox: '0 0 24 24', width: 22, height: 22, fill: 'none', stroke: s.ink,
       'stroke-width': 1.8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
     for (const d of ICONS[s.icon] || []) icon.append(svgEl('path', { d }));
     const title = el('div', 'pw-slice-title');
@@ -252,7 +255,7 @@ function mount(root, pw) {
       const shape = svgEl('path', { d: sector(R.compIn, R.compOut, b0, b1), class: 'pw-comp-shape' });
       cg.append(shape);
       cg.append(svgEl('title', {}, `${c.name} (${c.num})`));
-      ringLabel(cg, defs, pathId(`c-${cid}`), `${c.name} (${c.num})`, programs(c.programs), b0, b1, upper(bm));
+      ringLabel(cg, defs, pathId(`c-${cid}`), `${c.name}\u00a0(${c.num})`, programs(c.programs), b0, b1, bm);
       activate(cg, ev => { ev.stopPropagation(); pick(pw, { kind: 'competency', id: cid }); });
       compNodes.set(cid, { g: cg, shape, slice: s, mid: bm });
       wheel.append(cg);
@@ -315,7 +318,7 @@ function mount(root, pw) {
 // competency faces; everything else fades; the competency's skills fan out as rays from its own spot on the
 // ring, each ray as long as its program count, with a line to the skill's name in a list on that side.
 
-const OPEN = { scale: 0.46, shift: 185, column: 232, columnWidth: 300, rayFrom: 4, rayMin: 16, rayMax: 52, ms: 320 };
+const OPEN = { scale: 0.46, shift: 185, column: 232, columnWidth: 300, rayFrom: 5, rayMin: 12, rayMax: 44, ms: 320 };
 
 function reducedMotion() {
   return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -348,6 +351,8 @@ function closeBurst(pw, wheel, burst) {
 
 function openBurst(pw, wheel, burst, node, c, sel) {
   if (!node || !c) return closeBurst(pw, wheel, burst);
+  // On a narrow screen the shrunken wheel and its list would be too small to read: the panel lists the skills.
+  if (wheel.parentNode && wheel.parentNode.getBoundingClientRect().width < 520) return closeBurst(pw, wheel, burst);
   const right = Math.sin((node.mid * Math.PI) / 180) >= 0;     // the list goes on the side the competency faces
   const dx = right ? -OPEN.shift : OPEN.shift, cx = C + dx, k = OPEN.scale;
   wheel.parentNode?.classList.add('is-open');
@@ -392,7 +397,7 @@ function openBurst(pw, wheel, burst, node, c, sel) {
     const lean = right ? 90 : 270, turn = ((lean - node.mid + 540) % 360) - 180;
     const centre = node.mid + Math.max(-40, Math.min(40, turn * 0.5));
     const at = (r, deg) => { const [px, py] = point(r, deg); return [px + dx, py]; };
-    const r0 = R.compOut * k + OPEN.rayFrom;
+    const r0 = R.halfOut * k + OPEN.rayFrom;   // rays start past the outer ring, never across its words
     // The topmost ray goes to the topmost row, so leader lines never cross.
     const angles = c.skills.map((_, i) => centre + (i - (n - 1) / 2) * spread)
       .sort((a, b) => at(100, a)[1] - at(100, b)[1]);
@@ -426,7 +431,7 @@ function tint(hex, amount = 0.22) {
 function wrapTo(text, widths, px) {
   const lines = [];
   let line = '';
-  for (const word of text.split(/\s+/)) {
+  for (const word of text.split(/ +/)) {   // a no-break space keeps "(3)" with its last word
     const next = line ? `${line} ${word}` : word;
     const room = widths[lines.length];
     if (room === undefined) return null;
@@ -437,54 +442,93 @@ function wrapTo(text, widths, px) {
   return lines.length <= widths.length && lines.every((l, k) => textWidth(l, px) <= widths[k]) ? lines : null;
 }
 
-/** A competency's name and count along its arc of the ring, wrapped to fit, reading left to right.
- *  Each line is measured at its own radius, since the outer lines have more room than the inner ones. */
-function ringLabel(g, defs, idBase, name, count, a0, a1, isUpper) {
-  const thick = R.compOut - R.compIn;
-  const widthAt = r => (r * (a1 - a0) * Math.PI) / 180 - 14;
-  // Baseline radii for a block of n lines, centred across the ring; line 0 is the one read first.
-  const radii = (n, px) => {
-    const lh = px * RING_LINE, cap = px * 0.72;
-    const offset = Math.max(4, (thick - ((n - 1) * lh + cap)) / 2);
-    return Array.from({ length: n }, (_, k) =>
-      isUpper ? R.compOut - offset - cap - k * lh : R.compIn + offset + cap + k * lh);
-  };
-  // The tightest line of a glyph is where its letters reach nearest the centre.
-  const room = (r, px) => widthAt(isUpper ? r : r - px * 0.72);
-  let lines = null, px = RING_FONT[0];
-  search:
-  for (const size of RING_FONT) {
-    px = size;
+/** A competency's name and count in its cell of the ring, never cut short.
+ *  Cells near the top and bottom set the text along the arc. Cells at the sides (mid-angle more than 50 degrees
+ *  from the vertical) set it straight along the cell's middle ray, so it reads nearly level instead of sideways.
+ *  Every line, the count included, is measured against the room it actually has, with RING_PAD clear all round. */
+function ringLabel(g, defs, idBase, name, count, a0, a1, mid) {
+  const fromVertical = Math.min(Math.abs(((mid % 360) + 360) % 360 - 0), Math.abs(((mid % 360) + 360) % 360 - 180),
+    Math.abs(((mid % 360) + 360) % 360 - 360));
+  if (fromVertical > 50) return straightLabel(g, name, count, a0, a1, mid);
+  return curvedLabel(g, defs, idBase, name, count, a0, a1, upper(mid));
+}
+
+/** Try each font size and line count until the name and the count both fit; layout(n, px) gives the n+1 widths. */
+function fitLines(name, count, layout) {
+  for (const px of RING_FONT) {
     for (let n = 1; n <= RING_LINES; n++) {
-      const rs = radii(n + 1, size);
-      lines = wrapTo(name, rs.slice(0, n).map(r => room(r, size)), size);
-      if (lines) break search;
+      const widths = layout(n, px);
+      if (!widths) break;                       // n lines no longer fit across the cell at this size
+      if (textWidth(count, RING_COUNT_PX, 700) > widths[n]) continue;
+      const lines = wrapTo(name, widths.slice(0, n), px);
+      if (lines) return { lines, px };
     }
   }
-  if (!lines) {   // still too long: cut the last line (the full name is in the panel and the tooltip)
-    const rs = radii(RING_LINES + 1, px);
-    const widths = rs.slice(0, RING_LINES).map(r => room(r, px));
-    lines = [];
-    let rest = name.split(/\s+/);
-    for (let k = 0; k < RING_LINES; k++) {
-      let line = '';
-      while (rest.length && (!line || textWidth(`${line} ${rest[0]}`, px) <= widths[k])) line = line ? `${line} ${rest.shift()}` : rest.shift();
-      lines.push(line);
-    }
-    if (rest.length) {
-      let last = lines[RING_LINES - 1];
-      while (last.length > 1 && textWidth(last + '…', px) > widths[RING_LINES - 1]) last = last.slice(0, -1);
-      lines[RING_LINES - 1] = last.trimEnd() + '…';
-    }
-  }
-  const all = [...lines, count];
-  radii(all.length, px).forEach((r, k) => {
-    const id = `${idBase}-${k}`;
-    defs.append(svgEl('path', { id, d: arc(r, a0 + 0.5, a1 - 0.5, isUpper) }));
-    const t = svgEl('text', { class: k === all.length - 1 ? 'pw-ring-n' : 'pw-ring-text', 'font-size': px });
-    t.append(svgEl('textPath', { href: `#${id}`, startOffset: '50%', 'text-anchor': 'middle' }, all[k]));
+  // Nothing fitted (not expected with these sizes): smallest size, as many lines as it needs, nothing dropped.
+  const px = RING_FONT[RING_FONT.length - 1];
+  return { lines: name.split(/ +/), px };
+}
+
+function curvedLabel(g, defs, idBase, name, count, a0, a1, isUpper) {
+  const thick = R.compOut - R.compIn - 2 * RING_PAD;
+  const widthAt = r => (r * (a1 - a0) * Math.PI) / 180 - 2 * (RING_PAD + 4);
+  // Baseline radii for name lines of size px plus the count line, centred across the ring; null when too tall.
+  const radii = (n, px) => {
+    const lh = px * RING_LINE, countLh = RING_COUNT_PX * 1.2;
+    const block = (n - 1) * lh + countLh + px * 0.95;   // ink from the first ascender to the last descender
+    if (block > thick) return null;
+    const offset = RING_PAD + (thick - block) / 2;
+    const rs = Array.from({ length: n }, (_, k) => k * lh + px * 0.75);
+    rs.push((n - 1) * lh + countLh + px * 0.75);
+    return rs.map(d => (isUpper ? R.compOut - offset - d : R.compIn + offset + d));
+  };
+  // A line's tightest point is where its letters come nearest the centre.
+  const room = (r, px) => widthAt(isUpper ? r : r - px * 0.75);
+  const fit = fitLines(name, count, (n, px) => { const rs = radii(n, px); return rs && rs.map(r => room(r, px)); });
+  const rs = radii(fit.lines.length, fit.px) || radii(1, fit.px);
+  [...fit.lines, count].forEach((text, k) => {
+    const id = `${idBase}-${k}`, isCount = k === fit.lines.length;
+    const r = rs[Math.min(k, rs.length - 1)];
+    defs.append(svgEl('path', { id, d: arc(r, a0 + 0.2, a1 - 0.2, isUpper) }));
+    const t = svgEl('text', { class: isCount ? 'pw-ring-n' : 'pw-ring-text', 'font-size': isCount ? RING_COUNT_PX : fit.px });
+    t.append(svgEl('textPath', { href: `#${id}`, startOffset: '50%', 'text-anchor': 'middle' }, text));
     g.append(t);
   });
+}
+
+function straightLabel(g, name, count, a0, a1, mid) {
+  const right = Math.sin((mid * Math.PI) / 180) > 0;
+  const half = ((a1 - a0) / 2) * Math.PI / 180, tan = Math.tan(half);
+  // In the label's own frame the cell's middle ray runs along x and lines stack along y.
+  const span = (y, h) => {
+    const edge = Math.abs(y) + h / 2;
+    const start = Math.max(R.compIn + RING_PAD, (edge + RING_PAD) / tan);
+    const end = Math.sqrt(Math.max(0, (R.compOut - RING_PAD) ** 2 - edge ** 2));
+    return { start, end, width: end - start };
+  };
+  const rows = (n, px) => {
+    const lh = px * RING_LINE, countLh = RING_COUNT_PX * 1.25;
+    const heights = [...Array(n).fill(lh), countLh];
+    const total = heights.reduce((a, b) => a + b, 0);
+    let y = -total / 2;
+    return heights.map(h => { const c = y + h / 2; y += h; return { y: c, h }; });
+  };
+  const fit = fitLines(name, count, (n, px) => {
+    const ws = rows(n, px).map(r => span(r.y, r.h).width);
+    return ws.every(w => w > 20) ? ws : null;
+  });
+  const rot = right ? mid - 90 : mid - 270;
+  const tg = svgEl('g', { transform: `translate(${C} ${C}) rotate(${f(rot)})` });
+  rows(fit.lines.length, fit.px).forEach((row, k) => {
+    const isCount = k === fit.lines.length;
+    const { start, end } = span(row.y, row.h);
+    const x = (right ? 1 : -1) * (start + end) / 2;
+    const t = svgEl('text', { class: isCount ? 'pw-ring-n' : 'pw-ring-text', x: f(x), y: f(row.y),
+      'dominant-baseline': 'central', 'text-anchor': 'middle', 'font-size': isCount ? RING_COUNT_PX : fit.px },
+      isCount ? count : fit.lines[k]);
+    tg.append(t);
+  });
+  g.append(tg);
 }
 
 // ---------------------------------------------------------------- side panel
