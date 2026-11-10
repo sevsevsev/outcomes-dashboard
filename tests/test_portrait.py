@@ -219,3 +219,16 @@ def test_banner_and_credit_wording():
     assert portrait.CREDIT == ("Portrait of a Graduate Competency Framework, written by Building 21 for the School "
                                "District of Philadelphia, licensed CC BY-NC-SA 4.0.")
     assert portrait.codebook_version(pd.DataFrame({"codebook_version": [VERSION]})) == "0.1.0"
+
+
+def test_a_mixed_file_never_lets_portrait_rows_into_the_3x_pages(sample):
+    """Severin's case (2026-11-10): one file with 3.x and Portrait rows made the 3.x wheel show 27 domains."""
+    v3 = frame([row("Artwell", "Poets", "Youth read more",
+                    ("Domain Y1. Academic Learning & Achievement", "Y1.1 Literacy: Reading & Writing"),
+                    version="youth_outcomes_v3@3.3.0")])
+    blank = sample.assign(codebook_version="")      # an export that left the version blank
+    for portrait_rows in (sample, blank):
+        others, pog = portrait.split_by_codebook(pd.concat([v3, portrait_rows], ignore_index=True))
+        coded = others[od.COL_DOMAIN] != "Uncoded"   # a blank-version uncoded row cannot be told apart; it counts nowhere
+        assert others.loc[coded, od.COL_DOMAIN].str.startswith("Domain").all() and coded.sum() == 1
+        assert len(pog) == len(sample) - (portrait_rows is blank)

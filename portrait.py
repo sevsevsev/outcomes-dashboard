@@ -116,11 +116,15 @@ def number(code: str) -> str:
 def is_portrait(df: pd.DataFrame) -> pd.Series:
     """Rows coded with the Portrait codebook, told apart from 3.x rows by `codebook_version`.
 
-    A file without that column counts as Portrait only when its competencies are Portrait ones.
+    A row with no version counts as Portrait only when its competency is a Portrait one, so a 3.x row is
+    never pulled in and a Portrait row never reaches a 3.x count, whatever the export left blank.
     """
-    if COL_VERSION in df.columns:
-        return df[COL_VERSION].fillna("").astype(str).str.strip().str.startswith(VERSION_PREFIX)
-    return df[od.COL_DOMAIN].fillna("").astype(str).str.match(_COMPETENCY)
+    by_code = df[od.COL_DOMAIN].fillna("").astype(str).str.match(_COMPETENCY) if od.COL_DOMAIN in df.columns \
+        else pd.Series(False, index=df.index)
+    if COL_VERSION not in df.columns:
+        return by_code
+    version = df[COL_VERSION].fillna("").astype(str).str.strip().str.lower()
+    return version.str.contains("portrait") | ((version == "") & by_code)
 
 
 def split_by_codebook(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
