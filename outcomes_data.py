@@ -911,6 +911,10 @@ def goal_name(label: object) -> str:
     A statement the coder placed in a domain without a goal reads "No specific goal"."""
     if label == UNASSIGNED_SUBCAT:
         return "No specific goal"
+    if re.match(r"^\s*(?:POG|OUT)(?=[\s.\d])", str(label)):
+        # A Portrait of a Graduate skill: "Know my values and aspirations (2.1)", never "POG.2.1".
+        from portrait import plain_label
+        return plain_label(label) or str(label)
     return split_code(str(label))[1]
 
 

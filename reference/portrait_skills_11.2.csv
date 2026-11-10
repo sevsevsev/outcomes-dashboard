@@ -1,0 +1,84 @@
+id,type,group,competency,name,statement,has_progression
+POG.1,competency,Lifelong Learner,POG.1,Direct my own learning,"I can take ownership of my learning by connecting it to what matters to me and the world around me, knowing how I think and learn, and adjusting how I work as I go.",yes
+POG.1.1,skill,Lifelong Learner,POG.1,Connect what I'm learning to what matters to me,"I can connect what I'm learning to my interests, goals, and the world around me.",yes
+POG.1.2,skill,Lifelong Learner,POG.1,Understand how I learn and how I think,"I can recognize how I learn best and how I think, and use that to guide my learning.",yes
+POG.1.3,skill,Lifelong Learner,POG.1,"Plan and manage my time, attention, and work","I can plan my work, manage my time and attention, and follow through.",yes
+POG.1.4,skill,Lifelong Learner,POG.1,Monitor my progress and adjust my strategies,I can monitor my progress as I work and adjust my strategies to stay on track.,yes
+POG.1.5,skill,Lifelong Learner,POG.1,Seek and use feedback to grow,I can seek feedback from others and use it to improve.,yes
+POG.2,competency,Lifelong Learner,POG.2,Persist with purpose and adapt with confidence,"I can understand myself, care for my well-being, take healthy risks, and persist through challenge and change in pursuit of what matters most to me.",yes
+POG.2.1,skill,Lifelong Learner,POG.2,Know my values and aspirations,"I can name my values, aspirations, and what matters most to me.",yes
+POG.2.2,skill,Lifelong Learner,POG.2,Care for my well-being,"I can take care of my physical, mental, and emotional well-being.",yes
+POG.2.3,skill,Lifelong Learner,POG.2,"Manage my emotions, stress, and impulses","I can recognize and manage my emotions, stress, and impulses.",yes
+POG.2.4,skill,Lifelong Learner,POG.2,Navigate challenges and adapt through change,I can persevere through difficulty and adapt as circumstances change.,yes
+POG.3,competency,Culturally Responsive Communicator,POG.3,Communicate Ideas,"I can shape and share ideas, emotions, and information clearly and effectively across audiences, contexts, and forms of expression.",yes
+POG.3.1,skill,Culturally Responsive Communicator,POG.3,Choose and introduce my message,"I can identify my purpose, audience, and message, and introduce it clearly.",yes
+POG.3.2,skill,Culturally Responsive Communicator,POG.3,Convey ideas in writing,I can write clearly and effectively for my purpose and audience.,yes
+POG.3.3,skill,Culturally Responsive Communicator,POG.3,Present to an audience,"I can present with focus, clarity, and impact to an audience.",yes
+POG.3.4,skill,Culturally Responsive Communicator,POG.3,Communicate visually,I can communicate visually with clarity and impact.,yes
+POG.3.5,skill,Culturally Responsive Communicator,POG.3,Craft stories,I can craft stories with arc and detail to build connection or communicate ideas.,yes
+POG.4,competency,Culturally Responsive Communicator,POG.4,Engage in Dialogue and Advocacy,"I can listen actively, engage with empathy across cultures and perspectives, and advocate for myself and others with respect and impact.",yes
+POG.4.1,skill,Culturally Responsive Communicator,POG.4,Engage in discussion,I can listen with full presence and contribute meaningfully to discussion.,yes
+POG.4.2,skill,Culturally Responsive Communicator,POG.4,Navigate difficult conversations with honesty and care,I can stay engaged in difficult conversations with honesty and care.,yes
+POG.4.3,skill,Culturally Responsive Communicator,POG.4,Advocate for myself and articulate my own needs,"I can articulate my needs, goals, and boundaries and advocate for myself.",yes
+POG.4.4,skill,Culturally Responsive Communicator,POG.4,Advocate for others,I can recognize when others are not being heard and advocate for them.,yes
+POG.5,competency,Strong Community Builder and Collaborator,POG.5,Collaborate effectively on teams,"I can contribute my strengths, build inclusive teams, navigate disagreement, check in on progress, and help my team produce work no one of us could do alone.",yes
+POG.5.1,skill,Strong Community Builder and Collaborator,POG.5,"Establish shared purpose, norms, and roles","I can help establish shared purpose, norms, and roles on a team.",yes
+POG.5.2,skill,Strong Community Builder and Collaborator,POG.5,Navigate conflicts and challenges productively,I can navigate conflicts and challenges productively.,yes
+POG.5.3,skill,Strong Community Builder and Collaborator,POG.5,Monitor progress and share accountability,I can track my team's progress and share accountability.,yes
+POG.5.4,skill,Strong Community Builder and Collaborator,POG.5,Reflect on our collaboration,I can reflect on how my team worked together and how to improve.,yes
+POG.6,competency,Strong Community Builder and Collaborator,POG.6,"Build relationships, networks, and strengthen community","I can foster belonging, build and draw on networks, take action, and engage in the communities I am part of to make them stronger.",yes
+POG.6.1,skill,Strong Community Builder and Collaborator,POG.6,Foster belonging,I can foster belonging and welcome others into a community.,yes
+POG.6.2,skill,Strong Community Builder and Collaborator,POG.6,Build and draw on my network,I can build and draw on a network of people and resources.,yes
+POG.6.3,skill,Strong Community Builder and Collaborator,POG.6,Take action to improve my community,I can take action to improve my community.,yes
+POG.6.4,skill,Strong Community Builder and Collaborator,POG.6,Build and engage in healthy online communities,I can build and engage in healthy online communities.,yes
+POG.7,competency,Ethical and Creative Problem Solver,POG.7,Think Critically,"I can ask good questions, evaluate information and arguments, weigh perspectives, and improve my own reasoning to reach sound, well-supported conclusions.",yes
+POG.7.1,skill,Ethical and Creative Problem Solver,POG.7,Ask questions,I can ask questions that guide my thinking and inquiry.,yes
+POG.7.2,skill,Ethical and Creative Problem Solver,POG.7,Find and evaluate information,I can find relevant information and evaluate whether to trust it.,yes
+POG.7.3,skill,Ethical and Creative Problem Solver,POG.7,Analyze and evaluate media,"I can analyze and evaluate media, including a creator's purpose and how it tries to persuade me.",yes
+POG.7.4,skill,Ethical and Creative Problem Solver,POG.7,"Interpret and synthesize information, data, and representations","I can interpret and synthesize information, data, and representations to make meaning.",yes
+POG.7.5,skill,Ethical and Creative Problem Solver,POG.7,"Evaluate evidence, reasoning, and arguments","I can evaluate evidence, reasoning, and arguments to reach a warranted judgment.",yes
+POG.7.6,skill,Ethical and Creative Problem Solver,POG.7,Think flexibly,I can consider multiple perspectives and revise my thinking when the evidence warrants.,yes
+POG.7.7,skill,Ethical and Creative Problem Solver,POG.7,Monitor and improve my reasoning,I can monitor my reasoning and take steps to improve it.,yes
+POG.8,competency,Ethical and Creative Problem Solver,POG.8,Solve Everyday and Real-World Problems,"I can understand a problem, work toward the best solution while weighing its impact, test and improve it when I can, and reflect on my solution and what I learned.",yes
+POG.8.1,skill,Ethical and Creative Problem Solver,POG.8,Understand the problem,I can understand what a problem really is before trying to solve it.,yes
+POG.8.2,skill,Ethical and Creative Problem Solver,POG.8,Choose an approach,I can choose a problem-solving approach that fits the problem.,yes
+POG.8.3,skill,Ethical and Creative Problem Solver,POG.8,"Develop, Test, and Improve Prototypes (When Appropriate)","I can develop, test, and improve prototypes when the problem calls for it.",yes
+POG.8.4,skill,Ethical and Creative Problem Solver,POG.8,"Implement, evaluate, and reflect","I can implement my solution, evaluate how well it worked, and reflect on what I learned.",yes
+POG.9,competency,Ethical and Creative Problem Solver,POG.9,Create and Innovate,"I can generate original ideas, develop and refine them into finished work, identify opportunities to create value for others, and turn promising ideas into action.",no
+POG.9.1,skill,Ethical and Creative Problem Solver,POG.9,Generate original ideas,"I can generate many and varied ideas, and combine, adapt, or build on ideas to create something new.",no
+POG.9.2,skill,Ethical and Creative Problem Solver,POG.9,Develop and refine creative work,"I can develop an idea into finished creative work, using critique and revision to strengthen its originality and craft.",no
+POG.9.3,skill,Ethical and Creative Problem Solver,POG.9,Identify opportunities and create value,"I can identify unmet needs or opportunities and develop ideas that create social, cultural, or economic value for others.",no
+POG.9.4,skill,Ethical and Creative Problem Solver,POG.9,Turn ideas into action,"I can launch a venture, product, event, or initiative by organizing people and resources, weighing risks and rewards, and planning how to reach the people it serves.",no
+POG.10,competency,Global Citizen,POG.10,Engage as an Informed and Responsible Global Citizen,"I can explain how people, communities, and systems are interconnected, investigate issues across perspectives, and use what I learn to participate in civic and global life.",no
+POG.10.1,skill,Global Citizen,POG.10,Explain global interconnections,"I can explain how local choices and global social, economic, political, and environmental systems influence one another.",no
+POG.10.2,skill,Global Citizen,POG.10,Participate in civic and democratic life,"I can explain how government works at the local, state, and national levels, including my rights and responsibilities, and use that knowledge to participate in civic and democratic processes.",no
+POG.10.3,skill,Global Citizen,POG.10,Examine global issues and perspectives,I can investigate global issues using evidence and perspectives from different places and people affected.,no
+POG.10.4,skill,Global Citizen,POG.10,Analyze how the past shapes the present,"I can analyze primary and secondary sources in their historical context to explain causes, changes, and continuities, and how the past shapes present-day communities and issues.",no
+POG.11,competency,Global Citizen,POG.11,Make Ethical and Responsible Choices,"I can weigh values, perspectives, and consequences when making choices that affect other people, communities, and the world, and act with integrity.",no
+POG.11.1,skill,Global Citizen,POG.11,Reason through ethical dilemmas,"I can weigh competing values, responsibilities, and consequences to make and explain ethical choices.",no
+POG.11.2,skill,Global Citizen,POG.11,Weigh the impact of my choices,"I can analyze how my choices affect people, communities, and the environment, now and in the future, and use that analysis to guide what I do.",no
+POG.11.3,skill,Global Citizen,POG.11,Use technology and AI ethically and responsibly,"I can use digital technologies and AI responsibly by protecting privacy, crediting others' work, identifying bias and potential harm, and deciding when and how to use these tools.",no
+POG.11.4,skill,Global Citizen,POG.11,Act with integrity,"I can act on my values when it is difficult, take responsibility for the impact of my actions, and take steps to make things right.",no
+POG.12,competency,Scholar,POG.12,Apply Academic Knowledge and Skills,"I can read complex texts critically, analyze quantitative data, model with mathematics, develop and use models, investigate scientific questions, apply core disciplinary concepts in new situations, and strengthen my academic skills.",no
+POG.12.1,skill,Scholar,POG.12,Read critically and make meaning of complex texts,"I can read and analyze literary, informational, and subject-specific texts to understand ideas, evaluate arguments, and support interpretations with textual evidence.",no
+POG.12.2,skill,Scholar,POG.12,Analyze and interpret quantitative data,"I can organize, represent, analyze, and interpret quantitative data to identify patterns, evaluate claims, and draw supported conclusions.",no
+POG.12.3,skill,Scholar,POG.12,Model with mathematics,"I can use algebraic and other mathematical concepts, procedures, and representations (such as expressions, equations, inequalities, functions, and geometric figures) to represent real-world situations, solve problems, and interpret my results in context.",no
+POG.12.4,skill,Scholar,POG.12,Develop and use models,"I can develop, use, and refine models to represent real-world situations, explain relationships, make predictions, and evaluate how well the models represent reality.",no
+POG.12.5,skill,Scholar,POG.12,Use scientific inquiry and reasoning,"I can investigate scientific questions, gather and analyze evidence, and use scientific reasoning and core science concepts to develop and evaluate explanations.",no
+POG.12.6,skill,Scholar,POG.12,Strengthen academic skills and prepare for assessments,"I can identify areas for growth in my reading and math skills, use effective study and test-taking strategies and online learning programs, track my growth, and use assessment results to strengthen my academic performance and test scores.",no
+POG.12.7,skill,Scholar,POG.12,Use digital and AI tools to learn and work,"I can choose and use digital and AI tools, including tools used in my field of interest, to learn, investigate ideas, and produce quality work, checking the accuracy and usefulness of their outputs.",no
+POG.13,competency,Scholar,POG.13,Plan and Navigate My Postsecondary Future,"I can explore opportunities that align with my interests, strengths, and goals, make informed decisions about my future, and take steps toward my chosen pathway, including managing my money and navigating new settings.",no
+POG.13.1,skill,Scholar,POG.13,"Explore my interests, strengths, and possibilities","I can connect my interests, strengths, and goals to possible education, training, career, and life pathways.",no
+POG.13.2,skill,Scholar,POG.13,Investigate postsecondary and career pathways,"I can research the requirements, costs, earnings, and job outlook of different pathways after high school, including college, apprenticeship, military, employment, and self-employment.",no
+POG.13.3,skill,Scholar,POG.13,Evaluate options and make informed choices,"I can compare possible pathways using my goals, values, opportunities, and constraints to make informed choices.",no
+POG.13.4,skill,Scholar,POG.13,Plan and take steps toward my future,"I can develop and carry out a plan for my next steps after high school, including coursework, work-based learning, credentials, continued learning, deadlines, and needed resources.",no
+POG.13.5,skill,Scholar,POG.13,Navigate new settings,"I can learn the expectations, rights, responsibilities, and supports in a new workplace, college, or training setting and use them to succeed and advocate for myself.",no
+POG.13.6,skill,Scholar,POG.13,Manage my money,"I can build and follow a budget and make informed decisions about earning, saving, spending, borrowing, and paying for education or training.",no
+POG.14,competency,Scholar,POG.14,"Communicate my competencies, experiences, and goals","I can communicate my competencies, experiences, skills, and goals effectively in applications, interviews, portfolios, and other postsecondary opportunities.",no
+POG.14.1,skill,Scholar,POG.14,Curate my portfolio,"I can select, organize, and reflect on evidence of my competencies and experiences to show my growth and readiness.",no
+POG.14.2,skill,Scholar,POG.14,Present and defend my portfolio,"I can present my portfolio to an audience, explain what my evidence shows about my growth and readiness, and respond to questions about it.",no
+POG.14.3,skill,Scholar,POG.14,Craft my application materials,"I can create a resume, cover letter, personal statement, or online career profile tailored to a specific opportunity that shows why I am a strong fit.",no
+POG.14.4,skill,Scholar,POG.14,Interview with confidence,"I can prepare for and participate in interviews, answering questions with specific examples of my experiences and competencies, and follow up afterward.",no
+POG.14.5,skill,Scholar,POG.14,Identify and secure references,"I can identify people who know my work and character, ask them for references or recommendations, and keep them informed.",no
+POG.14.6,skill,Scholar,POG.14,Communicate across workplace and community settings,"I can communicate by email, phone, video, and in person in ways that fit the relationship, purpose, and setting, including workplaces, colleges, and community organizations.",no
+POG.14.7,skill,Scholar,POG.14,Manage my digital footprint and online presence,"I can build and manage an online presence that represents me the way I intend to employers, colleges, and communities.",no
