@@ -269,10 +269,6 @@ INK_2 = "#334155"     # slate-700, body text
 FAINT = "#94a3b8"     # slate-400
 WASH = "#f1f5f9"      # slate-100, the explorer's active-tab and hover fill
 ACCENT = charts.PRIMARY
-# One rule per part number (outcome_html numbers parts p1, p2 ... and their labels l1, l2 ...).
-PART_RULES = "\n".join(
-    f".outcome:has(.l{n}:hover, .l{n}:focus) :is(mark, .coded-part).p{n} {{ background: #c4d9f5; }}"
-    for n in range(1, 13))
 CSS = f"""
 <style>
 /* The browser's scroll anchoring shifts the page when a table below a chart changes; keep it still. */
@@ -333,20 +329,15 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
                   color: {INK_2}; }}
 .none {{ color: {MUTED}; font-size: 0.875rem; margin: 0; }}
 
-/* A split statement: the partner's sentence with its coded parts marked (outcome_html). */
-mark.part {{ background: #e3ecf8; color: inherit; border-radius: 2px; padding: 0 1px;
-             -webkit-box-decoration-break: clone; box-decoration-break: clone; transition: background .15s ease; }}
-.coded-part {{ display: block; margin-top: 0.15rem; font-size: 0.8125rem; color: {MUTED}; border-radius: 2px;
-               transition: background .15s ease; }}
-.outcome-reading {{ max-width: 52rem; margin: 0.9rem 0 0 0; }}
-.outcome-reading .sentence {{ font-size: 0.9375rem; line-height: 1.6; color: {INK_2}; }}
-.outcome .labels {{ display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }}
-.outcome .label {{ font-size: 0.8125rem; line-height: 1.4; color: {INK_2}; background: #fff; border: 1px solid {HAIRLINE};
-                   border-radius: 999px; padding: 0.1rem 0.6rem; cursor: default; transition: border-color .15s ease; }}
-.outcome .label:hover, .outcome .label:focus {{ border-color: {ACCENT}; color: {INK}; outline: none; }}
-/* Pointing at a label, or tapping it, picks out its part: the others go plain. */
-.outcome:has(.label:hover, .label:focus) mark.part {{ background: transparent; }}
-{PART_RULES}
+/* A split statement (outcome_html): each coded part on its own line, then the partner's sentence, quieter. */
+.outcome .lead {{ display: block; color: {INK}; font-weight: 500; }}
+.outcome .from {{ display: block; margin-top: 0.15rem; font-size: 0.8125rem; color: {MUTED}; }}
+.outcome-reading {{ max-width: 52rem; margin: 0.9rem 0 0 0; font-size: 0.9375rem; line-height: 1.6; color: {INK_2}; }}
+.outcome-reading .lead + .lead {{ margin-top: 0.2rem; }}
+.outcome-reading .from {{ margin-top: 0.4rem; font-size: 0.875rem; }}
+.outcome .label {{ font-size: 0.8125rem; font-weight: 400; line-height: 1.4; color: {INK_2}; background: #fff;
+                   border: 1px solid {HAIRLINE}; border-radius: 999px; padding: 0.05rem 0.55rem; margin-left: 0.4rem;
+                   white-space: nowrap; }}
 .reading-hint {{ color: {MUTED}; font-size: 0.8125rem !important; margin: 0.6rem 0 0 0; }}
 
 /* District indicators: one block per indicator, each link's goals with how many programs name them. */
@@ -556,14 +547,15 @@ DISPLAY_LABELS = {
     COL_NOTES: "Coder notes",
     COL_SOURCE_FILE: "Source file",
 }
-# Reading order: who, what they aim for, which goals it counts toward; context last.
+# Reading order: who, what was coded (when a sentence was split), the partner's sentence, which goals it
+# counts toward; context last.
 # Lists show each partner sentence once (sentence_rows), with a goal for each coded part.
 # Coding confidence stays in the downloads and on Review coding; the browsing tables leave it out.
-DISPLAY_COLUMNS = [COL_ORG_VIEW, COL_TEXT, GOALS, COL_POP, COL_PROGRAM]
+DISPLAY_COLUMNS = [COL_ORG_VIEW, COL_PART, COL_TEXT, GOALS, COL_POP, COL_PROGRAM]
 # Table cells can't wrap, so columns get pixel widths sized to what they hold:
 # names and outcomes get room, short columns stay narrow.
-# Organization to "For" fits a section at 1280 px, with room for two goal labels; program scrolls.
-COLUMN_WIDTHS = {COL_ORG_VIEW: 190, COL_PROGRAM: 200, COL_TEXT: 380, COL_PART: 260, COL_SUBCAT: 220, GOALS: 310,
+# Organization to "For" fits a 1240 px section, with room for two goal labels; program scrolls.
+COLUMN_WIDTHS = {COL_ORG_VIEW: 190, COL_PROGRAM: 200, COL_TEXT: 340, COL_PART: 240, COL_SUBCAT: 220, GOALS: 310,
                  COL_POP: 150, COL_CONF: 150, COL_NOTES: 260, COL_QA: 110, COL_SOURCE_FILE: 260}
 # Columns dropped from a table when every row has the same value, since the selection already says it.
 REPEATABLE = [COL_ORG_VIEW, COL_PROGRAM, COL_SUBCAT, GOALS, COL_POP, COL_CONF]
@@ -599,7 +591,8 @@ def outcome_table(df: pd.DataFrame, columns: Sequence[str] = DISPLAY_COLUMNS, he
         DISPLAY_LABELS[COL_TEXT], width=COLUMN_WIDTHS[COL_TEXT], help="The partner's words, as they wrote them.")
     config[COL_PART] = st.column_config.TextColumn(
         DISPLAY_LABELS[COL_PART], width=COLUMN_WIDTHS[COL_PART],
-        help="The part of the statement this row was coded on, when the coder split it into separate outcomes.")
+        help="What was coded, when the coder split the statement into separate outcomes: the partner's words "
+             "when they appear word for word, otherwise the coder's wording. Parts are separated by semicolons.")
     config[GOALS] = st.column_config.ListColumn(
         DISPLAY_LABELS[GOALS], width=COLUMN_WIDTHS[GOALS],
         help="One goal for each outcome the coder found in the statement. Pick a row to see which words each "
@@ -622,14 +615,9 @@ def outcome_table(df: pd.DataFrame, columns: Sequence[str] = DISPLAY_COLUMNS, he
 
 
 def outcome_reading(row: pd.Series) -> None:
-    """A picked statement, in full: its coded parts marked, and one label per part (its goal).
-
-    Pointing at a label, or tapping it, highlights its part. A part the coder
-    reworded shows under the sentence as "Coded part: ...".
-    """
+    """A picked statement, in full: each coded part with its goal beside it, then the partner's sentence."""
     key = row[COL_OUTCOME]
-    parts = outcome_parts(key)[1]
-    labels = [goal_name(g) for g in row[GOALS]] if len(parts) > 1 else None
+    labels = [goal_name(g) for g in row[GOALS]] if outcome_parts(key)[1] else None
     st.html(f"<div class='outcome outcome-reading'>{outcome_html(key, labels)}</div>")
 
 
@@ -671,7 +659,7 @@ def outcomes_panel(rows: pd.DataFrame, where: str, key: str, nonce_key: Optional
         if picked and picked[0] < len(shown):
             outcome_reading(shown.iloc[picked[0]])
         elif (shown["parts"] > 1).any():
-            st.markdown("<p class='reading-hint'>Pick a row to see which words each goal comes from.</p>",
+            st.markdown("<p class='reading-hint'>Pick a row to see which words went to each goal.</p>",
                         unsafe_allow_html=True)
 
 
@@ -693,7 +681,7 @@ def statement_list(texts: Sequence[str]) -> str:
     """Outcome statements (outcome keys) as an HTML list (escaped), for side-by-side reading."""
     if len(texts) == 0:
         return "<p class='none'>None in this goal</p>"
-    # Each sentence once, with the parts coded to this goal marked inside it.
+    # Each sentence once, led by the parts coded to this goal.
     return "<ul class='statements'>" + "".join(
         f"<li class='outcome'>{outcome_html(t)}</li>" for t in merge_outcome_keys(texts)) + "</ul>"
 
@@ -1193,7 +1181,7 @@ def page_review(df: pd.DataFrame) -> None:
     with section(f"{len(filtered):,} outcomes to check", shown, key="review_table"):
         # What a reviewer checks first (outcome, goal, confidence, notes) comes before the context.
         # Each coded outcome is its own row here, since each is checked on its own.
-        columns = [COL_ORG_VIEW, COL_TEXT, COL_PART, COL_SUBCAT, COL_CONF, COL_NOTES, COL_QA, COL_PROGRAM,
+        columns = [COL_ORG_VIEW, COL_PART, COL_TEXT, COL_SUBCAT, COL_CONF, COL_NOTES, COL_QA, COL_PROGRAM,
                    COL_SOURCE_FILE]
         outcome_table(filtered.iloc[start:start + page_size], columns=columns, height=560)
         if n_pages > 1:

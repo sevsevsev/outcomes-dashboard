@@ -274,10 +274,13 @@ def status_line(shown: int, total: int, organizations: int, sources: Iterable[st
 # =============================================================================
 # OUTCOME TEXT
 # -----------------------------------------------------------------------------
-# A split sentence is shown whole, with the part a row was coded on marked
-# inside it. The partner's words are never rewritten: when the coder reworded
-# a part (so it is not in the sentence word for word), the part goes on a
-# line of its own under the sentence instead.
+# A split sentence leads with the part a row was coded on, so a reader sees
+# first what was coded under this goal, and the partner's whole sentence
+# follows on a quieter "From:" line. (Leading with the sentence made readers
+# think "phonics and numeracy" was wrongly coded as Mathematics, when the
+# phonics part was coded elsewhere.) The part is the partner's own words when
+# it sits in the sentence word for word, and the coder's wording otherwise.
+# The partner's sentence itself is never rewritten.
 # =============================================================================
 
 # Joins a sentence and its coded parts into one string (COL_OUTCOME), so the
@@ -352,35 +355,54 @@ def mark_parts(sentence: str, parts: Sequence[str]) -> tuple[list[tuple[int, int
     return sorted(found), missing
 
 
+def coded_parts_text(sentence: str, parts: Sequence[str]) -> list[str]:
+    """What each coded part reads as, in part order: the partner's words when the part is in the
+    sentence word for word (its case and punctuation kept), else the coder's wording."""
+    found, missing = mark_parts(sentence, parts)
+    texts = {i: sentence[s:e] for s, e, i in found}
+    texts.update({i: " ".join(p.split()) for i, p in missing})
+    return _drop_repeats([texts[i] for i in sorted(texts)])
+
+
+def _drop_repeats(leads: Sequence[str]) -> list[str]:
+    """Leads without one that repeats another's words: the same sentence split a little differently in two
+    programs ("Academic Achievement: ≥10% ..." and "≥10% ...") shows its part once, in the longer form."""
+    folded = [" ".join(_PART_TRAIL.sub("", x).casefold().split()) for x in leads]
+    keep = []
+    for i, lead in enumerate(leads):
+        inside = any(j != i and folded[i] in folded[j] and (len(folded[j]) > len(folded[i]) or j < i)
+                     for j in range(len(leads)))
+        if not inside:
+            keep.append(lead)
+    return keep
+
+
 def outcome_payload(key: object) -> dict:
-    """An outcome for the browser components: {"t": sentence, "m": [[start, end], ...], "c": [parts not in it]}."""
+    """An outcome for the browser components: {"t": sentence, "m": [[start, end], ...], "c": [parts not in it]}.
+
+    The browser leads with the parts (the marked words, then "c") and shows the sentence under them."""
     sentence, parts = outcome_parts(key)
     found, missing = mark_parts(sentence, parts)
     return {"t": sentence, "m": [[s, e] for s, e, _ in found], "c": [p for _, p in missing]}
 
 
 def outcome_html(key: object, labels: Optional[Sequence[str]] = None) -> str:
-    """One outcome as escaped HTML: the sentence with its parts marked, then "Coded part: ..." for reworded ones.
+    """One outcome as escaped HTML. A sentence that was not split is just the sentence.
 
-    Each part's marks carry class "p<n>" (n from 1). With `labels` (one per
-    part, e.g. its goal), a row of labels follows; pointing at or tapping
-    (focusing) label n highlights part n, through the .outcome CSS in app.py.
+    A split one leads with each coded part on its own line (see coded_parts_text), then
+    "From: “sentence”". With `labels` (one per part, e.g. its goal), each part's label
+    follows it on its line, so which words went to which goal is visible without pointing.
     """
     sentence, parts = outcome_parts(key)
-    found, missing = mark_parts(sentence, parts)
-    out, pos = [], 0
-    for start, end, i in found:
-        out.append(html.escape(sentence[pos:start]))
-        out.append(f"<mark class='part p{i + 1}'>{html.escape(sentence[start:end])}</mark>")
-        pos = end
-    out.append(html.escape(sentence[pos:]))
-    body = f"<span class='sentence'>{''.join(out)}</span>"
-    for i, part in missing:
-        body += f"<span class='coded-part p{i + 1}'>Coded part: {html.escape(part)}</span>"
-    if labels:
-        body += "<span class='labels'>" + "".join(
-            f"<span class='label l{i + 1}' tabindex='0'>{html.escape(str(label))}</span>"
-            for i, label in enumerate(labels)) + "</span>"
+    if not parts:
+        return f"<span class='sentence'>{html.escape(sentence)}</span>"
+    leads = coded_parts_text(sentence, parts)
+    body = ""
+    for i, lead in enumerate(leads):
+        label = (f" <span class='label'>{html.escape(str(labels[i]))}</span>"
+                 if labels and i < len(labels) else "")
+        body += f"<span class='lead'>{html.escape(lead)}{label}</span>"
+    body += f"<span class='from'>From: “{html.escape(sentence)}”</span>"
     return body
 
 
@@ -615,9 +637,9 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
     # --- Outcome text ---------------------------------------------------------
     # The coder splits a sentence that names several results ("Students will
     # gain math skills and make new friends") into parts and codes each part
-    # on its own row. A part alone can read as nothing ("friends"), so lists
-    # and hovers show the partner's full sentence and mark the part inside it
-    # (see outcome_key and mark_parts). Counts stay one per row.
+    # on its own row. Lists and hovers lead with the part and show the
+    # partner's full sentence under it (see outcome_key and outcome_html).
+    # Counts stay one per row.
     atomic = df[COL_ATOMIC].fillna("") if COL_ATOMIC in df.columns else pd.Series("", index=df.index)
     was_split = (atomic.str.strip().str.len() > 0) & (
         atomic.str.strip().str.casefold() != df[COL_TEXT].str.strip().str.casefold())
@@ -757,34 +779,21 @@ def to_export_frame(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _wrap_for_hover(key: str) -> str:
-    """One outcome for a Plotly hover box: the sentence (cut to fit) with its coded parts in bold, wrapped.
-
-    A part the coder reworded follows on its own line, as "Coded part: ...".
-    """
+    """One outcome for a Plotly hover box, wrapped. A split one leads with its coded parts in bold,
+    then "From: “sentence”" in italics (cut to fit around the first part)."""
     sentence, parts = outcome_parts(key)
     sentence = " ".join(sentence.split())
-    found, missing = mark_parts(sentence, parts)
-    text, shift = clip_around(sentence, [(s, e) for s, e, _ in found], HOVER_MAX_CHARS)
-    # Words are wrapped first and bolded after, so a tag never straddles a line break.
-    bold = [False] * len(text)
-    for s, e, _ in found:
-        for i in range(max(0, s - shift), min(len(text), e - shift)):
-            bold[i] = True
-    lines, pos = [], 0
-    for line in textwrap.wrap(text, HOVER_WRAP_WIDTH, break_on_hyphens=False) or [""]:
-        start = text.find(line, pos)
-        pos = start + len(line)
-        out, run, on = [], "", False
-        for ch, b in zip(line, bold[start:pos]):
-            if b != on:
-                out.append(f"<b>{html.escape(run)}</b>" if on else html.escape(run))
-                run, on = "", b
-            run += ch
-        out.append(f"<b>{html.escape(run)}</b>" if on else html.escape(run))
-        lines.append("".join(out))
-    for _, part in missing:
-        part = " ".join(part.split())
-        lines += [f"<i>{html.escape(line)}</i>" for line in textwrap.wrap("Coded part: " + part, HOVER_WRAP_WIDTH)]
+    if not parts:
+        text, _ = clip_around(sentence, [], HOVER_MAX_CHARS)
+        return "<br>   ".join(html.escape(line) for line in
+                              textwrap.wrap(text, HOVER_WRAP_WIDTH, break_on_hyphens=False) or [""])
+    found, _ = mark_parts(sentence, parts)
+    lines = []
+    for lead in coded_parts_text(sentence, parts):
+        lines += [f"<b>{html.escape(line)}</b>" for line in textwrap.wrap(lead, HOVER_WRAP_WIDTH)]
+    text, _ = clip_around(sentence, [(s, e) for s, e, _ in found], HOVER_MAX_CHARS)
+    lines += [f"<i>{html.escape(line)}</i>" for line in
+              textwrap.wrap(f"From: “{text}”", HOVER_WRAP_WIDTH, break_on_hyphens=False)]
     return "<br>   ".join(lines)
 
 
@@ -1515,12 +1524,14 @@ def sentence_rows(df: pd.DataFrame) -> pd.DataFrame:
 
     Columns: the sentence id, the organization view and program, COL_TEXT (the
     sentence), COL_OUTCOME (its outcome_key with every part in `df`, in part
-    order), "goals" (one goal per part, in the same order), "parts" (how many
+    order), COL_PART (those parts as shown, see coded_parts_text, joined with
+    "; "; "" when not split), "goals" (one goal per part, in the same order), "parts" (how many
     coded outcomes it holds), and COL_POP and COL_CONF (each distinct value,
     joined with ", "). Sentences keep the order of their first row. Counts
     elsewhere stay one per coded outcome; only the listing changes.
     """
-    columns = [COL_SENTENCE, COL_ORG_VIEW, COL_PROGRAM, COL_TEXT, COL_OUTCOME, "goals", "parts", COL_POP, COL_CONF]
+    columns = [COL_SENTENCE, COL_ORG_VIEW, COL_PROGRAM, COL_TEXT, COL_OUTCOME, COL_PART, "goals", "parts", COL_POP,
+               COL_CONF]
     if df.empty:
         return pd.DataFrame(columns=columns)
     ordered = df.assign(_order=pd.factorize(df[COL_SENTENCE])[0]).sort_values(["_order", COL_PART_INDEX],
@@ -1543,7 +1554,9 @@ def sentence_rows(df: pd.DataFrame) -> pd.DataFrame:
             row["_parts"].append(part)               # each distinct part once, its goal beside it
             row["goals"].append(goal)
     for row in out.values():
-        row[COL_OUTCOME] = outcome_key(row[COL_TEXT], row.pop("_parts"))
+        parts = row.pop("_parts")
+        row[COL_OUTCOME] = outcome_key(row[COL_TEXT], parts)
+        row[COL_PART] = "; ".join(coded_parts_text(row[COL_TEXT], parts)) if parts else ""
         row[COL_POP] = ", ".join(row.pop("_pops"))
         confs = row.pop("_confs")
         row[COL_CONF] = ", ".join(c for c in CONFIDENCE_ORDER if c in confs)

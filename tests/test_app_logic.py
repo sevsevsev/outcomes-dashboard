@@ -188,24 +188,28 @@ def test_mark_parts_marks_found_parts_and_keeps_reworded_ones_aside():
     assert missing == [(0, "Students will gain math skills")]
 
 
-def test_outcome_html_marks_parts_labels_them_and_never_rewrites_the_sentence():
-    key = app.outcome_key(SPLIT, ["Students will gain math skills", "make new friends"])
+def test_outcome_html_leads_with_the_coded_parts_and_keeps_the_sentence_whole():
+    key = app.outcome_key(SPLIT, ["Students will gain math skills", "and make new friends."])
     out = app.outcome_html(key, labels=["Creative expression", "Teamwork"])
-    assert "<mark class='part p2'>make new friends</mark>" in out
-    assert "<span class='coded-part p1'>Coded part: Students will gain math skills</span>" in out
-    assert "<span class='label l1' tabindex='0'>Creative expression</span>" in out
-    plain = re.sub(r"<span class='(coded-part|labels).*", "", out)
-    assert re.sub(r"<[^>]+>", "", plain) == SPLIT
-    assert "&lt;b&gt;" in app.outcome_html("<b>bold</b>")
+    # Each part on its own line, in part order, with its goal: the reworded part in the coder's words,
+    # the found one in the partner's words (no leading "and").
+    assert ("<span class='lead'>Students will gain math skills <span class='label'>Creative expression</span></span>"
+            "<span class='lead'>make new friends <span class='label'>Teamwork</span></span>") in out
+    # Then the partner's sentence, unchanged.
+    assert out.endswith(f"<span class='from'>From: “{SPLIT}”</span>")
+    # A sentence that was not split is just the sentence, escaped.
+    assert app.outcome_html("<b>bold</b>") == "<span class='sentence'>&lt;b&gt;bold&lt;/b&gt;</span>"
 
 
-def test_hover_shows_the_sentence_with_the_part_in_bold():
+def test_hover_leads_with_the_part_in_bold_then_the_sentence():
     key = app.outcome_key(SPLIT, ["make new friends", "Students will gain math skills"])
     hover = app._wrap_for_hover(key)
-    assert "<b>make new friends</b>" in hover and "<i>Coded part: Students will gain math skills</i>" in hover
+    assert hover.startswith("<b>make new friends</b><br>   <b>Students will gain math skills</b><br>   <i>From: “")
+    assert "Coded part" not in hover
     long = "Word " * 80 + "make new friends at the end."
     clipped = app._wrap_for_hover(app.outcome_key(long, ["make new friends"]))
-    assert "<b>make new friends</b>" in clipped and clipped.startswith("…")
+    assert clipped.startswith("<b>make new friends</b><br>   <i>From: “…")
+    assert app._wrap_for_hover("Plain sentence") == "Plain sentence"
 
 
 def test_samples_show_a_split_sentence_once_with_all_its_parts():
@@ -220,6 +224,7 @@ def test_sentence_rows_list_each_sentence_once_and_keep_counts():
     rows = app.sentence_rows(df)
     assert list(rows[app.COL_TEXT]) == [SPLIT, "Students work in teams"]
     assert rows.loc[0, "goals"] == [CREATE, TEAM] and rows.loc[1, "goals"] == [TEAM]
+    assert list(rows[app.COL_PART]) == ["Students will gain math skills; make new friends", ""]
     assert rows["parts"].sum() == len(df)
     # Counts stay one per coded outcome: the split sentence adds one to each of its goals.
     assert df.groupby(app.COL_SUBCAT).size().to_dict() == {CREATE: 1, TEAM: 2}
@@ -1010,3 +1015,11 @@ def test_ranked_summaries_count_programs_as_the_wheel_does(df):
         assert "programs" in summary.columns
         assert (summary["programs"] >= summary["organizations"]).all()
     assert app.domain_summary(df)["programs"].max() <= app.count_programs(df)
+
+
+def test_a_part_split_two_ways_leads_once_in_its_longer_form():
+    sentence = "Academic Achievement: ≥10% of participants improve math PSSA scores; ≥15% improve reading PSSA scores"
+    key = app.outcome_key(sentence, ["Academic Achievement: ≥10% of participants improve math PSSA scores",
+                                     "≥10% of participants improve math PSSA scores"])
+    assert app.coded_parts_text(*app.outcome_parts(key)) == [
+        "Academic Achievement: ≥10% of participants improve math PSSA scores"]
