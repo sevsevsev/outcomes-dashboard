@@ -494,20 +494,32 @@ function matchingSamples(sb, rows, n = 3) {
 
 const OUTCOME_CHARS = 200;   // longer sentences are cut around their coded part
 
-/** One outcome in the panel: the partner's whole sentence (cut around its coded part when long), the
- *  part marked inside it, and search words marked too. A part the coder reworded, so it is not in the
- *  sentence word for word, follows on its own line as "Coded part: …". The partner's words are never
- *  rewritten. */
+/** Leads without one that repeats another's words: one sentence split a little differently in two
+ *  programs ("Academic Achievement: ≥10% …" and "≥10% …") shows its part once, in the longer form. */
+function dropRepeats(leads) {
+  const f = leads.map(x => x.replace(/[\s.,;:!?]+$/, '').toLowerCase().split(/\s+/).join(' '));
+  return leads.filter((_, i) => !f.some((y, j) => j !== i && y.includes(f[i]) && (y.length > f[i].length || j < i)));
+}
+
+/** One outcome in the panel. A sentence that was not split is the partner's sentence (cut around
+ *  the first search word when long). A split one leads with its coded parts, each on its own line (the
+ *  partner's words when the part is in the sentence word for word, else the coder's wording), then the
+ *  whole sentence on a quieter "From:" line, cut around the first part. Leading with the part shows
+ *  what was coded under this goal first, so other words in the sentence ("phonics" under Mathematics)
+ *  don't read as a coding mistake. The partner's words are never rewritten. Search words are marked. */
 function outcomeItem(p, w) {
   if (typeof p === 'string') p = { t: p, m: [], c: [] };
   const t = p.t || '';
   const marks = (p.m || []).slice().sort((x, y) => x[0] - y[0]);
+  const reworded = p.c || [];
+  const split = marks.length > 0 || reworded.length > 0;
   const source = w && w.length ? '\\b(' + w.map(escapeRe).join('|') + ')' : null;
-  const split = source ? new RegExp(source, 'gi') : null;
-  // What must stay in view: the first search word when searching, else the first coded part.
-  let focus = marks.length ? marks[0][0] : 0;
+  const splitter = source ? new RegExp(source, 'gi') : null;
+  // What must stay in view: the first coded part, else the first search word.
+  let focus = 0;
   const hit = source ? new RegExp(source, 'i').exec(t) : null;
-  if (hit) focus = hit.index;
+  if (marks.length) focus = marks[0][0];
+  else if (hit) focus = hit.index;
   let start = 0, end = t.length;
   if (t.length > OUTCOME_CHARS) {
     if (focus > OUTCOME_CHARS * 0.4) start = t.lastIndexOf(' ', Math.max(0, focus - 30)) + 1;
@@ -518,30 +530,22 @@ function outcomeItem(p, w) {
     }
   }
   const addText = (parent, text) => {
-    if (!split) { parent.append(text); return; }
-    text.split(split).forEach((x, i) => parent.append(i % 2 ? el('mark', '', x) : document.createTextNode(x)));
+    if (!splitter) { parent.append(text); return; }
+    text.split(splitter).forEach((x, i) => parent.append(i % 2 ? el('mark', '', x) : document.createTextNode(x)));
   };
   const li = el('li', 'sb-outcome');
-  const quote = el('span', 'sb-quote');
-  quote.append('“' + (start ? '…' : ''));
-  let pos = start;
-  for (const [s, e] of marks) {
-    const a = Math.max(s, start), b = Math.min(e, end);
-    if (b <= a || a < pos) continue;
-    addText(quote, t.slice(pos, a));
-    const part = el('span', 'sb-part');
-    addText(part, t.slice(a, b));
-    quote.append(part);
-    pos = b;
+  if (split) {
+    for (const x of dropRepeats([...marks.map(([s, e]) => t.slice(s, e)), ...reworded])) {
+      const lead = el('span', 'sb-lead');
+      addText(lead, x);
+      li.append(lead);
+    }
   }
-  addText(quote, t.slice(pos, end));
+  const quote = el('span', split ? 'sb-from' : 'sb-quote');
+  quote.append((split ? 'From: ' : '') + '“' + (start ? '…' : ''));
+  addText(quote, t.slice(start, end));
   quote.append((end < t.length ? '…' : '') + '”');
   li.append(quote);
-  for (const c of p.c || []) {
-    const line = el('span', 'sb-coded', 'Coded part: ');
-    addText(line, c);
-    li.append(line);
-  }
   return li;
 }
 
