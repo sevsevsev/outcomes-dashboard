@@ -164,6 +164,7 @@ MAX_PROGRAMS = 6
 DEFAULT_PROGRAMS = 4
 UPLOAD_KEY = "uploaded_csv"          # (file name, bytes) of a CSV uploaded this session
 PORTRAIT_UPLOAD_KEY = "uploaded_portrait_csv"   # the same for the Portrait of a Graduate export
+GO_PORTRAIT_KEY = "go_to_portrait"              # set when a Portrait-only file was loaded from another page
 PORTRAIT_ENV_VAR = "PORTRAIT_CSV"
 READ_ERRORS = (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError)
 VIEWS = ["Wheel", "Ranked"]
@@ -1770,6 +1771,7 @@ def remember_upload(uploaded, key: str = UPLOAD_KEY) -> None:
         if frame is not None and len(frame) and portrait.is_portrait(frame).all():
             key = PORTRAIT_UPLOAD_KEY
             st.session_state["portrait_routed"] = uploaded.name
+            st.session_state[GO_PORTRAIT_KEY] = True    # open the Portrait page on the next run
     st.session_state[key] = value
 
 
@@ -2058,6 +2060,8 @@ def main() -> None:
     PAGES.update(pages)
     current = st.navigation([*pages.values(), alias, alias_aims], position="top")
     page_key = next((k for k, p in pages.items() if p.url_path == current.url_path), "map")
+    if st.session_state.pop(GO_PORTRAIT_KEY, False) and page_key != "portrait":
+        st.switch_page(pages["portrait"])
     if page_key == "portrait":
         holder["portrait_version"] = portrait.codebook_version(portrait_df) if portrait_df is not None \
             else portrait.DEFAULT_VERSION
