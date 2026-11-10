@@ -116,8 +116,39 @@
 .pw-index-name { flex: 1; min-width: 0; }
 .pw-index-n { flex: none; color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+/* ---- an opened competency: the wheel shrinks aside, its skills fan out as rays to a list */
+.pw-svg.is-open .pw-half, .pw-svg.is-open .pw-half-text { opacity: .35; transition: opacity .2s ease; }
+.pw-burst { opacity: 0; transition: opacity .2s ease .12s; }
+.pw-burst.is-open { opacity: 1; }
+.pw-burst-fo { overflow: visible; }
+.pw-burst-list {
+  position: relative; box-sizing: border-box; height: 100%; display: flex; flex-direction: column;
+  justify-content: center; align-items: flex-start; gap: 4px; text-align: left;
+}
+.pw-burst-list.is-left { align-items: flex-end; text-align: right; }
+.pw-burst-head { margin-bottom: 8px; }
+.pw-burst-title { font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--ink); }
+.pw-burst-n { margin-top: 2px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pw-burst-row {
+  all: unset; box-sizing: border-box; max-width: 100%; display: flex; flex-direction: column; padding: 3px 6px;
+  border-radius: 6px; cursor: pointer;
+}
+.pw-burst-list.is-left .pw-burst-row { align-items: flex-end; }
+.pw-burst-row:hover, .pw-burst-row.is-on { background: var(--wash); }
+.pw-burst-row:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; }
+.pw-burst-name { font-size: 13px; font-weight: 600; line-height: 1.3; color: var(--ink); }
+.pw-burst-count { font-size: 12px; line-height: 1.35; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.pw-burst-row.is-zero .pw-burst-name { font-weight: 500; color: var(--muted); }
+.pw-burst-row.is-zero .pw-burst-count { color: var(--muted); }
+.pw-ray { cursor: pointer; }
+.pw-ray-line { stroke-width: 6; stroke-linecap: round; }
+.pw-ray.is-zero .pw-ray-line { stroke-width: 2; stroke-dasharray: 3 4; }
+.pw-ray.is-on .pw-ray-line { stroke-width: 8; }
+.pw-leader { fill: none; stroke: #cbd5e1; stroke-width: 1.2; }
+.pw-ray.is-on .pw-leader { stroke: var(--ink-2); }
+
 @media (prefers-reduced-motion: reduce) {
-  .pw-slice-shape, .pw-comp-shape, .pw-slice-label, .pw-ring-text, .pw-ring-n { transition: none; }
+  .pw-slice-shape, .pw-comp-shape, .pw-slice-label, .pw-ring-text, .pw-ring-n, .pw-burst { transition: none; }
 }
 
 /* Narrower than two columns: the list and the panel go under the wheel, full width. */

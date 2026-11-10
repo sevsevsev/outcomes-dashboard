@@ -159,6 +159,7 @@ function pick(pw, sel) {
 
 function mount(root, pw) {
   const data = pw.data;
+  pw.burstFor = null;   // the opened competency's rays are drawn again on the new wheel
   root.replaceChildren();
   const comps = data.competencies;
   const sliceOf = new Map();
@@ -197,6 +198,9 @@ function mount(root, pw) {
     'aria-label': 'Portrait of a Graduate wheel: six slices and their competencies, with the number of programs naming a goal in each' });
   const defs = svgEl('defs');
   svg.append(defs);
+  // Everything that shrinks and steps aside when a competency opens (see openBurst).
+  const wheel = svgEl('g', { class: 'pw-wheel' });
+  const burst = svgEl('g', { class: 'pw-burst' });
   const pathId = name => `pw${pw.uid}-${name}`;
 
   // Outer ring: two halves, with their words along the arc.
@@ -205,13 +209,13 @@ function mount(root, pw) {
     { key: 'collective', a0: 1.5, a1: 178.5, fill: '#fde6d4', text: [16, 164] },
   ];
   for (const h of halves) {
-    svg.append(svgEl('path', { d: sector(R.halfIn, R.halfOut, h.a0, h.a1), fill: h.fill, class: 'pw-half' }));
+    wheel.append(svgEl('path', { d: sector(R.halfIn, R.halfOut, h.a0, h.a1), fill: h.fill, class: 'pw-half' }));
     const id = pathId(`half-${h.key}`);
     defs.append(svgEl('path', { id, d: arc((R.halfIn + R.halfOut) / 2 - 5.5, h.text[0], h.text[1]) }));
     const t = svgEl('text', { class: 'pw-half-text', fill: data.navy });
     const tp = svgEl('textPath', { href: `#${id}`, startOffset: '50%', 'text-anchor': 'middle' }, data.halves[h.key]);
     t.append(tp);
-    svg.append(t);
+    wheel.append(t);
   }
 
   const sliceNodes = new Map(), compNodes = new Map();
@@ -236,7 +240,7 @@ function mount(root, pw) {
     g.append(fo);
     activate(g, () => pick(pw, { kind: 'slice', id: s.id }));
     sliceNodes.set(s.id, g);
-    svg.append(g);
+    wheel.append(g);
 
     // The competency ring: each of the slice's competencies gets an equal share of its 60 degrees.
     const step = 60 / s.competencies.length;
@@ -250,8 +254,8 @@ function mount(root, pw) {
       cg.append(svgEl('title', {}, `${c.name} (${c.num})`));
       ringLabel(cg, defs, pathId(`c-${cid}`), `${c.name} (${c.num})`, programs(c.programs), b0, b1, upper(bm));
       activate(cg, ev => { ev.stopPropagation(); pick(pw, { kind: 'competency', id: cid }); });
-      compNodes.set(cid, { g: cg, shape, slice: s });
-      svg.append(cg);
+      compNodes.set(cid, { g: cg, shape, slice: s, mid: bm });
+      wheel.append(cg);
     });
   });
 
@@ -262,7 +266,8 @@ function mount(root, pw) {
   cfo.append(el('div', 'pw-centre-text', 'Portrait of a Graduate'));
   centre.append(cfo);
   centre.addEventListener('click', () => { if (pw.sel) pick(pw, pw.sel); });
-  svg.append(centre);
+  wheel.append(centre);
+  svg.append(wheel, burst);
   figure.append(svg);
   figure.append(el('p', 'pw-key', 'Each number counts programs naming a goal in that slice or competency; a program counts once in each place. Slice sizes are fixed and do not show counts.'));
 
@@ -298,9 +303,116 @@ function mount(root, pw) {
       n.g.setAttribute('aria-pressed', String(!!litComp && id === litComp));
     }
     for (const [id, b] of outRows) b.classList.toggle('is-on', sel?.kind === 'outside' && sel.id === id);
+    if (litComp) openBurst(pw, wheel, burst, compNodes.get(litComp), comps[litComp], sel);
+    else closeBurst(pw, wheel, burst);
     drawPanel(panel, pw, sliceOf);
   };
   pw.refresh();
+}
+
+// ---------------------------------------------------------------- the opened competency
+// Clicking a competency never turns the wheel. The wheel shrinks and steps aside, away from the side the
+// competency faces; everything else fades; the competency's skills fan out as rays from its own spot on the
+// ring, each ray as long as its program count, with a line to the skill's name in a list on that side.
+
+const OPEN = { scale: 0.46, shift: 185, column: 232, columnWidth: 300, rayFrom: 4, rayMin: 16, rayMax: 52, ms: 320 };
+
+function reducedMotion() {
+  return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/** Tween the wheel to scale k, shifted dx to the side, about its own centre. */
+function moveWheel(pw, wheel, k, dx) {
+  const set = (kk, xx) => wheel.setAttribute('transform', kk === 1 && xx === 0 ? '' :
+    `translate(${f(C * (1 - kk) + xx)} ${f(C * (1 - kk))}) scale(${f(kk)})`);
+  cancelAnimationFrame(pw.raf);
+  const from = pw.at || { k: 1, dx: 0 };
+  if (from.k === k && from.dx === dx) return set(k, dx);
+  const t0 = performance.now(), ms = reducedMotion() ? 0 : OPEN.ms;
+  const step = now => {
+    const p = ms ? Math.min(1, (now - t0) / ms) : 1, e = 1 - Math.pow(1 - p, 3);
+    pw.at = { k: from.k + (k - from.k) * e, dx: from.dx + (dx - from.dx) * e };
+    set(pw.at.k, pw.at.dx);
+    if (p < 1) pw.raf = requestAnimationFrame(step);
+  };
+  if (ms) pw.raf = requestAnimationFrame(step); else step(t0);
+}
+
+function closeBurst(pw, wheel, burst) {
+  pw.burstFor = null;
+  burst.replaceChildren();
+  burst.classList.remove('is-open');
+  wheel.parentNode?.classList.remove('is-open');
+  moveWheel(pw, wheel, 1, 0);
+}
+
+function openBurst(pw, wheel, burst, node, c, sel) {
+  if (!node || !c) return closeBurst(pw, wheel, burst);
+  const right = Math.sin((node.mid * Math.PI) / 180) >= 0;     // the list goes on the side the competency faces
+  const dx = right ? -OPEN.shift : OPEN.shift, cx = C + dx, k = OPEN.scale;
+  wheel.parentNode?.classList.add('is-open');
+  moveWheel(pw, wheel, k, dx);
+  const picked = sel?.kind === 'skill' ? sel.id : null;
+  if (pw.burstFor === c.id) {
+    // Same competency: only the picked skill changes.
+    burst.querySelectorAll('[data-skill]').forEach(n => n.classList.toggle('is-on', n.dataset.skill === picked));
+    return;
+  }
+  pw.burstFor = c.id;
+  burst.replaceChildren();
+  burst.classList.remove('is-open');
+
+  // The list: the competency's name and count, then one row per skill.
+  const x = right ? cx + OPEN.column : cx - OPEN.column - OPEN.columnWidth;
+  const fo = svgEl('foreignObject', { x: f(x), y: 0, width: OPEN.columnWidth, height: SIZE, class: 'pw-burst-fo' });
+  const col = el('div', 'pw-burst-list' + (right ? '' : ' is-left'));
+  const head = el('div', 'pw-burst-head');
+  head.append(el('div', 'pw-burst-title', `${c.name} (${c.num})`),
+    el('div', 'pw-burst-n', `${programs(c.programs)} naming a goal in this competency`));
+  col.append(head);
+  const rows = c.skills.map(sk => {
+    const b = el('button', 'pw-burst-row' + (sk.programs ? '' : ' is-zero') + (sk.id === picked ? ' is-on' : ''));
+    b.type = 'button';
+    b.dataset.skill = sk.id;
+    b.append(el('span', 'pw-burst-name', `${sk.name} (${sk.num})`),
+      el('span', 'pw-burst-count', sk.programs ? programs(sk.programs) : 'none yet'));
+    b.setAttribute('aria-label', `${sk.name} (${sk.num}): ${sk.programs ? programs(sk.programs) : 'no programs yet'} naming a goal in this skill`);
+    activate(b, () => pick(pw, { kind: 'skill', id: sk.id }));
+    col.append(b);
+    return b;
+  });
+  fo.append(col);
+  burst.append(fo);
+
+  // Rays and leader lines need the rows' heights, so they are drawn once the list has been laid out.
+  requestAnimationFrame(() => {
+    if (pw.burstFor !== c.id) return;
+    const ys = rows.map(r => r.offsetTop + 10);
+    const n = c.skills.length, spread = Math.min(11, 66 / n);
+    const lean = right ? 90 : 270, turn = ((lean - node.mid + 540) % 360) - 180;
+    const centre = node.mid + Math.max(-40, Math.min(40, turn * 0.5));
+    const at = (r, deg) => { const [px, py] = point(r, deg); return [px + dx, py]; };
+    const r0 = R.compOut * k + OPEN.rayFrom;
+    // The topmost ray goes to the topmost row, so leader lines never cross.
+    const angles = c.skills.map((_, i) => centre + (i - (n - 1) / 2) * spread)
+      .sort((a, b) => at(100, a)[1] - at(100, b)[1]);
+    const max = Math.max(1, ...c.skills.map(sk => sk.programs));
+    const lx = right ? x - 6 : x + OPEN.columnWidth + 6;
+    c.skills.forEach((sk, i) => {
+      const deg = angles[i];
+      const len = sk.programs ? OPEN.rayMin + OPEN.rayMax * Math.sqrt(sk.programs / max) : 10;
+      const [x0, y0] = at(r0, deg), [x1, y1] = at(r0 + len, deg), ty = ys[i];
+      const g = svgEl('g', { class: 'pw-ray' + (sk.programs ? '' : ' is-zero') + (sk.id === picked ? ' is-on' : ''),
+        'data-skill': sk.id, 'aria-hidden': 'true' });
+      g.append(svgEl('path', { class: 'pw-leader',
+        d: `M${f(x1)},${f(y1)} C${f((x1 + lx) / 2)},${f(y1)} ${f((x1 + lx) / 2)},${f(ty)} ${f(lx)},${f(ty)}` }));
+      g.append(svgEl('line', { class: 'pw-ray-line', x1: f(x0), y1: f(y0), x2: f(x1), y2: f(y1),
+        stroke: sk.programs ? node.slice.color : '#94a3b8' }));
+      g.addEventListener('click', () => pick(pw, { kind: 'skill', id: sk.id }));
+      burst.insertBefore(g, fo);
+    });
+    burst.classList.add('is-open');
+  });
 }
 
 /** A pale tint of a slice colour for its competency ring, so navy names read on it. */
