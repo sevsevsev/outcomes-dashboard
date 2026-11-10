@@ -12,7 +12,7 @@ youth-serving program logic models. It is built for two audiences:
 
 Pages (top navigation):
 
-1. Program goals - findings, linked priority (or domain) / goal / audience charts, coverage gaps
+1. Explore intended outcomes - findings, linked priority (or domain) / goal / audience charts, coverage gaps
 2. Find peers        - peers for an organization, organizations by goal, program comparison
 3. Partners at a school - a school's partners, coded or not, and where their outcomes meet
 4. District indicators - which goals may reach the District's SPOTlight indicators (internal only)
@@ -1907,7 +1907,7 @@ def main() -> None:
     # Pages read the filtered frame from here once the filter bar has run.
     holder: dict[str, pd.DataFrame] = {}
     pages = {
-        "map": st.Page(lambda: page_system_map(holder["df"]), title="Program goals", url_path="goals",
+        "map": st.Page(lambda: page_system_map(holder["df"]), title="Explore intended outcomes", url_path="intended-outcomes",
                        default=True),
         "peers": st.Page(lambda: page_find_peers(holder["df"]), title="Find peers", url_path="find-peers"),
         "schools": st.Page(lambda: page_schools(holder["df"], df), title="Partners at a school",
@@ -1918,9 +1918,9 @@ def main() -> None:
     }
     # The default page is served at "/" and its own url_path is ignored, so links to /system-map (and /aims) opened
     # "Page not found". Hidden pages at those addresses hand over to the landing page.
-    alias = st.Page(lambda: st.switch_page(pages["map"]), title="Program goals", url_path="system-map",
+    alias = st.Page(lambda: st.switch_page(pages["map"]), title="Explore intended outcomes", url_path="system-map",
                     visibility="hidden")
-    alias_aims = st.Page(lambda: st.switch_page(pages["map"]), title="Program goals", url_path="aims",
+    alias_aims = st.Page(lambda: st.switch_page(pages["map"]), title="Explore intended outcomes", url_path="aims",
                     visibility="hidden")
     PAGES.clear()
     PAGES.update(pages)
