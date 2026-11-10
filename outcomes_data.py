@@ -161,8 +161,9 @@ ORG_ALIASES = {
 # sometimes followed by " — Part 2 of 6".
 FILENAME_PATTERN = re.compile(r"^\s*\d+_\d+\s+-\s+(?P<org>.+?)\s+-\s+(?P<program>.+?)\s+-\s+Logic Model", re.I)
 
-# Plotly hover boxes do not wrap text, so outcome samples are wrapped manually.
-HOVER_WRAP_WIDTH = 70
+# Plotly hover boxes do not wrap text, so outcome samples are wrapped manually. 60 characters keeps
+# a ranked-bar hover box narrower than its half-width chart, so the box never runs off the chart's edge.
+HOVER_WRAP_WIDTH = 60
 HOVER_MAX_CHARS = 220
 HOVER_SAMPLE_SIZE = 3
 

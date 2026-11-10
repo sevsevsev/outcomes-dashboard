@@ -292,20 +292,37 @@ def build_ranked_bars(
         textposition="outside",
         cliponaxis=False,
         textfont=dict(color=TEXT_SECONDARY, size=12),
+        # The row's name heads the hover box (yaxis.unifiedhovertitle below), so it isn't repeated here.
         hovertemplate=(
-            "<b>%{customdata[2]}</b><br>%{x} " + value_noun
+            "%{x} " + value_noun
             + (f"<br>{detail}" if detail else "")
             + "<br><br><b>Sample outcomes</b><br>%{customdata[1]}<extra></extra>"
         ),
         selected=BAR_SELECTED,
         unselected=BAR_UNSELECTED,
     ))
+    x_max = (data[value_col].max() or 1) * 1.12
+    # An invisible bar fills each row, so the hover box (placed below or above the hovered points)
+    # clears the whole row, a two-line label included, and the box sits mid-chart whatever the bar's
+    # length. It has no hover text of its own and carries the same customdata, so a click on it
+    # picks the row too.
+    fig.add_trace(go.Bar(
+        x=[x_max] * len(names), y=names, orientation="h", width=1, customdata=custom,
+        marker=dict(color="rgba(0,0,0,0)"), hoverinfo="none", showlegend=False,
+    ))
     fig.update_layout(
         # The top margin keeps Plotly's hover toolbar off the first (longest) bar's value.
         height=row * max(len(data), 2) + 32,
-        xaxis=dict(visible=False, range=[0, (data[value_col].max() or 1) * 1.12]),
-        yaxis=dict(type="category", autorange="reversed", automargin=True,
+        xaxis=dict(visible=False, range=[0, x_max]),
+        yaxis=dict(type="category", autorange="reversed", automargin=True, showspikes=False,
+                   unifiedhovertitle=dict(text="<b>%{y}</b>"),
                    tickfont=dict(color=TEXT_PRIMARY, size=13), showgrid=False, **category_ticks(names)),
+        # A bar's hover box is too wide to sit beside the bar in a half-width column, so Plotly's
+        # default ("closest") pushed it back over the bar, its label and its neighbours. "y unified"
+        # puts the box under the hovered bar, or over it when there is no room below, so the hovered
+        # row stays in sight. app.CSS hides the box's legend swatch.
+        hovermode="y unified",
+        barmode="overlay",
         margin=dict(t=28, l=0, r=8, b=4),
         bargap=1 - BAR_THICKNESS / row,
         barcornerradius=4,

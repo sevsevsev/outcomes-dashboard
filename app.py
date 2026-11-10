@@ -276,6 +276,11 @@ CSS = f"""
 .block-container {{ padding-top: 5.25rem; padding-bottom: 4rem; max-width: 1240px; }}
 body, .stApp {{ -webkit-font-smoothing: antialiased; }}
 
+/* Ranked bars hover with Plotly's "y unified" box (charts.build_ranked_bars), drawn as a little legend.
+   One series needs no colour swatch: hide it and move the text left, under the bar's name. */
+.js-plotly-plot .hoverlayer .legend .legendpoints {{ display: none; }}
+.js-plotly-plot .hoverlayer .legend .legendtext {{ transform: translateX(-36px); }}
+
 /* Top bar, as on the explorer site: the site name, then the pages as quiet pills. */
 [data-testid="stHeader"] {{ background: #fff; border-bottom: 1px solid {HAIRLINE}; height: 4rem; }}
 [data-testid="stHeader"]::before {{
