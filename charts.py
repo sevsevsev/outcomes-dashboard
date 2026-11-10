@@ -785,8 +785,8 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
     goal then carries "here", what the scope's count is for it (0 when no one there names it), with
     the partner names or sample statements behind it.
 
-    With the outcome `crosswalk`, goals are grouped by the District priority (lane) they serve, in the
-    crosswalk's lane order and codebook order within a lane, and "lanes" lists every lane with its
+    Goals are in codebook order and the map groups them under their domains. With the outcome `crosswalk`,
+    each goal carries the District priority (lane) it serves for the side panel, and "lanes" lists every lane with its
     other goals (from `goal_names`, every codebook goal): the ones with no link, which the map shows as
     one row per lane rather than as a gap. Without it, goals sit under their domains as before.
     """
@@ -796,13 +796,9 @@ def spotlight_map_data(reach: list[dict], links: dict, domain_names: dict[str, s
     goal_defs = definitions.get("goals", {}) if definitions else {}
     lane_list = crosswalk_lanes(crosswalk or {})
     lane_of = crosswalk_code_lanes(crosswalk or {})
-    lane_rank = {lane["id"]: k for k, lane in enumerate(lane_list)}
-
-    def order(code: str) -> tuple:
-        return (lane_rank.get(lane_of.get(code, {}).get("lane"), len(lane_rank)), subcategory_sort_key(code))
 
     goals = []
-    for code in sorted(goals_by_code, key=order):
+    for code in sorted(goals_by_code, key=subcategory_sort_key):
         domain = code.split(".")[0]
         hue = DOMAIN_HUES[DOMAIN_ORDER_V3.index(domain)] if domain in DOMAIN_ORDER_V3 else None
         lane = lane_of.get(code, {})

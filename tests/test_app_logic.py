@@ -944,8 +944,12 @@ def test_lane_program_counts_count_shared_logic_models_once():
     # Tutors and Math Club share one logic model (and Tutors spans two files), so A counts once.
     assert counts == {"names-indicator": 1, "guardrail-well-rounded": 2, "quality-condition": 0}
     assert [lane["name"] for lane in app.lane_program_counts(rows, small_crosswalk())][1] == (
-        "Guardrail: a well-rounded education")
+        "Board guardrail: a well-rounded education")
     assert app.lane_program_counts(rows, {}) == []
+    # A lane the plain-name table does not know keeps the file's own name and description.
+    unknown = {"lanes": [{"id": "new-lane", "name": "File name", "description": "File text."}], "codes": []}
+    assert app.crosswalk_lanes(unknown)[0]["name"] == "File name"
+    assert app.crosswalk_lanes(unknown)[0]["description"] == "File text."
     # Without file names, a program is a program name within one organization, as on the wheel.
     no_files = rows.drop(columns=[app.COL_SOURCE_FILE])
     assert app.logic_model_programs(no_files).nunique() == app.count_programs(no_files)
@@ -955,7 +959,7 @@ def test_wheel_panel_shows_lane_and_serves_in_place_of_the_guardrail_note():
     from outcomes_data import load_spotlight_links, spotlight_panel_data
     panel = spotlight_panel_data(load_spotlight_links(), small_crosswalk())
     arts = panel["lanes"]["Y1.6"]
-    assert arts["laneName"] == "Guardrail: a well-rounded education"
+    assert arts["laneName"] == "Board guardrail: a well-rounded education"
     assert arts["serves"].startswith("A well-rounded education")
     assert arts["quote"] == "Every student will have a well-rounded education"
     assert panel["lanes"]["Y1.3"]["quote"] == ""
@@ -973,7 +977,7 @@ def test_spotlight_map_groups_goals_by_lane():
     data = charts.spotlight_map_data(reach, links, codebook_domain_names(), {}, n_goals=99,
                                      crosswalk=small_crosswalk(), goal_names=codebook_goal_names())
     maths = next(g for g in data["goals"] if g["id"] == "Y1.3")
-    assert maths["laneName"] == "Names a SPOTlight indicator" and maths["serves"] == "Math tests"
+    assert maths["laneName"] == "SPOTlight: measured directly" and maths["serves"] == "Math tests"
     placed = [g["lane"] for g in data["goals"] if g["lane"]]
     assert placed == sorted(placed, key=["names-indicator", "guardrail-well-rounded", "quality-condition"].index)
     lanes = {lane["id"]: lane for lane in data["lanes"]}
@@ -997,14 +1001,14 @@ def test_copied_crosswalk_places_every_codebook_goal_and_domain_once():
                                load_crosswalk)
     crosswalk = load_crosswalk()
     lanes = crosswalk_lanes(crosswalk)
-    assert len(lanes) == 8 and lanes[0]["name"] == "Names a SPOTlight indicator"
+    assert len(lanes) == 8 and lanes[0]["name"] == "SPOTlight: measured directly"
     codes = [c["code"] for c in crosswalk["codes"]]
     assert len(codes) == len(set(codes))
     assert set(codes) == set(codebook_goal_names()) | set(codebook_domain_names())
     placed = crosswalk_code_lanes(crosswalk)
     assert {e["lane"] for e in placed.values()} <= {lane["id"] for lane in lanes}
     assert all(e["serves"] for e in placed.values())
-    assert placed["Y1.6"]["laneName"] == "Guardrail: a well-rounded education"
+    assert placed["Y1.6"]["laneName"] == "Board guardrail: a well-rounded education"
     # The file holds no counts and no evidence.
     assert not any(isinstance(v, (int, float)) for c in crosswalk["codes"] for v in c.values())
 
@@ -1024,7 +1028,7 @@ def test_priority_grid_puts_cells_only_where_the_crosswalk_has_goals():
                                                 "Y2": "Engagement, Interest & Creative Expression",
                                                 "A2": "Program Quality, Access & Reach"})
     assert [lane["id"] for lane in data["lanes"]] == ["names-indicator", "guardrail-well-rounded", "quality-condition"]
-    assert data["groups"] == ["Board goals and SPOTlight indicators", "Board guardrails", "Valued on their own terms"]
+    assert data["groups"] == ["Board goals and SPOTlight indicators", "Board guardrails", "Beyond students"]
     assert [d["code"] for d in data["domains"]] == ["Y1", "Y2", "A2"]
     cells = {(c["lane"], c["domain"]): c for c in data["cells"]}
     # No cell where the crosswalk has no goal: Mathematics is the only names-indicator domain here.
