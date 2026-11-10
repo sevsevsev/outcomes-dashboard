@@ -304,7 +304,7 @@ def test_findings_state_the_top_domain_and_codebook_gaps(df):
     frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
     coverage = app.subcategory_coverage(frame, app.load_codebook())
     text = " ".join(app.portfolio_findings(frame, coverage))
-    assert "**Social-emotional skills** is the most widely shared aim: **2 of 4** organizations" in text
+    assert "**Social-emotional skills** is the most common outcome area among partners: **2 of 4** organizations" in text
     assert "Far fewer name what schools report on: **0** name attendance, **0** literacy and **0** math." in text
     gaps = int((coverage["organizations"] == 0).sum())
     assert f"**{gaps} goals** in the codebook have no program" in text
