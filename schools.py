@@ -425,17 +425,14 @@ def school_findings(school: str, portfolio: pd.DataFrame, rows: pd.DataFrame, ye
     found = [f"**{_plural(n, 'partner')}** run **{_plural(n_programs, 'program')}** at {school}"
              f"{' in ' + year if year else ''}."]
     if k == 0:
-        found.append("None of them has coded outcomes yet, so there is nothing to chart. "
-                     "They are listed below as not yet coded.")
+        found.append("None of them has outcome goals on file yet. They are listed below.")
         return found
     partly = int((coded["status"] == PARTLY_CODED).sum())
-    sentence = (f"**{k} of {n}** have coded outcomes, so the picture below covers "
-                f"{'them' if k > 1 else 'that partner'}"
-                + (f"; the other **{n - k}** {'is' if n - k == 1 else 'are'} listed as not yet coded."
-                   if k < n else "."))
+    sentence = (f"Outcome goals are on file for **{k} of {n}**"
+                + (f"; the other **{n - k}** {'is' if n - k == 1 else 'are'} listed at the bottom." if k < n else "."))
     if partly:
-        sentence = sentence[:-1] + (f" ({partly} of the coded {'partner runs' if partly == 1 else 'partners run'} "
-                                    "other programs here that are not coded yet).")
+        sentence = sentence[:-1] + (f" ({partly} of those {'runs' if partly == 1 else 'run'} other programs here "
+                                    "without goals on file yet).")
     found.append(sentence)
 
     aims = rows[(rows[COL_DOMAIN] != UNCODED_DOMAIN) & (rows[COL_PRIORITY] != UNCODED_PRIORITY)]
@@ -443,9 +440,7 @@ def school_findings(school: str, portfolio: pd.DataFrame, rows: pd.DataFrame, ye
         per_aim = aims.groupby(COL_PRIORITY)[COL_PARTNER].nunique().sort_values(ascending=False, kind="stable")
         top = per_aim[per_aim == per_aim.iloc[0]].index.tolist()[:3]
         count = int(per_aim.iloc[0])
-        found.append(f"The most common aim among them is **{_listed(top)}**: **{count} of {k}** coded "
-                     f"{'partner names' if count == 1 else 'partners name'} at least one outcome in "
-                     f"{'it' if len(top) == 1 else 'each'}.")
+        found.append(f"The most common aim is **{_listed(top)}**, named by **{count} of {k}** of those partners.")
     return found
 
 

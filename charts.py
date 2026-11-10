@@ -28,23 +28,15 @@ import plotly.graph_objects as go
 import plotly.io as pio
 
 from outcomes_data import (
-    COL_DOMAIN,
-    COL_ORG_VIEW,
-    COL_SUBCAT,
-    COL_OUTCOME,
     outcome_payload,
     DOMAIN_ONLY_SUFFIX,
     MEASURE_COLUMNS,
     MEASURE_ORGS,
     MEASURE_PROGRAMS,
     UNCODED_DOMAIN,
-    count_organizations,
-    distinct_counts_by,
     domain_code,
     domain_short,
     goal_name,
-    hierarchy_counts,
-    sample_outcome_texts,
     SPOTLIGHT_ASSOCIATED_NAMES,
     SPOTLIGHT_ASSOCIATED_NOTE,
     SPOTLIGHT_EVIDENCE,
@@ -111,128 +103,6 @@ PLOTLY_CONFIG = {
 # =============================================================================
 # SYSTEM MAP
 # =============================================================================
-
-
-# Readability rules for the treemap and sunburst. Plotly shrinks each label to
-# fit its block, so on a full portfolio most labels end up a few pixels tall.
-# Instead, every label is drawn at one size between these two limits, and a
-# block too small for the minimum shows no text (hover still names it).
-HIERARCHY_TEXT_SIZE = 15
-HIERARCHY_MIN_TEXT_SIZE = 12
-# Characters per line when wrapping long names (treemap blocks, sunburst wedges).
-TREEMAP_WRAP = 22
-SUNBURST_WRAP = 16
-ROOT_LABEL = "All domains"
-
-
-def wrap_label(text: str, width: int) -> str:
-    """Break a long name onto several lines (Plotly uses <br> for line breaks)."""
-    return "<br>".join(textwrap.wrap(str(text), width=width, break_long_words=False, break_on_hyphens=False)) or str(text)
-
-
-def build_hierarchy_chart(df: pd.DataFrame, measure: str = MEASURE_ORGS, chart_type: str = "Treemap"):
-    """Treemap or sunburst: domain (parent) -> subcategory (child).
-
-    Block size follows `measure` (organizations or outcome statements).
-    Color always shows how many organizations target the subcategory, so dark
-    blocks are the most saturated goals and pale ones the thinnest.
-
-    The chart opens on domains only; clicking a domain expands it into its
-    subcategories, and clicking its name (treemap) or the center (sunburst)
-    goes back. Showing one level at a time gives every label room to be
-    read. Labels use the short domain name and wrapped subcategory names;
-    hover shows the full names.
-    """
-    counts = hierarchy_counts(df)
-    size_col = "organizations" if measure == MEASURE_ORGS else "outcomes"
-    is_treemap = chart_type == "Treemap"
-    # An "All domains" root is what you click to go back up from a domain.
-    has_root = counts[COL_DOMAIN].nunique() > 1
-    count_index, count_noun = (2, "organizations") if measure == MEASURE_ORGS else (1, "outcome statements")
-    wrap = TREEMAP_WRAP if is_treemap else SUNBURST_WRAP
-
-    # Display labels: short domain names and subcategory names wrapped onto
-    # short lines, so they fit narrow blocks without shrinking.
-    counts["domain_label"] = counts[COL_DOMAIN].map(lambda s: wrap_label(domain_short(s), wrap))
-    counts["subcat_label"] = counts[COL_SUBCAT].map(lambda s: wrap_label(s, wrap))
-
-    chart_fn = px.treemap if is_treemap else px.sunburst
-    fig = chart_fn(
-        counts,
-        path=([px.Constant(ROOT_LABEL)] if has_root else []) + ["domain_label", "subcat_label"],
-        values=size_col,
-        color="organizations",
-        color_continuous_scale=SEQUENTIAL_BLUE,
-        custom_data=["samples", "outcomes", "organizations", COL_SUBCAT],
-    )
-
-    # Plotly fills custom_data and color for parent nodes by aggregating
-    # children, which gives "(?)" for text and double-counts organizations
-    # working in several subcategories. Recompute domains from the rows so
-    # labels, hover and shading are exact.
-    # Nodes are identified by parent (not by splitting ids on "/"), because
-    # some labels, e.g. "School/Program Connectedness", contain "/".
-    trace = fig.data[0]
-    root_id = next(i for i, p in zip(trace.ids, trace.parents) if not p) if has_root else ""
-    full_domain = dict(zip(counts["domain_label"], counts[COL_DOMAIN]))
-    per_domain = distinct_counts_by(df, COL_DOMAIN)
-    domain_samples = df.groupby(COL_DOMAIN)[COL_OUTCOME].agg(sample_outcome_texts)
-    fixed, colors = [], []
-    for label, parent, custom, color in zip(trace.labels, trace.parents, trace.customdata, trace.marker.colors):
-        if has_root and not parent:
-            fixed.append([sample_outcome_texts(df[COL_OUTCOME]), len(df), count_organizations(df[COL_ORG_VIEW]), ROOT_LABEL])
-            # A colorscale overrides root_color, so the root takes the palest
-            # blue and reads as background rather than as a count.
-            colors.append(0)
-        elif parent == root_id:
-            domain = full_domain[label]
-            row = per_domain.loc[domain]
-            fixed.append([domain_samples.get(domain, ""), int(row["outcomes"]), int(row["organizations"]), domain])
-            colors.append(int(row["organizations"]))
-        else:
-            fixed.append(list(custom))
-            colors.append(color)
-    trace.customdata = fixed
-    trace.marker.colors = colors
-
-    fig.update_traces(
-        hovertemplate=(
-            "<b>%{customdata[3]}</b><br>%{customdata[2]} organizations · %{customdata[1]} outcome statements"
-            + SAMPLE_HOVER_BLOCK
-            + "<extra></extra>"
-        ),
-        marker=dict(line=dict(color=SURFACE, width=2)),
-        textfont=dict(size=HIERARCHY_TEXT_SIZE),
-        # Show the exact count rather than Plotly's summed value, which
-        # double-counts organizations at the domain level.
-        texttemplate=f"<b>%{{label}}</b><br>%{{customdata[{count_index}]}} {count_noun}",
-        # One level below the current center at a time: domains first,
-        # a domain's subcategories after a click.
-        maxdepth=2,
-    )
-    if is_treemap:
-        fig.update_traces(
-            textposition="top left",
-            tiling=dict(pad=4),
-            # Header strips fit a two-line domain name once it's expanded.
-            marker_pad=dict(t=48, l=4, r=4, b=4),
-            pathbar=dict(visible=False),  # the header above does the same job
-        )
-    else:
-        # "auto" turns each label whichever way lets it be largest.
-        fig.update_traces(insidetextorientation="auto")
-    fig.update_layout(
-        height=720,
-        margin=dict(t=44, l=0, r=0, b=0),
-        uniformtext=dict(minsize=HIERARCHY_MIN_TEXT_SIZE, mode="hide"),
-        # A slim key above the top-right corner, so the chart itself gets the full width.
-        coloraxis_colorbar=dict(
-            orientation="h", x=1, xanchor="right", y=1.01, yanchor="bottom", len=0.28, thickness=8,
-            title=dict(text="Organizations working on it", side="top", font=dict(size=12, color=TEXT_SECONDARY)),
-            tickfont=dict(size=11, color=TEXT_SECONDARY), outlinewidth=0,
-        ),
-    )
-    return fig
 
 
 # =============================================================================
@@ -721,34 +591,6 @@ def build_peer_heatmap(counts: pd.DataFrame, samples: pd.DataFrame):
 # =============================================================================
 # REVIEW
 # =============================================================================
-
-
-def build_confidence_bar(counts: pd.Series):
-    """One stacked bar showing how the coder's confidence is distributed (a compact overview)."""
-    colors = {"high": "#2563eb", "medium": "#93c5fd", "low": "#f59e0b", "none": "#94a3b8"}
-    fig = go.Figure()
-    total = int(counts.sum()) or 1
-    for level, n in counts.items():
-        share = f"{n / total:.0%}" if n / total >= 0.01 else "<1%"
-        fig.add_bar(
-            # The legend gives each level's share; the filter pills below it give the counts.
-            x=[n], y=[""], orientation="h", name=f"{level.title()} · {share}",
-            marker=dict(color=colors.get(level, "#94a3b8"), line=dict(color=SURFACE, width=2)),
-            hovertemplate=f"<b>{level.title()}</b>: {n:,} outcomes ({n / total:.0%})<extra></extra>",
-        )
-    fig.update_layout(
-        barmode="stack",
-        height=58,
-        bargap=0,
-        showlegend=True,
-        legend=dict(orientation="h", y=-0.12, yanchor="top", x=0, traceorder="normal", itemwidth=30,
-                    font=dict(size=12, color=TEXT_SECONDARY)),
-        xaxis=dict(visible=False, range=[0, total]),
-        yaxis=dict(visible=False),
-        margin=dict(t=0, l=0, r=0, b=36),
-        barcornerradius=4,
-    )
-    return fig
 
 
 # =============================================================================

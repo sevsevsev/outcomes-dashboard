@@ -755,7 +755,7 @@ function domainList(sb, model) {
   const nav = el('nav', 'sb-domains');
   nav.setAttribute('aria-label', 'Domains');
   const top = el('div', 'sb-dom-top');
-  top.append(el('span', '', 'Domains'), el('span', '', 'Goals named'));
+  top.append(el('span', '', 'Domains'), el('span', '', 'Goals in use'));
   nav.append(top);
   const rows = new Map();
   for (const d of model.domains) {
@@ -1362,7 +1362,10 @@ function readout(sb, hovered) {
     li.append(el('b', '', fmt(n)), document.createTextNode(n === 1 ? one : many));
     counts.append(li);
   }
-  const children = [eyebrow, title, ...definitionOf(sb, focus, !!hovered), counts];
+  // At rest the totals are already in the filter bar and the wheel's centre, so the panel skips its
+  // heading and counts there and opens on the sample outcomes.
+  const atRest = focus.level === 'root' && !hits;
+  const children = atRest ? [] : [eyebrow, title, ...definitionOf(sb, focus, !!hovered), counts];
   if (focus.level === 'root' && hits) {
     children.push(el('div', 'sb-share-note sb-match-note', hits.goals.size
       ? `${plural(hits.goals.size, 'goal', 'goals')} in ${plural(hits.domains.size, 'domain', 'domains')} hold ${query}. Grey slices don't.`
@@ -1580,6 +1583,6 @@ function hint(sb, hovered) {
   }
   if (sb.zoom) return viewCat(sb) ? 'Click the center to go back to the whole domain.' : 'Click a category to see its goals, or the center to go back to all domains.';
   if (sb.hits) return 'Point at a slice to see what matched. Clicking still opens it.';
-  return sb.model.cats.length ? 'Point at a domain, here or in the list, to name its categories. Click a category to list its outcomes.'
-    : 'Point at a slice to read it. Click a domain to open its goals.';
+  return sb.model.cats.length ? 'Click a domain, here or in the list, to open its categories, or a category to list its outcomes.'
+    : 'Click a domain to open its goals.';
 }

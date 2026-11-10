@@ -108,56 +108,6 @@ def test_heatmap_matrices_align(df):
     assert counts.loc["Musicopia", CONF] == 0
 
 
-def test_hierarchy_chart_gives_every_node_sample_text_and_exact_counts(df):
-    for measure in app.MEASURES:
-        for chart_type in ("Treemap", "Sunburst"):
-            fig = charts.build_hierarchy_chart(df, measure, chart_type)
-            trace = fig.data[0]
-            assert all("(?)" not in str(c[0]) for c in trace.customdata)
-            # Hover carries the full name, so key nodes by it rather than the display label.
-            nodes = {c[3]: c for c in trace.customdata}
-            # SEL has 4 outcomes from 2 organizations (BalletX and ArtWell each have two).
-            assert list(nodes[SEL][1:3]) == [4, 2]
-
-
-def test_hierarchy_chart_labels_stay_readable(df):
-    for chart_type, width in (("Treemap", charts.TREEMAP_WRAP), ("Sunburst", charts.SUNBURST_WRAP)):
-        fig = charts.build_hierarchy_chart(df, chart_type=chart_type)
-        trace = fig.data[0]
-        # One "All domains" root to click back to, with the domains under it.
-        roots = [i for i, p in zip(trace.ids, trace.parents) if not p]
-        top = [lab for lab, p in zip(trace.labels, trace.parents) if p in roots]
-        assert len(roots) == 1
-        assert top and all(not label.replace("<br>", " ").startswith("Domain ") for label in top)
-        # Subcategory names wrap onto short lines (single long words can't wrap).
-        subcats = [lab for lab, p in zip(trace.labels, trace.parents) if p and p not in roots]
-        assert all(len(line) <= width for label in subcats for line in label.split("<br>") if " " in line)
-        # Blocks too small for readable text hide it instead of shrinking it.
-        assert fig.layout.uniformtext.mode == "hide"
-        assert fig.layout.uniformtext.minsize >= 12
-
-
-def test_hierarchy_chart_opens_on_domains_with_exact_counts(df):
-    for chart_type in ("Treemap", "Sunburst"):
-        fig = charts.build_hierarchy_chart(df, chart_type=chart_type)
-        trace = fig.data[0]
-        # Only the root and the domains are drawn until the reader clicks a domain.
-        assert trace.maxdepth == 2
-        # Domain shading and label counts are distinct organizations, not a sum over subcategories.
-        by_name = {c[3]: (c, color) for c, color in zip(trace.customdata, trace.marker.colors)}
-        custom, color = by_name[SEL]
-        assert custom[2] == color == 2
-
-
-def test_hierarchy_chart_handles_a_single_domain(df):
-    one = app.filter_outcomes(df, domains=[SEL])
-    for chart_type in ("Treemap", "Sunburst"):
-        trace = charts.build_hierarchy_chart(one, chart_type=chart_type).data[0]
-        # The domain itself is the only top-level block (no "All domains" header).
-        assert [c[3] for c, p in zip(trace.customdata, trace.parents) if not p] == [SEL]
-        assert {c[3] for c, p in zip(trace.customdata, trace.parents) if p} == set(one[app.COL_SUBCAT])
-
-
 def test_hover_samples_escape_html():
     text = app.sample_outcome_texts(pd.Series(["<b>bold</b> claim"]))
     assert "&lt;b&gt;" in text and "<b>bold" not in text
@@ -678,7 +628,7 @@ def test_app_runs_every_view(tmp_path, monkeypatch):
     monkeypatch.setenv(app.DATA_ENV_VAR, str(path))
     at = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"), default_timeout=60).run()
     assert not at.exception
-    for view in ("Sunburst", "Treemap", "Ranked"):
+    for view in ("Ranked",):
         at.session_state["v1_view"] = view
         at.run()
         assert not at.exception, view
@@ -748,7 +698,7 @@ def test_codebook_definitions_cover_every_v3_code():
 def test_display_labels_leave_codes_off():
     # Plain names wherever text fits (Severin, 2026-10-05); codes stay in exports.
     assert app.goal_name("Y7.6 Financial Capability") == "Financial Capability"
-    assert app.goal_name("Unassigned subcategory") == "Unassigned subcategory"
+    assert app.goal_name("Unassigned subcategory") == "No specific goal"
     assert app.goal_name("Y5. Identity, Confidence & Agency") == "Identity, Confidence & Agency"
     assert app.goal_name("Y4 Social & Emotional Skills, no specific goal") == (
         "Social & Emotional Skills, no specific goal")
@@ -1044,3 +994,19 @@ def test_priority_grid_puts_cells_only_where_the_crosswalk_has_goals():
     assert priority_pick_codes({"kind": "lane", "id": "guardrail-well-rounded"}, crosswalk) == ["Y1.6", "Y2"]
     assert priority_pick_codes({"kind": "cell", "id": "guardrail-well-rounded|Y2"}, crosswalk) == ["Y2"]
     assert priority_grid_data(rows, {}, {}) == {}
+
+
+def test_status_line_says_once_that_outcomes_are_intended_not_measured():
+    line = app.status_line(2441, 2441, 112, ["logic_model"])
+    assert "<b>2,441</b> intended outcomes" in line and "<b>112</b> organizations' logic models" in line
+    assert "not measured results" in line
+    filtered = app.status_line(300, 2441, 1, ["logic_model", "program_description"], filtered_to="2 domains")
+    assert filtered.startswith("Filtered to 2 domains: <b>300</b> of 2,441")
+    assert "<b>1</b> organization'" in filtered and "logic models and program descriptions" in filtered
+
+
+def test_ranked_summaries_count_programs_as_the_wheel_does(df):
+    for summary in (app.domain_summary(df), app.priority_summary(df), app.goal_summary(df)):
+        assert "programs" in summary.columns
+        assert (summary["programs"] >= summary["organizations"]).all()
+    assert app.domain_summary(df)["programs"].max() <= app.count_programs(df)
