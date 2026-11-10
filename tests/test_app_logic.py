@@ -664,6 +664,19 @@ def test_ranked_bars_key_rows_on_full_names():
     assert all("…" not in t for t in fig.layout.yaxis.ticktext)
 
 
+def test_ranked_bars_hover_box_clears_the_hovered_row():
+    """The hover box goes below or above the hovered row (never back over it), and the row's full height counts."""
+    data = pd.DataFrame({"label": ["A long goal name that wraps", "B"], "n": [3, 2], "key": ["a", "b"],
+                         "samples": ["", ""]})
+    fig = charts.build_ranked_bars(data, "label", "n", "key")
+    assert fig.layout.hovermode == "y unified" and fig.layout.barmode == "overlay"
+    assert fig.layout.yaxis.showspikes is False
+    bar, row = fig.data
+    assert "%{customdata[2]}" not in bar.hovertemplate      # the name heads the box once, as its title
+    assert row.width == 1 and row.hoverinfo == "none" and row.marker.color == "rgba(0,0,0,0)"
+    assert [tuple(c) for c in row.customdata] == [tuple(c) for c in bar.customdata]   # a click on the row picks it
+
+
 def test_coded_by_is_an_organization_not_junk():
     raw = pd.DataFrame({
         "organization": ["Coded by:", None], "program": ["Coded by: Classroom"] * 2,
