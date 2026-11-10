@@ -12,7 +12,7 @@ youth-serving program logic models. It is built for two audiences:
 
 Pages (top navigation):
 
-1. What programs aim for - findings, linked priority (or domain) / goal / audience charts, coverage gaps
+1. Program goals - findings, linked priority (or domain) / goal / audience charts, coverage gaps
 2. Find peers        - peers for an organization, organizations by goal, program comparison
 3. Partners at a school - a school's partners, coded or not, and where their outcomes meet
 4. District indicators - which goals may reach the District's SPOTlight indicators (internal only)
@@ -1907,7 +1907,7 @@ def main() -> None:
     # Pages read the filtered frame from here once the filter bar has run.
     holder: dict[str, pd.DataFrame] = {}
     pages = {
-        "map": st.Page(lambda: page_system_map(holder["df"]), title="What programs aim for", url_path="aims",
+        "map": st.Page(lambda: page_system_map(holder["df"]), title="Program goals", url_path="goals",
                        default=True),
         "peers": st.Page(lambda: page_find_peers(holder["df"]), title="Find peers", url_path="find-peers"),
         "schools": st.Page(lambda: page_schools(holder["df"], df), title="Partners at a school",
@@ -1916,13 +1916,15 @@ def main() -> None:
                               url_path="district-indicators"),
         "review": st.Page(lambda: page_review(holder["df"]), title="Review coding", url_path="review-coding"),
     }
-    # The default page is served at "/" and its own url_path is ignored, so links to /system-map opened
-    # "Page not found". A hidden page at that address hands over to the landing page.
-    alias = st.Page(lambda: st.switch_page(pages["map"]), title="What programs aim for", url_path="system-map",
+    # The default page is served at "/" and its own url_path is ignored, so links to /system-map (and /aims) opened
+    # "Page not found". Hidden pages at those addresses hand over to the landing page.
+    alias = st.Page(lambda: st.switch_page(pages["map"]), title="Program goals", url_path="system-map",
+                    visibility="hidden")
+    alias_aims = st.Page(lambda: st.switch_page(pages["map"]), title="Program goals", url_path="aims",
                     visibility="hidden")
     PAGES.clear()
     PAGES.update(pages)
-    current = st.navigation([*pages.values(), alias], position="top")
+    current = st.navigation([*pages.values(), alias, alias_aims], position="top")
     page_key = next((k for k, p in pages.items() if p.url_path == current.url_path), "map")
     holder["df"] = filter_bar(df, source, page_key)
     current.run()
