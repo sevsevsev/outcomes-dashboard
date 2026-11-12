@@ -230,6 +230,13 @@ def test_sentence_rows_list_each_sentence_once_and_keep_counts():
     assert df.groupby(app.COL_SUBCAT).size().to_dict() == {CREATE: 1, TEAM: 2}
 
 
+def test_statement_cell_leads_with_the_part_and_keeps_the_sentence():
+    rows = app.sentence_rows(split_rows())
+    cells = [app.statement_cell(t, p) for t, p in zip(rows[app.COL_TEXT], rows[app.COL_PART])]
+    assert cells == [f"Students will gain math skills; make new friends · From: “{SPLIT}”",
+                     "Students work in teams"]   # not split: the sentence alone, nothing blank
+
+
 def test_text_search_finds_the_sentence_or_the_coded_part():
     df = split_rows()
     assert len(app.filter_outcomes(df, text_query="our program")) == 2          # in the sentence only

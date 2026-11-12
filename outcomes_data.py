@@ -365,6 +365,13 @@ def coded_parts_text(sentence: str, parts: Sequence[str]) -> list[str]:
     return _drop_repeats([texts[i] for i in sorted(texts)])
 
 
+def statement_cell(sentence: str, part: str) -> str:
+    """An outcome in one table cell: the sentence alone when it was not split, else the coded part(s) first
+    and then "From: “sentence”", as in the rest of the app. Table cells show plain text on one line, so the
+    two sit side by side; picking the row shows them on separate lines (outcome_reading)."""
+    return f"{part} · From: “{sentence}”" if part else sentence
+
+
 def _drop_repeats(leads: Sequence[str]) -> list[str]:
     """Leads without one that repeats another's words: the same sentence split a little differently in two
     programs ("Academic Achievement: ≥10% ..." and "≥10% ...") shows its part once, in the longer form."""
