@@ -316,34 +316,13 @@ def test_findings_state_the_top_domain_and_codebook_gaps(df):
     frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
     coverage = app.subcategory_coverage(frame, app.load_codebook())
     text = " ".join(app.portfolio_findings(frame, coverage))
-    assert "**Social-emotional skills** is the most common outcome area among partners: **2 of 4** organizations" in text
-    assert "Far fewer name what schools report on: **0** name attendance, **0** literacy and **0** math." in text
+    assert "**Social & Emotional Learning** is the most common domain among partners: **2 of 4** organizations" in text
+    # The goals schools report on, under their codebook names (1.x here, the fixture's codebook).
+    assert "Of the goals schools report on, **0** name Attendance, Chronic Absence & School Stability, **0** " in text
     gaps = int((coverage["organizations"] == 0).sum())
     assert f"**{gaps} goals** in the codebook have no program" in text
     assert "of outcomes are about students and youth" in text
     assert app.portfolio_findings(frame.iloc[0:0], coverage) == []
-
-
-def test_priorities_put_school_measures_before_their_domain():
-    assert app.priority_of(11.0, "11.5 Attendance, Chronic Absence & School Stability") == "Attendance"
-    assert app.priority_of(11.0, "11.3 General Content Knowledge & Conceptual Understanding") == \
-        "Other academic learning"
-    assert app.priority_of(7.0, "7.2 Mental Health Status (Symptom Reduction)") == "Mental health"
-    assert app.priority_of(7.0, "7.1 Physical Activity & Nutrition") == "Physical health & safety"
-    assert app.priority_of(3.0, CONF) == "Social-emotional skills"
-    assert app.priority_of(1.0, app.UNASSIGNED_SUBCAT) == "Joy & interest in learning"  # falls back to the domain
-    assert app.priority_of(float("inf"), app.UNASSIGNED_SUBCAT) == app.UNCODED_PRIORITY
-    # 11.5 must not match 11.50-style numbers or 1.1 match 11.
-    assert app.priority_of(1.0, "1.1 Joy & Emotional Wellness") == "Joy & interest in learning"
-
-
-def test_priority_summary_counts_organizations_and_skips_uncoded(df):
-    frame = df.assign(**{app.COL_ORG_VIEW: df[app.COL_ORG]})
-    summary = app.priority_summary(frame).set_index(app.COL_PRIORITY)
-    assert summary.loc["Social-emotional skills", "organizations"] == 2   # BalletX and ArtWell
-    assert summary.loc["Social-emotional skills", "outcomes"] == 4
-    assert summary.index[0] == "Social-emotional skills"
-    assert app.UNCODED_PRIORITY not in summary.index
 
 
 def test_rows_with_no_organization_are_not_counted_as_one():
@@ -353,8 +332,8 @@ def test_rows_with_no_organization_are_not_counted_as_one():
     assert (frame[app.COL_ORG] == app.UNKNOWN_ORG).sum() == 1
     assert frame[app.COL_ORG].nunique() == 5
     assert app.count_organizations(frame[app.COL_ORG]) == 4
-    summary = app.priority_summary(frame).set_index(app.COL_PRIORITY)
-    assert summary.loc["Social-emotional skills", "organizations"] == 2
+    summary = app.domain_summary(frame).set_index(app.COL_DOMAIN)
+    assert summary.loc[SEL, "organizations"] == 2
 
 
 def test_sunburst_nodes_count_programs_and_organizations_at_each_level(df):
@@ -563,21 +542,6 @@ def test_source_type_defaults_to_logic_model_and_renames_old_district_value():
     assert "logic models and program descriptions" in app.intent_note(["logic_model", "program_description"])
 
 
-def test_priorities_recognize_codebook_3_codes():
-    assert app.priority_of(Y1, ATTEND) == "Attendance"
-    assert app.priority_of(Y1, "Y1.1 Literacy: Reading & Writing") == "Literacy"
-    assert app.priority_of(Y1, "Y1.10 Academic Perseverance") == "Engagement & study habits"  # not Literacy
-    assert app.priority_of(Y1, "Y1.18 Postsecondary Enrollment, Persistence & Completion") == "College & career"
-    assert app.priority_of(Y1, "Y1.5 Other Academic Subjects") == "Other academic learning"
-    assert app.priority_of("Domain Y8. Health, Safety & Well-Being", "Y8.6 Mental Health Symptoms & Distress") \
-        == "Mental health"
-    assert app.priority_of(Y4, app.UNASSIGNED_SUBCAT) == "Social-emotional skills"
-    assert app.priority_of("Domain F2. Basic Needs & Economic Stability", "F2.2 Food Security") == \
-        "Families & basic needs"
-    frame = app.clean_outcomes(district_rows())
-    assert app.UNCODED_PRIORITY not in set(frame.loc[frame[app.COL_DOMAIN] != app.UNCODED_DOMAIN, app.COL_PRIORITY])
-
-
 def test_codebook_3_domains_sort_by_part_then_number():
     frame = app.clean_outcomes(district_rows())
     assert app.domain_order(frame) == [Y1, Y4, A2, app.UNCODED_DOMAIN]
@@ -591,7 +555,8 @@ def test_domain_only_rows_get_their_own_goal_and_stay_out_of_coverage_gaps():
     frame = frame.assign(**{app.COL_ORG_VIEW: frame[app.COL_ORG]})
     row = frame[frame[app.COL_TEXT] == "Grow social-emotionally"].iloc[0]
     assert row[app.COL_SUBCAT] == "Y4 Social & Emotional Skills (CASEL), no specific goal"
-    assert row[app.COL_PRIORITY] == "Social-emotional skills"
+    # Shown under the domain's name, without the framework tag, as the wheel and the panel show it.
+    assert app.goal_name(row[app.COL_SUBCAT]) == "Social & Emotional Skills, no specific goal"
     uncoded = frame[frame[app.COL_TEXT] == "Overall youth development"].iloc[0]
     assert uncoded[app.COL_SUBCAT] == app.UNASSIGNED_SUBCAT
     coverage = app.subcategory_coverage(frame, app.load_codebook_for(frame))
@@ -1031,7 +996,7 @@ def test_status_line_says_once_that_outcomes_are_intended_not_measured():
 
 
 def test_ranked_summaries_count_programs_as_the_wheel_does(df):
-    for summary in (app.domain_summary(df), app.priority_summary(df), app.goal_summary(df)):
+    for summary in (app.domain_summary(df), app.goal_summary(df)):
         assert "programs" in summary.columns
         assert (summary["programs"] >= summary["organizations"]).all()
     assert app.domain_summary(df)["programs"].max() <= app.count_programs(df)
@@ -1043,3 +1008,13 @@ def test_a_part_split_two_ways_leads_once_in_its_longer_form():
                                      "≥10% of participants improve math PSSA scores"])
     assert app.coded_parts_text(*app.outcome_parts(key)) == [
         "Academic Achievement: ≥10% of participants improve math PSSA scores"]
+
+
+def test_domain_short_forms_are_the_first_words_of_the_codebook_name():
+    """One vocabulary: a short form is never a nickname, only the start of the codebook's own name."""
+    import charts
+    names = {app.split_code(d)[0]: app.goal_name(d) for d in app.load_codebook(app.CODEBOOK_V3_PATH)[app.COL_DOMAIN]}
+    assert set(charts.DOMAIN_SHORT_NAMES) == set(names)
+    for code, short in charts.DOMAIN_SHORT_NAMES.items():
+        assert names[code] == short or names[code].startswith(short + " ") or names[code].startswith(short + ","), \
+            (code, short, names[code])

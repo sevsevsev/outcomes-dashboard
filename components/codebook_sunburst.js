@@ -979,7 +979,7 @@ function draw(sb) {
     if (label) {
       let show = false;
       if (d && n.level === 'domain') {
-        // A domain always gets a name, never its code: its nickname drops to the smallest size before giving up.
+        // A domain always gets a name, never its code: its short form drops to the smallest size before giving up.
         const arcs = els.labelArcs.get(id);
         show = !sb.zoom && (bandLabel(label, arcs, n.names, a0, a1, R.hole, R.domain, model.equal ? LABEL_PX.domain : LABEL_PX.domainValue, 3, false)
           || bandLabel(label, arcs, n.names, a0, a1, R.hole, R.domain, LABEL_PX.tiny, 2, false));
@@ -1089,7 +1089,7 @@ function fanOut(sb, openCat) {
 
 // ---------------------------------------------------------------- labels
 // Each slice shows the longest of its plain names that fits (full name, then the
-// codebook's short name or the domain's nickname), on up to three lines, and its
+// codebook's short name or the first words of the domain's name), on up to three lines, and its
 // code only when no name fits. Widths are measured once per string on a canvas,
 // so fitting stays cheap while slices tween.
 
