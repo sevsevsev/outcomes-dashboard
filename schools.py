@@ -38,14 +38,13 @@ from outcomes_data import (
     COL_ORG,
     COL_OUTCOME,
     COL_PARTNER_ID,
-    COL_PRIORITY,
     COL_SUBCAT,
     COL_TEXT,
     UNCODED_DOMAIN,
-    UNCODED_PRIORITY,
     UNKNOWN_ORG,
     _plural,
     domain_order,
+    goal_name,
     sample_outcome_texts,
     subcategory_sort_key,
 )
@@ -435,12 +434,14 @@ def school_findings(school: str, portfolio: pd.DataFrame, rows: pd.DataFrame, ye
                                     "without goals on file yet).")
     found.append(sentence)
 
-    aims = rows[(rows[COL_DOMAIN] != UNCODED_DOMAIN) & (rows[COL_PRIORITY] != UNCODED_PRIORITY)]
+    aims = rows[rows[COL_DOMAIN] != UNCODED_DOMAIN]
     if not aims.empty:
-        per_aim = aims.groupby(COL_PRIORITY)[COL_PARTNER].nunique().sort_values(ascending=False, kind="stable")
+        # Named by the codebook's domain names, as on every other page.
+        per_aim = (aims.assign(_domain=aims[COL_DOMAIN].map(goal_name)).groupby("_domain")[COL_PARTNER]
+                   .nunique().sort_values(ascending=False, kind="stable"))
         top = per_aim[per_aim == per_aim.iloc[0]].index.tolist()[:3]
         count = int(per_aim.iloc[0])
-        found.append(f"The most common outcome area is **{_listed(top)}**, named by **{count} of {k}** of those partners.")
+        found.append(f"The most common domain is **{_listed(top)}**, named by **{count} of {k}** of those partners.")
     return found
 
 

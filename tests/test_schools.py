@@ -115,8 +115,8 @@ def test_school_dots_add_grey_rows_for_uncoded_partners():
                                    [("Partner 30", "Not yet coded")])
     assert list(fig.layout.yaxis.categoryarray)[-1] == "Partner 30"
     assert fig.data[-1].text == ("Not yet coded",)
-    # Headers name the domain (here its nickname) and leave the code off.
-    assert any("<b>emotional</b>" in text for text in fig.data[1].text)
+    # Headers name the domain (here the first words of its codebook name) and leave the code off.
+    assert any("<b>Social &amp;</b>" in text and "<b>Skills</b>" in text for text in fig.data[1].text)
     assert not any("<b>Y4</b>" in text for text in fig.data[1].text)
 
 

@@ -99,7 +99,6 @@ COL_SENTENCE = "sentence_id"            # the same for every part of one partner
 COL_PART_INDEX = "part_index"           # a part's position in its sentence (1, 2, 3 ...), for ordering
 COL_DOMAIN_SHORT = "domain_short"       # "3. Social & Emotional Learning" for compact axis labels
 COL_PROGRAM_LABEL = "program_label"     # "Org" or "Org: Program" when an organization has several
-COL_PRIORITY = "priority"               # the plain-language priority a row's goal belongs to (PRIORITIES)
 
 # Placeholder labels for missing values, so nothing silently drops out of a chart.
 UNCODED_DOMAIN = "Uncoded"
@@ -208,36 +207,10 @@ ORG_GROUPING_OPTIONS = {
     "Grantee from the file name": COL_GRANTEE,
 }
 
-# Plain-language priorities, named the way school plans and public agendas name
-# things, so a reader can find "Attendance" without knowing it is goal 11.5.
-# Each rule lists codebook numbers: a domain like "3" or a goal like "11.5" from
-# codebook 1.x, and a domain like "Y4" or a code like "Y1.13" from codebook 3.x.
-# The two schemes never collide, so one table serves files coded with either.
-# A row takes the priority with the most specific matching number, so the
-# school measures win over their domain's catch-all. The list is editorial:
-# edit it here and the landing chart follows.
-PRIORITIES: list[tuple[str, tuple[str, ...]]] = [
-    ("Attendance", ("11.5", "Y1.13")),
-    ("Literacy", ("11.1", "Y1.1")),
-    ("Math", ("11.2", "Y1.3")),
-    ("Graduation & on-track", ("11.6", "Y1.15", "Y1.17")),
-    ("Other academic learning", ("11", "Y1")),
-    ("Mental health", ("7.2", "7.3", "7.4", "Y8.6", "Y8.7", "Y8.8", "Y8.9")),
-    ("Physical health & safety", ("7", "Y8")),
-    ("College & career", ("8", "Y7", "Y1.18")),
-    ("Social-emotional skills", ("3", "Y4")),
-    ("Belonging & relationships", ("2", "Y3")),
-    ("Joy & interest in learning", ("1", "Y2")),
-    ("Engagement & study habits", ("4", "Y1.9", "Y1.10", "Y1.11", "Y1.12")),
-    ("Positive youth development", ("5", "Y5")),
-    ("Civic voice & community", ("6", "Y6")),
-    ("Access & equity", ("9", "A2")),
-    ("Staff & system capacity", ("10", "A1", "A3")),
-    ("Families & basic needs", ("12", "F1", "F2")),
-]
-UNCODED_PRIORITY = "Not coded"
-# Priorities schools report on, which the findings compare with the most shared aim.
-SCHOOL_MEASURES = ["Attendance", "Literacy", "Math"]
+# The goals schools report on (attendance, literacy, mathematics), which the findings name: 3.x codes, and the
+# same goals' numbers in codebook 1.x.
+SCHOOL_GOALS = ("Y1.13", "Y1.1", "Y1.3")
+SCHOOL_GOALS_V1 = ("11.5", "11.1", "11.2")
 
 # One standing line under the filter bar. Every audience review found the same
 # first misreading: taking what programs intend for what they achieved.
@@ -514,37 +487,6 @@ def subcategory_sort_key(label: str) -> tuple:
     return (tuple(parts), str(label))
 
 
-def _code_number(domain: object, subcategory: str) -> Optional[str]:
-    """The most specific codebook number for a row: '3.1.4' or 'Y4.2' from its goal, else '3' or 'Y4'.
-
-    `domain` is the domain label, or (as before) its number from _domain_number().
-    """
-    match = re.match(r"\s*([YFA]?\d+(?:\.\d+)+)\b", str(subcategory))
-    if match:
-        return match.group(1)
-    if isinstance(domain, str):
-        return domain_code(domain)
-    if pd.isna(domain) or domain == float("inf"):
-        return None
-    return str(int(domain))
-
-
-def priority_of(domain: object, subcategory: str) -> str:
-    """The plain-language priority (PRIORITIES) for a row's domain and goal.
-
-    The most specific matching number wins ("11.5" over "11", "Y1.13" over "Y1").
-    """
-    code = _code_number(domain, subcategory)
-    if code is None:
-        return UNCODED_PRIORITY
-    best, best_len = UNCODED_PRIORITY, -1
-    for label, numbers in PRIORITIES:
-        for n in numbers:
-            if (code == n or code.startswith(n + ".")) and len(n) > best_len:
-                best, best_len = label, len(n)
-    return best
-
-
 def codebook_scheme(domains: Iterable[str]) -> set[str]:
     """Which codebook numbering the domain labels use: {'1.x'}, {'3.x'}, both, or neither."""
     schemes = set()
@@ -663,7 +605,6 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
     # --- Helper columns -------------------------------------------------------
     df[COL_DOMAIN_NUM] = df[COL_DOMAIN].map(_domain_number)
     df[COL_DOMAIN_SHORT] = df[COL_DOMAIN].map(domain_short)
-    df[COL_PRIORITY] = [priority_of(d, g) for d, g in zip(df[COL_DOMAIN], df[COL_SUBCAT])]
 
     # Default grouping; main() may switch this to the grantee column.
     df[COL_ORG_VIEW] = df[COL_ORG]
@@ -923,7 +864,12 @@ def goal_name(label: object) -> str:
         # A Portrait of a Graduate skill: "Know my values and aspirations (2.1)", never "POG.2.1".
         from portrait import plain_label
         return plain_label(label) or str(label)
-    return split_code(str(label))[1]
+    name = split_code(str(label))[1]
+    if name.endswith(DOMAIN_ONLY_SUFFIX):
+        # "Social & Emotional Skills (CASEL), no specific goal" -> "Social & Emotional Skills, no specific goal",
+        # the same domain name the wheel and the panel use.
+        name = re.sub(r"\s*\(.*?\)(?=" + re.escape(DOMAIN_ONLY_SUFFIX) + "$)", "", name)
+    return name
 
 
 def sunburst_nodes(df: pd.DataFrame, codebook: Optional[pd.DataFrame] = None,
@@ -1821,31 +1767,6 @@ def domain_summary(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def priority_summary(df: pd.DataFrame) -> pd.DataFrame:
-    """One row per plain-language priority: organizations, outcomes and hover samples.
-
-    Rows that were never coded are left out. Sorted by organizations, most
-    first, then in PRIORITIES order.
-    """
-    coded = df[df[COL_PRIORITY] != UNCODED_PRIORITY]
-    if coded.empty:
-        return pd.DataFrame(columns=[COL_PRIORITY, "organizations", "outcomes", "programs", "samples"])
-    order = {label: i for i, (label, _) in enumerate(PRIORITIES)}
-    summary = (
-        _program_ids(coded).groupby(COL_PRIORITY)
-        .agg(organizations=(COL_ORG_VIEW, count_organizations), outcomes=(COL_TEXT, "size"),
-             programs=("_program", "nunique"),
-             samples=(COL_OUTCOME, sample_outcome_texts))
-        .reset_index()
-    )
-    summary["_order"] = summary[COL_PRIORITY].map(order)
-    return (
-        summary.sort_values(["organizations", "_order"], ascending=[False, True])
-        .drop(columns="_order")
-        .reset_index(drop=True)
-    )
-
-
 def goal_summary(df: pd.DataFrame) -> pd.DataFrame:
     """One row per coded subcategory: domain, organizations, outcomes and samples, most organizations first."""
     coded = df[(df[COL_SUBCAT] != UNASSIGNED_SUBCAT) & (df[COL_DOMAIN] != UNCODED_DOMAIN)]
@@ -1893,20 +1814,26 @@ def portfolio_findings(df: pd.DataFrame, coverage: Optional[pd.DataFrame] = None
     if domains.empty or n_orgs == 0:
         return findings
 
-    priorities = priority_summary(df)
-    if len(priorities) > 1:
-        top = priorities.iloc[0]
+    if len(domains) > 1:
+        top = domains.iloc[0]
         findings.append(
-            f"**{top[COL_PRIORITY]}** is the most common outcome area among partners: "
+            f"**{goal_name(top[COL_DOMAIN])}** is the most common domain among partners: "
             f"**{int(top['organizations'])} of {n_orgs}** organizations name at least one outcome in it."
         )
-        counts = priorities.set_index(COL_PRIORITY)["organizations"]
-        school = {label: int(counts.get(label, 0)) for label in SCHOOL_MEASURES}
-        if top[COL_PRIORITY] not in school:
-            named = [f"**{n}** {label.lower()}" for label, n in school.items()]
-            named[0] = named[0].replace("** ", "** name ", 1)
-            findings.append("Far fewer name what schools report on: "
-                            + ", ".join(named[:-1]) + " and " + named[-1] + ".")
+    # The goals schools report on, under their codebook names. Files coded with 1.x use 1.x numbers.
+    goals = goal_summary(df)
+    if not goals.empty:
+        by_code = {split_code(label)[0]: (label, int(n)) for label, n in zip(goals[COL_SUBCAT], goals["organizations"])}
+        scheme = SCHOOL_GOALS_V1 if codebook_scheme(goals[COL_DOMAIN]) == {"1.x"} else SCHOOL_GOALS
+        names = codebook_goal_names(CODEBOOK_V3_PATH if scheme is SCHOOL_GOALS else CODEBOOK_PATH)
+        named = []
+        for code in scheme:
+            label, n = by_code.get(code, (None, 0))
+            name = goal_name(label) if label else names.get(code)
+            if name:
+                named.append(f"**{n}** name {name}" if not named else f"**{n}** {name}")
+        if len(named) == len(scheme):
+            findings.append("Of the goals schools report on, " + ", ".join(named[:-1]) + " and " + named[-1] + ".")
 
     if coverage is not None and not coverage.empty:
         gaps = int((coverage["organizations"] == 0).sum())
