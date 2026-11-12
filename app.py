@@ -61,6 +61,8 @@ from outcomes_data import (
     outcome_html,
     outcome_parts,
     sentence_rows,
+    statement_cell,
+    coded_parts_text,
     CATEGORY_SEP,
     COL_ATOMIC,
     COL_CONF,
@@ -567,15 +569,17 @@ DISPLAY_LABELS = {
     COL_NOTES: "Coder notes",
     COL_SOURCE_FILE: "Source file",
 }
-# Reading order: who, what was coded (when a sentence was split), the partner's sentence, which goals it
-# counts toward; context last.
+# Reading order: who, the outcome, which goals it counts toward; context last.
+# The outcome column leads with what was coded when a sentence was split, then "From:" and the partner's
+# sentence (statement_cell); a sentence that was not split is just the sentence. (A separate "Coded part"
+# column was blank for every sentence that was not split, which is most of them.)
 # Lists show each partner sentence once (sentence_rows), with a goal for each coded part.
 # Coding confidence stays in the downloads and on Review coding; the browsing tables leave it out.
-DISPLAY_COLUMNS = [COL_ORG_VIEW, COL_PART, COL_TEXT, GOALS, COL_POP, COL_PROGRAM]
+DISPLAY_COLUMNS = [COL_ORG_VIEW, COL_TEXT, GOALS, COL_POP, COL_PROGRAM]
 # Table cells can't wrap, so columns get pixel widths sized to what they hold:
 # names and outcomes get room, short columns stay narrow.
 # Organization to "For" fits a 1240 px section, with room for two goal labels; program scrolls.
-COLUMN_WIDTHS = {COL_ORG_VIEW: 190, COL_PROGRAM: 200, COL_TEXT: 340, COL_PART: 240, COL_SUBCAT: 220, GOALS: 310,
+COLUMN_WIDTHS = {COL_ORG_VIEW: 190, COL_PROGRAM: 200, COL_TEXT: 520, COL_SUBCAT: 220, GOALS: 310,
                  COL_POP: 150, COL_CONF: 150, COL_NOTES: 260, COL_QA: 110, COL_SOURCE_FILE: 260}
 # Columns dropped from a table when every row has the same value, since the selection already says it.
 REPEATABLE = [COL_ORG_VIEW, COL_PROGRAM, COL_SUBCAT, GOALS, COL_POP, COL_CONF]
@@ -592,7 +596,8 @@ def outcome_table(df: pd.DataFrame, columns: Sequence[str] = DISPLAY_COLUMNS, he
     With the GOALS column (the default), each partner sentence is one row and
     its coded parts' goals are its labels (sentence_rows); counts elsewhere
     still take each part as one outcome. Without it, each coded outcome is a
-    row, with its sentence and, when the sentence was split, its coded part.
+    row. Either way, a split sentence's cell leads with its coded part(s), then
+    "From:" and the sentence (statement_cell).
     With `key`, a row can be picked; the selection event comes back, along
     with the rows as shown.
     """
@@ -602,22 +607,26 @@ def outcome_table(df: pd.DataFrame, columns: Sequence[str] = DISPLAY_COLUMNS, he
     if len(frame) > 1:
         same = lambda c: frame[c].map(lambda v: tuple(v) if isinstance(v, list) else v).nunique() == 1
         cols = [c for c in cols if not (c in REPEATABLE and same(c))]
-    # Columns with nothing in them (no split statements, an export without QA or notes) are left out.
-    for col in (COL_PART, COL_QA, COL_NOTES):
+    # Columns with nothing in them (an export without QA or notes) are left out.
+    for col in (COL_QA, COL_NOTES):
         if col in cols and not frame[col].fillna("").astype(str).str.strip().astype(bool).any():
             cols.remove(col)
     config = {c: st.column_config.TextColumn(DISPLAY_LABELS.get(c, c), width=COLUMN_WIDTHS.get(c)) for c in cols}
     config[COL_TEXT] = st.column_config.TextColumn(
-        DISPLAY_LABELS[COL_TEXT], width=COLUMN_WIDTHS[COL_TEXT], help="The partner's words, as they wrote them.")
-    config[COL_PART] = st.column_config.TextColumn(
-        DISPLAY_LABELS[COL_PART], width=COLUMN_WIDTHS[COL_PART],
-        help="What was coded, when the coder split the statement into separate outcomes: the partner's words "
-             "when they appear word for word, otherwise the coder's wording. Parts are separated by semicolons.")
+        DISPLAY_LABELS[COL_TEXT], width=COLUMN_WIDTHS[COL_TEXT],
+        help="The partner's words, as they wrote them. When the coder split a statement into separate outcomes, "
+             "the coded parts come first (separated by semicolons), then “From:” and the full statement. "
+             "Pick a row to read it in full.")
     config[GOALS] = st.column_config.ListColumn(
         DISPLAY_LABELS[GOALS], width=COLUMN_WIDTHS[GOALS],
         help="One goal for each outcome the coder found in the statement. Pick a row to see which words each "
              "goal comes from.")
     shown = frame[cols].copy()
+    if COL_TEXT in shown and COL_PART in frame:
+        # Grouped rows already hold their parts as shown; a single coded row's part is shown the same way.
+        parts = frame[COL_PART].fillna("") if grouped else [
+            "; ".join(coded_parts_text(t, [p])) if p else "" for t, p in zip(frame[COL_TEXT], frame[COL_PART].fillna(""))]
+        shown[COL_TEXT] = [statement_cell(t, p) for t, p in zip(frame[COL_TEXT], parts)]
     if COL_SUBCAT in shown:
         shown[COL_SUBCAT] = shown[COL_SUBCAT].map(goal_name)
     if GOALS in shown:
@@ -1201,7 +1210,7 @@ def page_review(df: pd.DataFrame) -> None:
     with section(f"{len(filtered):,} outcomes to check", shown, key="review_table"):
         # What a reviewer checks first (outcome, goal, confidence, notes) comes before the context.
         # Each coded outcome is its own row here, since each is checked on its own.
-        columns = [COL_ORG_VIEW, COL_PART, COL_TEXT, COL_SUBCAT, COL_CONF, COL_NOTES, COL_QA, COL_PROGRAM,
+        columns = [COL_ORG_VIEW, COL_TEXT, COL_SUBCAT, COL_CONF, COL_NOTES, COL_QA, COL_PROGRAM,
                    COL_SOURCE_FILE]
         outcome_table(filtered.iloc[start:start + page_size], columns=columns, height=560)
         if n_pages > 1:
