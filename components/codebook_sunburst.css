@@ -15,13 +15,16 @@
 }
 
 /* Everything hangs from the top of the row, so a list row opening or the panel's content changing never moves the wheel. */
-.sb { display: flex; gap: 28px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
-.sb-figure { position: relative; flex: 0 1 690px; min-width: 300px; max-width: 690px; }
-.sb-domains ~ .sb-figure { flex-basis: 520px; }   /* room for the domain list on the left */
+.sb { display: flex; gap: 28px; align-items: flex-start; justify-content: center; flex-wrap: wrap;
+  /* The page fits one screen (review of 2026-11-18): the wheel, the list and the panel take the height left
+     under the top bar, the filter bar, the toolbar and the row of buttons under the wheel. */
+  --sb-fit: max(380px, calc(100vh - 292px)); }
+.sb-figure { position: relative; flex: 0 1 690px; min-width: 300px; max-width: min(690px, var(--sb-fit)); }
+.sb-domains ~ .sb-figure { flex-basis: min(640px, var(--sb-fit)); }   /* room for the domain list on the left */
 
 /* The domain list left of the category wheel: one row per domain, a pinned row opens into its categories.
    Fixed height, so opening a row never moves the wheel. */
-.sb-domains { flex: 0 1 220px; min-width: 200px; max-height: 690px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.sb-domains { flex: 0 1 220px; min-width: 200px; max-height: var(--sb-fit); overflow-y: auto; scrollbar-width: thin; display: flex; flex-direction: column; gap: 2px; }
 .sb-dom { border-radius: 8px; transition: opacity .2s ease, background .2s ease; }
 .sb-dom.is-dim { opacity: .45; }
 .sb-dom.is-lit, .sb-dom.is-open { background: var(--wash); opacity: 1; }
@@ -158,7 +161,7 @@
 .sb-fan { pointer-events: none; }
 .sb-dots { pointer-events: none; }
 
-.sb-domains ~ .sb-panel { flex-basis: 250px; min-width: 220px; height: 540px; }
+.sb-domains ~ .sb-panel { flex-basis: 270px; min-width: 220px; height: var(--sb-fit); }
 /* Beside the wheel the side panel is set tighter, so the wheel can take the room. */
 .sb-domains ~ .sb-panel .sb-title { font-size: 17px; }
 .sb-domains ~ .sb-panel .sb-counts { gap: 16px; margin-top: 10px; }
@@ -216,3 +219,42 @@
   .sb-domains { order: 1; flex: 1 1 100%; min-width: 0; max-height: none; }
   .sb-equal .sb-center-inner { width: 34%; }
 }
+
+/* The search box at the head of the domain list (mount): it stays put while the list scrolls under it. */
+.sb-search.in-list { position: sticky; top: 0; z-index: 2; background: #fff; max-width: none; margin: 0 0 8px;
+  height: auto; padding-bottom: 6px; flex-direction: column; align-items: stretch; gap: 4px; }
+.sb-search.in-list .sb-search-box { flex: none; height: 34px; }
+.sb-search.in-list .sb-search-note { font-size: 12px; white-space: normal; }
+.sb-search.in-list:not(.has-query) .sb-search-note { display: none; }
+
+/* Where the wheel is: a quiet trail at the top of the panel; every level above the current one is a link. */
+.sb-crumbs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin: 0 0 12px; font-size: 12.5px;
+  line-height: 1.4; color: var(--muted); flex: none; }
+.sb-crumb { all: unset; cursor: pointer; color: var(--ink-2); border-radius: 4px; text-decoration: underline;
+  text-decoration-color: var(--line); text-underline-offset: 3px; }
+.sb-crumb:hover { text-decoration-color: var(--ink-2); }
+.sb-crumb:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 2px; }
+.sb-crumb.is-here { cursor: default; text-decoration: none; color: var(--ink); font-weight: 600; }
+.sb-crumb-sep { color: var(--faint); }
+.sb-panel { gap: 0; }
+.sb-panel > .sb-panel-inner { flex: 1; min-height: 0; }
+
+/* The counts as one sentence. */
+p.sb-counts { display: block; margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+p.sb-counts b, .sb-domains ~ .sb-panel p.sb-counts b { display: inline; font-size: inherit; font-weight: 600; color: var(--ink); }
+.sb-domains ~ .sb-panel p.sb-counts { font-size: 13px; margin-top: 8px; }
+
+/* "What stands out", in the panel while nothing is picked. */
+.sb-findings { margin: 8px 0 18px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.sb-findings li { font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.sb-findings b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* An open domain's bars print their counts past their tips. */
+.sb-tip { font-size: 12px; font-weight: 600; fill: var(--ink-2); pointer-events: none; font-variant-numeric: tabular-nums; }
+
+/* Save image: a quiet text button in the wheel's top-right corner, clear of the bars. */
+.sb-save { all: unset; position: absolute; top: 0; right: 0; padding: 4px 8px; border-radius: 6px; cursor: pointer;
+  font-size: 12px; color: var(--muted); }
+.sb-save:hover { background: var(--wash); color: var(--ink); }
+.sb-save:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 1px; }
+@media (max-width: 640px) { .sb { --sb-fit: 600px; } .sb-domains ~ .sb-panel { height: auto; min-height: 320px; } }

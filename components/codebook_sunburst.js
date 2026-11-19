@@ -59,6 +59,11 @@ const LABEL_STYLE = 'halo';
 // light tint of it, 'neutral' in grey; the pointed-at or picked goal takes the full hue.
 const ZOOM_COLOR = 'pale';
 const zoomColor = () => globalThis.SB_ZOOM_COLOR || ZOOM_COLOR;
+// At rest, before anything is pointed at, picked or opened, the hues sit a step softer, so the wheel reads
+// calmly; whatever is pointed at or open then takes the full hue (review of 2026-11-18).
+const REST_BAR = h => `hsl(${h} 50% 64%)`;
+const REST_RING = h => `hsl(${h} 48% 56%)`;
+const TIP_MIN_DEG = 4;       // narrowest open bar that prints its count at its tip
 const MAX_LINES = 3;         // a label wraps onto at most this many lines
 const BASE_PX = { domain: 13, domainValue: 13.5, bar: 13, goal: 15, cat: 14, letter: 12, small: 11, tiny: 10 };   // font sizes for the plain-name labels
 // On a narrow screen the SVG shrinks with its labels; there no label is drawn smaller than
@@ -209,7 +214,8 @@ function baseFills(node, state) {
       return {
         fill: node.count === 0 ? '#fff' : grey ? (on ? '#7c8492' : '#cbd5e1')
           : pale ? (on ? `hsl(${node.hue} 58% 46%)` : zoomColor() === 'pale' ? `hsl(${node.hue} 45% 72%)` : '#cbd5e1')
-          : on ? `hsl(${node.hue} 62% 40%)` : `hsl(${node.hue} 58% ${activeDomain === node.parent ? 52 : 60}%)`,
+          : on ? `hsl(${node.hue} 62% 40%)` : activeDomain === node.parent ? `hsl(${node.hue} 58% 52%)`
+            : activeDomain ? `hsl(${node.hue} 58% 60%)` : REST_BAR(node.hue),
         opacity: FAN && state.activeCat === node.id ? 0.18 : dim ? 0.3 : 1,
       };
     }
@@ -223,7 +229,7 @@ function baseFills(node, state) {
   if (node.level === 'domain') {
     const on = activeDomain === node.id;
     return {
-      fill: grey ? (on ? '#7c8492' : '#9aa1ad') : `hsl(${h} ${on ? 60 : 55}% ${on ? 42 : 52}%)`,
+      fill: grey ? (on ? '#7c8492' : '#9aa1ad') : on ? `hsl(${h} 60% 42%)` : activeDomain ? `hsl(${h} 55% 52%)` : REST_RING(h),
       opacity: hovering && !on ? 0.35 : 1,
     };
   }
@@ -240,7 +246,7 @@ function baseFills(node, state) {
   if (state.equal) {
     return {
       fill: node.count === 0 ? '#fff' : grey ? (on ? '#7c8492' : '#cbd5e1')
-        : on ? `hsl(${h} 62% 40%)` : `hsl(${h} 58% ${inDomain ? 52 : 60}%)`,
+        : on ? `hsl(${h} 62% 40%)` : inDomain ? `hsl(${h} 58% 52%)` : activeDomain ? `hsl(${h} 58% 60%)` : REST_BAR(h),
       opacity: hovering && !inDomain ? 0.3 : 1,
     };
   }
@@ -344,7 +350,7 @@ function searchBar(parentElement, root, sb) {
   icon.append(svgEl('circle', { cx: 8.5, cy: 8.5, r: 5.5, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.8 }),
     svgEl('path', { d: 'M13 13l4 4', stroke: 'currentColor', 'stroke-width': 1.8, 'stroke-linecap': 'round' }));
   const input = el('input');
-  Object.assign(input, { type: 'text', value: sb.query || '', placeholder: 'Search goals and outcomes',
+  Object.assign(input, { type: 'text', value: sb.query || '', placeholder: 'Search the wheel',
     autocomplete: 'off', spellcheck: false });
   input.setAttribute('aria-label', 'Search the chart: slices without the word turn grey');
   const clear = el('button', 'sb-search-clear', '×');
@@ -566,6 +572,10 @@ function mount(root, sb, data) {
     }
   }
   const firstMount = sb.sig === null;
+  // New counts (another Count, a filter): bars grow or shrink from the lengths they had (see morph).
+  const morphFrom = !firstMount && sb.shownFrac && sb.shownFrac.size && !reducedMotion() ? new Map(sb.shownFrac) : null;
+  sb.shownFrac = new Map();
+  sb.morphFrom = null;
   sb.sig = data.sig;
   sb.model = model;
   sb.R = model.equal ? R_EQUAL : R_VALUE;
@@ -624,8 +634,22 @@ function mount(root, sb, data) {
   const list = model.equal && model.cats.length ? domainList(sb, model) : null;
   if (sb.focus && !model.byId.has(sb.focus)) sb.focus = null;
   root.append(...(list ? [list.nav] : []), figure, panel);
+  // The search box heads the domain list, so it takes no row of its own above the wheel.
+  if (sb.searchBar) {
+    // On a phone the list moves below the wheel, so there the box stays above the wheel.
+    if (list && window.innerWidth >= NARROW) list.nav.prepend(sb.searchBar.bar);
+    else root.parentNode.insertBefore(sb.searchBar.bar, root);
+    sb.searchBar.bar.classList.toggle('in-list', !!list && window.innerWidth >= NARROW);
+  }
+  // Save the wheel as it is now, as a PNG with its title and the status line (saveImage).
+  const save = el('button', 'sb-save', 'Save image');
+  save.type = 'button';
+  save.title = 'Download the wheel as it is now, as a PNG image';
+  save.addEventListener('click', () => saveImage(sb));
+  figure.append(save);
 
-  sb.els = { svg, hole, center, panel, list, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map(), catNames: new Map(), labelArcs: new Map(), inks: new Map(), dots: new Map(), fan };
+  sb.els = { svg, hole, center, panel, list, slices: new Map(), labels: new Map(), tracks: new Map(), hits: new Map(), catNames: new Map(), labelArcs: new Map(), inks: new Map(), dots: new Map(), tips: new Map(), fan };
+  const tipLayer = svgEl('g', { class: 'sb-tips' });
   const uid = `sb${Math.random().toString(36).slice(2, 8)}`;
   const animate = firstMount && !reducedMotion();
   if (animate) svg.classList.add('sb-enter');
@@ -682,6 +706,13 @@ function mount(root, sb, data) {
       defs.append(...arcs);
       sb.els.labelArcs.set(n.id, arcs);
     }
+    if (model.equal && (n.level === 'goal' || n.level === 'category') && n.count > 0) {
+      // In an open domain each bar prints its count just past its tip.
+      const tip = svgEl('text', { class: 'sb-tip sb-halo', 'text-anchor': 'middle', 'dominant-baseline': 'central' });
+      tip.textContent = fmt(n.count);
+      tipLayer.appendChild(tip);
+      sb.els.tips.set(n.id, tip);
+    }
     if (n.level === 'category' && model.equal) {
       // One dot per goal at the bar's base: filled when a program names it, hollow for a gap.
       const dots = svgEl('g', { class: 'sb-dots' });
@@ -702,6 +733,7 @@ function mount(root, sb, data) {
     }
     wire(path, n, sb);
   }
+  svg.appendChild(tipLayer);
   if (animate) setTimeout(() => svg.classList.remove('sb-enter'), 1600);
   sb.labelFloor = 0;
   new ResizeObserver(() => {
@@ -719,6 +751,38 @@ function mount(root, sb, data) {
   sb.focusKey = null;
   draw(sb);
   if (!firstMount) tween(sb, target);
+  if (morphFrom) morph(sb, morphFrom);
+}
+
+/** Bars grow or shrink from their old lengths to their new ones, so a new Count or filter shows what changed. */
+function morph(sb, from) {
+  cancelAnimationFrame(sb.morphFrame);
+  const t0 = performance.now();
+  const ease = t => 1 - Math.pow(1 - t, 3);
+  sb.morphFrom = from;
+  sb.morphK = 0;
+  draw(sb);
+  const step = now => {
+    sb.morphK = ease(Math.min((now - t0) / ANIM_MS, 1));
+    if (sb.morphK >= 1) sb.morphFrom = null;
+    draw(sb);
+    if (sb.morphFrom) sb.morphFrame = requestAnimationFrame(step);
+  };
+  sb.morphFrame = requestAnimationFrame(step);
+}
+
+/** A number in the centre counts from its old value to its new one (after a new Count or filter). */
+function countUp(node, from, to) {
+  if (from === null || from === undefined || from === to || reducedMotion()) return;
+  const t0 = performance.now();
+  const step = now => {
+    if (!node.isConnected) return;
+    const k = Math.min((now - t0) / ANIM_MS, 1);
+    node.textContent = fmt(Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3))));
+    if (k < 1) requestAnimationFrame(step);
+  };
+  node.textContent = fmt(from);
+  requestAnimationFrame(step);
 }
 
 function wire(path, node, sb) {
@@ -730,6 +794,14 @@ function wire(path, node, sb) {
   path.addEventListener('keydown', e => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); clickNode(sb, node); }
     if (e.key === 'Escape' && sb.zoom) { e.preventDefault(); goUp(sb); }
+    if (['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(e.key)) {
+      // Arrows move to the next slice of the same ring, clockwise (right, down) or back (left, up).
+      e.preventDefault();
+      const ring = [...sb.els.slices].filter(([id, p]) => sb.model.byId.get(id).level === node.level && shown(p))
+        .sort((x, y) => (sb.angles.get(x[0]) || [0])[0] - (sb.angles.get(y[0]) || [0])[0]);
+      const k = ring.findIndex(([id]) => id === node.id);
+      if (ring.length > 1 && k >= 0) ring[(k + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : ring.length - 1)) % ring.length][1].focus();
+    }
   });
 }
 
@@ -925,18 +997,27 @@ function tween(sb, target) {
 }
 
 /** How far a goal's slice reaches: the full ring in the sunburst, its bar length on the wheel. */
-function outerRadius(sb, n, count = n.count) {
+function outerRadius(sb, n, count) {
+  // Called without a count, this is the bar as drawn: it is recorded, and while new counts settle in
+  // (morph) it grows or shrinks from the length it had before.
+  const live = count === undefined;
+  if (live) count = n.count;
   const R = sb.R;
   const base = barBase(sb);
   if (!sb.model.equal) {
     // While searching, the matching share of a sunburst slice fills it from the inside out.
     return count === n.count ? R.goal : base + Math.max(count / n.count, 0.06) * (R.goal - base);
   }
-  if (count === 0) return base + STUB;
   // Square root, so the bar's area (not its length) follows the count, and thin goals stay visible.
   // Resting on categories, revealed goals share the categories' scale, so they read against them.
   const max = catBars(sb) ? sb.maxUnit : sb.maxCount;
-  return base + STUB + Math.sqrt(count / max) * (R.goal - base - STUB);
+  let frac = count === 0 ? 0 : Math.sqrt(count / max);
+  if (live) {
+    const from = sb.morphFrom ? sb.morphFrom.get(n.id) : undefined;
+    if (from !== undefined) frac = from + (frac - from) * sb.morphK;
+    if (sb.shownFrac) sb.shownFrac.set(n.id, frac);
+  }
+  return base + STUB + frac * (R.goal - base - STUB);
 }
 
 function draw(sb) {
@@ -973,6 +1054,18 @@ function draw(sb) {
       const usable = !!(hit && hit.partial && d) && (n.level !== 'category' || resting);
       hitPath.dataset.usable = usable ? '1' : '';
       if (usable) hitPath.setAttribute('d', arcPath(barBase(sb), outerRadius(sb, n, Math.max(hit.count, 1)), a0, a1));
+    }
+    const tip = els.tips.get(id);
+    if (tip) {
+      // Only in an open domain, on bars wide enough to carry a number; resting, the wheel stays quiet.
+      const bar = n.level === 'category' ? resting : !resting;
+      const on = !!sb.zoom && bar && !!d && a1 - a0 >= TIP_MIN_DEG && !sb.hits;
+      tip.style.display = on ? '' : 'none';
+      if (on) {
+        const [x, y] = point(Math.min(outerRadius(sb, n) + 11, R.goal + 9), (a0 + a1) / 2);
+        tip.setAttribute('x', f(x));
+        tip.setAttribute('y', f(y));
+      }
     }
     const label = els.labels.get(id);
     const named = n.level === 'category' && categoryName(sb, n, a0, a1, d);
@@ -1336,7 +1429,11 @@ function readout(sb, hovered) {
   if (focus.level === 'root' && hits) {
     inner.append(el('div', 'sb-big', fmt(match.count)), el('div', 'sb-meta', `${match.count === 1 ? data.noun_one : data.noun} match ${query}`));
   } else if (focus.level === 'root') {
-    inner.append(el('div', 'sb-big', fmt(focus.count)), el('div', 'sb-meta', `${data.noun} in ${data.n_domains} domains`));
+    const big = el('div', 'sb-big', fmt(focus.count));
+    inner.append(big, el('div', 'sb-meta', `${data.noun} in ${data.n_domains} domains`));
+    // After a new Count or filter the total counts to its new value instead of jumping.
+    if (sb.lastTotal && sb.lastTotal.sig !== data.sig && sb.lastTotal.noun === data.noun_one) countUp(big, sb.lastTotal.n, focus.count);
+    sb.lastTotal = { n: focus.count, sig: data.sig, noun: data.noun_one };
   } else {
     inner.append(
       el('div', 'sb-eyebrow', focus.eyebrow),
@@ -1358,18 +1455,28 @@ function readout(sb, hovered) {
   }
   eyebrow.append(document.createTextNode(focus.level === 'root' ? (hits ? 'Search' : 'The whole portfolio') : focus.eyebrow));
   const title = el('div', 'sb-title', focus.level === 'root' ? (hits ? query : 'All domains') : focus.title);
-  const counts = el('ul', 'sb-counts');
+  // The counts read as one line ("90 programs, 78 organizations, 380 outcome statements"), not as tiles.
+  const counts = el('p', 'sb-counts');
   const shown = focus.level === 'root' && hits ? hits.total : focus;
-  for (const [n, one, many] of [[shown.programs, 'program', 'programs'], [shown.organizations, 'organization', 'organizations'],
-    [shown.outcomes, 'outcome statement', 'outcome statements']]) {
-    const li = el('li');
-    li.append(el('b', '', fmt(n)), document.createTextNode(n === 1 ? one : many));
-    counts.append(li);
-  }
+  [[shown.programs, 'program', 'programs'], [shown.organizations, 'organization', 'organizations'],
+    [shown.outcomes, 'outcome statement', 'outcome statements']].forEach(([n, one, many], k) => {
+    if (k) counts.append(document.createTextNode(k === 2 ? ' and ' : ', '));
+    counts.append(el('b', '', fmt(n)), document.createTextNode(` ${n === 1 ? one : many}`));
+  });
   // At rest the totals are already in the filter bar and the wheel's centre, so the panel skips its
   // heading and counts there and opens on the sample outcomes.
   const atRest = focus.level === 'root' && !hits;
   const children = atRest ? [] : [eyebrow, title, ...definitionOf(sb, focus, !!hovered), counts];
+  if (atRest && data.findings && data.findings.length) {
+    // "What stands out" lives here at rest, beside the wheel, instead of below it.
+    const list = el('ul', 'sb-findings');
+    for (const text of data.findings) {
+      const li = el('li');
+      String(text).split(/[*][*]/).forEach((part, k) => li.append(k % 2 ? el('b', '', part) : document.createTextNode(part)));
+      list.append(li);
+    }
+    children.push(el('div', 'sb-eyebrow', 'What stands out'), list);
+  }
   if (focus.level === 'root' && hits) {
     children.push(el('div', 'sb-share-note sb-match-note', hits.goals.size
       ? `${plural(hits.goals.size, 'goal', 'goals')} in ${plural(hits.domains.size, 'domain', 'domains')} hold ${query}. Grey slices don't.`
@@ -1442,7 +1549,110 @@ function readout(sb, hovered) {
   }
   children.push(el('div', 'sb-hint', hint(sb, hovered)));
   box.append(...children);
-  panel.replaceChildren(box);
+  panel.replaceChildren(...[crumbs(sb)].filter(Boolean), box);
+}
+
+/** Where the wheel is ("All domains › Academics › Literacy"), each level above the current one a link back. */
+function crumbs(sb) {
+  if (!sb.zoom) return null;
+  const model = sb.model;
+  const domain = model.byId.get(sb.zoom);
+  const cat = viewCat(sb);
+  const picked = sb.pick ? model.byId.get(sb.pick) : null;
+  const parts = [['All domains', () => choose(sb, null, null)],
+    [domain.title, cat || (picked && picked.id !== domain.id) ? () => choose(sb, domain.id, domain.id) : null]];
+  if (cat) parts.push([model.byId.get(cat).title, picked && picked.level === 'goal' ? () => choose(sb, domain.id, cat) : null]);
+  if (picked && picked.level === 'goal') parts.push([picked.title, null]);
+  const nav = el('nav', 'sb-crumbs');
+  nav.setAttribute('aria-label', 'Where you are on the wheel');
+  parts.forEach(([label, go], k) => {
+    if (k) nav.append(el('span', 'sb-crumb-sep', '›'));
+    if (go) {
+      const b = el('button', 'sb-crumb', label);
+      b.type = 'button';
+      b.addEventListener('click', go);
+      nav.append(b);
+    } else nav.append(el('span', 'sb-crumb is-here', label));
+  });
+  return nav;
+}
+
+/** Download the wheel as it is now: a PNG with what is open as its title, the status line, and the wheel. */
+async function saveImage(sb) {
+  const { svg, center } = sb.els;
+  const STYLE = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linejoin', 'paint-order',
+    'opacity', 'display', 'font-family', 'font-size', 'font-weight', 'letter-spacing', 'transform', 'transform-origin'];
+  const clone = svg.cloneNode(true);
+  const from = [svg, ...svg.querySelectorAll('*')];
+  const to = [clone, ...clone.querySelectorAll('*')];
+  from.forEach((node, k) => {
+    const cs = getComputedStyle(node);
+    to[k].setAttribute('style', STYLE.map(p => `${p}:${cs.getPropertyValue(p)}`).join(';'));
+  });
+  clone.setAttribute('xmlns', SVG_NS);
+  clone.setAttribute('width', SIZE);
+  clone.setAttribute('height', SIZE);
+  clone.querySelector('.sb-tips')?.removeAttribute('style');
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }));
+  const img = new Image();
+  await new Promise((ok, fail) => { img.onload = ok; img.onerror = fail; img.src = url; });
+  const scale = 2, pad = 48, head = 96, foot = 40;
+  const W = SIZE + pad * 2, H = head + SIZE + foot + pad;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * scale;
+  canvas.height = H * scale;
+  const g = canvas.getContext('2d');
+  g.scale(scale, scale);
+  g.fillStyle = '#fff';
+  g.fillRect(0, 0, W, H);
+  const font = (w, px) => `${w} ${px}px Inter, "Segoe UI", system-ui, sans-serif`;
+  const model = sb.model;
+  const cat = viewCat(sb);
+  const picked = sb.pick ? model.byId.get(sb.pick) : null;
+  const title = picked && picked.level === 'goal' ? picked.title : cat ? model.byId.get(cat).title
+    : sb.zoom ? model.byId.get(sb.zoom).title : 'Intended outcomes by codebook domain';
+  g.fillStyle = '#0f172a';
+  g.font = font(600, 22);
+  g.fillText(title, pad, pad + 6);
+  g.fillStyle = '#64748b';
+  g.font = font(400, 14);
+  g.fillText(model.data.status || '', pad, pad + 34);
+  g.drawImage(img, pad, head, SIZE, SIZE);
+  URL.revokeObjectURL(url);
+  // The centre readout is HTML over the SVG: write its lines in the middle of the wheel.
+  const lines = [...center.querySelectorAll('.sb-center-inner > div')].filter(d => !d.classList.contains('sb-back'));
+  const sizes = lines.map(d => parseFloat(getComputedStyle(d).fontSize) || 13);
+  let y = head + C - (sizes.reduce((t, px) => t + px * 1.3, 0)) / 2;
+  g.textAlign = 'center';
+  lines.forEach((d, k) => {
+    const cs = getComputedStyle(d);
+    g.fillStyle = cs.color;
+    g.font = font(cs.fontWeight, sizes[k]);
+    y += sizes[k] * 1.3;
+    const text = cs.textTransform === 'uppercase' ? d.textContent.toUpperCase() : d.textContent;
+    const words = text.trim().split(/\s+/);
+    const room = sb.R.hole * 1.5;
+    let line = '';
+    const rows = [];
+    for (const w of words) {
+      const next = line ? `${line} ${w}` : w;
+      if (g.measureText(next).width > room && line) { rows.push(line); line = w; } else line = next;
+    }
+    rows.push(line);
+    rows.forEach((r, i) => g.fillText(r, pad + C, y - sizes[k] * 0.3 + i * sizes[k] * 1.25));
+    y += (rows.length - 1) * sizes[k] * 1.25;
+  });
+  g.textAlign = 'left';
+  g.fillStyle = '#94a3b8';
+  g.font = font(400, 12);
+  g.fillText('Outcomes Explorer · intended outcomes from partner documents, not measured results', pad, H - pad / 2);
+  const blob = await new Promise(ok => canvas.toBlob(ok, 'image/png'));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `outcomes-wheel-${String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.png`;
+  document.body.append(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
 /** The codebook's words for what is open or picked (not what is only pointed at, so the panel holds still). */
@@ -1581,12 +1791,11 @@ function hint(sb, hovered) {
   if (hovered) {
     if (hovered.level === 'domain') return sb.zoom === hovered.id ? (viewCat(sb) ? 'Click to show the whole domain.' : 'Click to go back to all domains.')
       : sb.model.cats.length ? 'Point at a category to see its subcategories. Click to open the domain.' : 'Click to open its goals.';
-    if (hovered.level === 'category') return sb.pick === hovered.id ? 'Click again to show the whole domain.' : 'Click to open it on its own and list its outcomes below.';
+    if (hovered.level === 'category') return sb.pick === hovered.id ? 'Click again to show the whole domain.' : 'Click to open it on its own.';
     if (sb.pick === hovered.id) return hovered.category ? 'Click again to show the whole category.' : 'Click again to show the whole domain.';
-    return hovered.count ? 'Click to list its outcomes in the table below.' : 'Nothing to list yet.';
+    return hovered.count ? 'Click to pick it. “Show outcomes” under the wheel lists them.' : 'No outcomes to list yet.';
   }
   if (sb.zoom) return viewCat(sb) ? 'Click the center to go back to the whole domain.' : 'Click a category to see its goals, or the center to go back to all domains.';
   if (sb.hits) return 'Point at a slice to see what matched. Clicking still opens it.';
-  return sb.model.cats.length ? 'Click a domain, here or in the list, to open its categories, or a category to list its outcomes.'
-    : 'Click a domain to open its goals.';
+  return 'Pick a domain to see its goals.';
 }
