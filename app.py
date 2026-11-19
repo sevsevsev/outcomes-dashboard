@@ -325,8 +325,10 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 .st-key-sec-findings {{ margin-bottom: 1rem; }}
 .st-key-sec-explore {{ border-top: none; padding-top: 0.25rem; margin-top: 0.5rem; }}
 /* The wheel page fits one screen: a tight toolbar row, the wheel, then one row of buttons under it. */
-.inline-label {{ font-size: 0.8125rem !important; font-weight: 500; color: {INK_2}; margin: 0 !important; text-align: right; }}
+.inline-label {{ font-size: 0.8125rem !important; font-weight: 500; color: {INK_2}; margin: 0 !important; text-align: right; white-space: nowrap; }}
 .st-key-sec-explore [data-testid="stHorizontalBlock"]:first-child {{ margin-bottom: -0.25rem; }}
+.st-key-count-row {{ margin-bottom: -0.7rem !important; }}
+.st-key-count-row [data-testid="stElementContainer"] {{ width: auto !important; flex: none; }}
 .inline-label.lead {{ text-align: left; }}
 @media (max-width: 640px) {{ .inline-label {{ text-align: left; }} }}
 .st-key-wheel-actions {{ border-top: 1px solid {HAIRLINE}; padding-top: 0.6rem; }}
@@ -814,18 +816,19 @@ def page_system_map(df: pd.DataFrame) -> None:
         # fit on one laptop screen (review of 2026-11-18).
         views = list(release.shown_views(SHOW_ALL))
         if len(views) > 1:
-            t0, t1, t2, _ = st.columns([1.45, 0.45, 3.4, 3.2], vertical_alignment="center", gap="small")
+            t0, t1, t2, _ = st.columns([1.45, 0.75, 3.4, 2.9], vertical_alignment="center", gap="small")
             view = t0.segmented_control("View", views, default="Wheel", key="v1_view",
                                         label_visibility="collapsed") or "Wheel"
         else:
-            # Only the wheel in this release (release.py): Count starts the row.
-            t1, t2, _ = st.columns([0.32, 3.4, 4.78], vertical_alignment="center", gap="small")
+            # Only the wheel in this release (release.py): "Bars show" and its control start the row, side by side
+            # at any width (a column would wrap the label or leave a gap).
+            t1 = t2 = st.container(horizontal=True, vertical_alignment="center", gap="small", key="count-row")
             view = views[0]
         lead = "" if len(views) > 1 else " lead"
-        t1.markdown(f"<p class='inline-label{lead}'>Count</p>", unsafe_allow_html=True)
+        t1.markdown(f"<p class='inline-label{lead}'>Bars show</p>", unsafe_allow_html=True)
         # One Count control for both views, so switching view never changes what is counted.
         measure = t2.segmented_control(
-            "Count", SUNBURST_MEASURES, default=MEASURE_PROGRAMS, key="v1_measure",
+            "Bars show", SUNBURST_MEASURES, default=MEASURE_PROGRAMS, key="v1_measure",
             format_func=lambda m: "Statements" if m == MEASURE_OUTCOMES else m, label_visibility="collapsed",
             help="Programs and organizations count each one once per goal. Statements counts every outcome "
                  "statement, so programs that list many outcomes weigh more.",
