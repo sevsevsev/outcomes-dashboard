@@ -492,6 +492,38 @@ button[kind="tertiary"]:hover p {{ color: {INK}; }}
 </style>
 """
 
+# Direction A of the 2026-11-18 design review: one type scale (22 / 15 / 13 / 11 px), weight and grey tone for
+# hierarchy instead of size, Inter's alternate glyphs and tabular figures, and lighter controls. Laid over CSS.
+POLISH_CSS = f"""
+<style>
+.stApp {{ font-feature-settings: "cv11", "ss03"; }}
+.status b, .findings b, .sb-count {{ font-variant-numeric: tabular-nums; }}
+.block-container {{ padding-top: 4.5rem; }}
+[data-testid="stHeader"] {{ height: 3.5rem; }}
+[data-testid="stToolbar"] {{ height: 3.5rem; padding-left: 11rem; }}
+[data-testid="stHeader"]::before {{ font-size: 0.9375rem; font-weight: 650; letter-spacing: -0.01em; }}
+[data-testid="stTopNavLink"] {{ border-radius: 0; padding: 0.4rem 0.1rem; margin: 0 0.7rem; background: none !important;
+                               box-shadow: inset 0 -2px 0 transparent; }}
+[data-testid="stTopNavLink"] p {{ font-size: 0.8125rem; }}
+[data-testid="stTopNavLink"][aria-current="page"] {{ box-shadow: inset 0 -2px 0 {INK}; }}
+[data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li {{ font-size: 0.9375rem; }}
+h1 {{ font-size: 1.375rem !important; letter-spacing: -0.02em; padding-top: 0.75rem !important; }}
+.page-lede {{ font-size: 0.875rem !important; margin: -0.4rem 0 0.75rem 0; }}
+.findings {{ font-size: 0.9375rem; line-height: 1.55; max-width: 44rem; padding-left: 1rem; }}
+.findings li {{ margin-bottom: 0.2rem; }}
+.findings b {{ font-weight: 600; }}
+.sec-title {{ font-size: 0.9375rem !important; }}
+.sec-note {{ font-size: 0.8125rem !important; }}
+[class*="st-key-sec-"] {{ padding-top: 1.1rem; margin-top: 1rem; }}
+.status {{ font-size: 0.8125rem !important; }}
+[data-testid="stWidgetLabel"] p {{ font-size: 0.75rem !important; font-weight: 500; color: {MUTED}; }}
+[data-baseweb="select"] > div {{ background: #fff; border-color: #e2e8f0; min-height: 2.25rem; font-size: 0.875rem; }}
+[data-testid="stButtonGroup"] button p, [data-testid="stPopover"] button p {{ font-size: 0.8125rem; }}
+[data-testid="stButtonGroup"] button {{ min-height: 2rem; padding: 0.25rem 0.75rem; }}
+</style>
+"""
+
+
 
 def page_header(title: str, lede: Optional[str] = None) -> None:
     st.title(title, anchor=False)
@@ -2088,7 +2120,7 @@ PAGES: dict = {}
 
 def main() -> None:
     st.set_page_config(page_title=APP_TITLE, layout="wide")
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(CSS + POLISH_CSS, unsafe_allow_html=True)
 
     df, source = load_data()
     portrait_df, portrait_source = load_portrait(df, source) if "portrait" in release.shown_pages(SHOW_ALL) \
