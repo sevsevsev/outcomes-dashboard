@@ -44,7 +44,7 @@ The school page also needs two district files: the program-to-school export (col
 
 Deploy on [Streamlit Community Cloud](https://share.streamlit.io) from this repo, with `main` as the branch and `app.py` as the main file. Vercel and other serverless hosts can't run Streamlit.
 
-The deployed app asks each visitor to upload the CSV. The file lives only in that browser session. The look follows the codebook explorer site and is set in `.streamlit/config.toml` and the CSS at the top of `app.py`: Inter, a white page, slate greys, and one blue that marks what is selected.
+The deployed app asks each visitor to upload the CSV. The file lives only in that browser session. The look follows the codebook explorer site and is set in `.streamlit/config.toml` and the CSS at the top of `app.py`: Inter (with its alternate a, l and t, and same-width figures for counts), a white page, slate greys, and one blue that marks what is selected. One type scale runs through the pages: 22px page titles, 15px text, 13px secondary text and 11px uppercase labels (`POLISH_CSS` in `app.py`).
 
 ## Code layout
 
