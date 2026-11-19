@@ -78,7 +78,6 @@ from outcomes_data import (
     COL_ORG_VIEW,
     COL_POP,
     COL_PROGRAM,
-    COL_PRIORITY,
     COL_PROGRAM_LABEL,
     COL_QA,
     COL_SOURCE_FILE,
@@ -127,7 +126,6 @@ from outcomes_data import (
     population_group,
     population_summary,
     portfolio_findings,
-    priority_summary,
     program_flows,
     program_labels,
     program_options,
@@ -171,9 +169,6 @@ PORTRAIT_ENV_VAR = "PORTRAIT_CSV"
 READ_ERRORS = (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError)
 VIEWS = ["Wheel", "Ranked"]
 # What the first ranked chart groups by: plain priorities, or the codebook's own domains.
-GROUP_PRIORITIES = "Priorities"
-GROUP_DOMAINS = "Codebook domains"
-GROUPINGS = [GROUP_PRIORITIES, GROUP_DOMAINS]
 
 
 # =============================================================================
@@ -774,14 +769,6 @@ def page_system_map(df: pd.DataFrame) -> None:
         # Wide enough that View and Count each stay on one line at 1280 px.
         t0, t1, t2 = st.columns([3.6, 4.6, 3])
         view = t0.segmented_control("View", VIEWS, default="Wheel", key="v1_view") or "Wheel"
-        grouping = GROUP_PRIORITIES
-        if view == "Ranked":
-            # Only the ranked bars can group by priority; the other views always show the codebook's domains.
-            grouping = t2.segmented_control(
-                "Group by", GROUPINGS, default=GROUP_PRIORITIES, key="v1_grouping",
-                help="Priorities use plain names such as Attendance or Math. Codebook domains are the coder's "
-                     "own domains, which the wheel, sunburst and treemap always use.",
-            ) or GROUP_PRIORITIES
         # One Count control for both views, so switching view never changes what is counted.
         measure = t1.segmented_control(
             "Count", SUNBURST_MEASURES, default=MEASURE_PROGRAMS, key="v1_measure",
@@ -790,7 +777,7 @@ def page_system_map(df: pd.DataFrame) -> None:
                  "statement, so programs that list many outcomes weigh more.",
         ) or MEASURE_PROGRAMS
         if view == "Ranked":
-            chosen_domain = linked_explorer(df, measure, grouping, lead_in=lead_in)
+            chosen_domain = linked_explorer(df, measure, lead_in=lead_in)
         else:
             chosen_domain = sunburst_view(df, measure, layout="equal", lead_in=lead_in)
 
@@ -803,43 +790,33 @@ def findings_section(df: pd.DataFrame, coverage: pd.DataFrame) -> None:
         findings(cached_findings(df, coverage))
 
 
-def linked_explorer(df: pd.DataFrame, measure: str, grouping: str = GROUP_PRIORITIES,
-                    lead_in: Optional[Callable[[], None]] = None) -> Optional[str]:
-    """Priorities (or domains), goals and audiences as ranked bars; each click narrows the charts after it
-    and the table.
+def linked_explorer(df: pd.DataFrame, measure: str, lead_in: Optional[Callable[[], None]] = None) -> Optional[str]:
+    """Domains, goals and audiences as ranked bars; each click narrows the charts after it and the table.
 
     Returns the selected domain, if any, so the coverage table can follow it.
     Each chart's key includes the selections before it, so picking a new
-    priority or domain starts its goals chart unselected.
+    domain starts its goals chart unselected. Domains and goals carry their
+    codebook names, the same names the wheel and every table use.
     """
     value = MEASURE_COLUMNS[measure]
     other = "organizations" if value == "outcomes" else "outcomes"
     noun = {"programs": "programs", "organizations": "organizations", "outcomes": "outcome statements"}[value]
     other_template = ("%{customdata[3]} organizations" if value == "outcomes"
                       else "%{customdata[3]} outcome statements")
-    by_priority = grouping == GROUP_PRIORITIES
-    base = f"v1_{st.session_state.get('v1_nonce', 0)}_{value}_{'pri' if by_priority else 'dom'}"
+    base = f"v1_{st.session_state.get('v1_nonce', 0)}_{value}_dom"
 
     left, right = st.columns(2, gap="large")
     with left:
-        if by_priority:
-            groups = priority_summary(df).sort_values(value, ascending=False, kind="stable")
-            subhead("Priorities", f"by {noun}")
-            fig = charts.build_ranked_bars(groups, COL_PRIORITY, value, COL_PRIORITY, value_noun=noun)
-        else:
-            groups = domain_summary(df).sort_values([value, COL_DOMAIN_NUM], ascending=[False, True])
-            subhead("Domains", f"by {noun}")
-            groups = groups.assign(domain_name=groups[COL_DOMAIN].map(plain_domain))
-            fig = charts.build_ranked_bars(groups, "domain_name", value, COL_DOMAIN, value_noun=noun)
+        groups = domain_summary(df).sort_values([value, COL_DOMAIN_NUM], ascending=[False, True])
+        subhead("Domains", f"by {noun}")
+        groups = groups.assign(domain_name=groups[COL_DOMAIN].map(plain_domain))
+        fig = charts.build_ranked_bars(groups, "domain_name", value, COL_DOMAIN, value_noun=noun)
         add_hover_value(fig, groups[other].tolist(), other_template)
         chosen = clickable(fig, f"{base}_top")
 
-    group_col = COL_PRIORITY if by_priority else COL_DOMAIN
-    scope = df if chosen is None else df[df[group_col] == chosen]
-    # The coverage table below follows a domain. Each priority sits inside one domain, so it follows that.
-    domains_in_scope = scope[COL_DOMAIN].unique() if chosen is not None else []
-    domain = domains_in_scope[0] if len(domains_in_scope) == 1 else None
-    chosen_name = (chosen if by_priority else plain_domain(chosen)) if chosen else None
+    scope = df if chosen is None else df[df[COL_DOMAIN] == chosen]
+    domain = chosen
+    chosen_name = plain_domain(chosen) if chosen else None
     goals = goal_summary(scope).sort_values([value, other], ascending=False)
     if chosen is None:
         goals = goals.head(12)
