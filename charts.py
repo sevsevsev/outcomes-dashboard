@@ -140,7 +140,7 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
     (and its zoom) alone.
 
     Each node's `names` lists its plain names, longest first, then its code
-    (domain: full name, nickname, code; goal: full name, `short_names` entry,
+    (domain: full name, short form from DOMAIN_SHORT_NAMES, code; goal: full name, `short_names` entry,
     code), so the chart writes the longest one that fits.
     """
     short_names = short_names or {}
@@ -169,7 +169,7 @@ def codebook_sunburst_data(nodes: pd.DataFrame, measure: str = MEASURE_PROGRAMS,
         else:
             eyebrow, label = "", ""
         if row.level == "domain":
-            names = [row.title, DOMAIN_NICKNAMES.get(row.code, ""), row.code] if coded else [row.title]
+            names = [row.title, DOMAIN_SHORT_NAMES.get(row.code, ""), row.code] if coded else [row.title]
         elif row.level == "category":
             names = [row.title, row.code]
         elif row.level == "goal":
@@ -358,10 +358,13 @@ DOT_SELECTED = dict(marker=dict(opacity=1))
 DOT_UNSELECTED = dict(marker=dict(opacity=0.22), textfont=dict(color=TEXT_SECONDARY))
 # A school can touch every 3.x domain, too many columns for full names, so each
 # domain header carries a word or two; hovering a header gives the full name.
-DOMAIN_NICKNAMES = {
-    "Y1": "Academics", "Y2": "Interest", "Y3": "Belonging", "Y4": "Social-emotional", "Y5": "Identity",
-    "Y6": "Character, civic", "Y7": "Career", "Y8": "Health, safety", "F1": "Families", "F2": "Basic needs",
-    "A1": "Staff", "A2": "Program quality", "A3": "Systems",
+# A domain's short form, for places too tight for its full name (wheel labels, dot-grid headers). Each one is
+# the first words of the codebook's own domain name, so a reader can match it to the full name, which the side
+# panel and hover always show. tests/test_app_logic.py checks that every one is a leading slice of the name.
+DOMAIN_SHORT_NAMES = {
+    "Y1": "Academic Learning", "Y2": "Engagement", "Y3": "Belonging", "Y4": "Social & Emotional Skills",
+    "Y5": "Identity", "Y6": "Character", "Y7": "Career", "Y8": "Health", "F1": "Family & Caregiver",
+    "F2": "Basic Needs", "A1": "Staff", "A2": "Program Quality", "A3": "Systems",
 }
 
 
@@ -403,8 +406,8 @@ def _header_parts(target: str, zoomed: bool) -> tuple[str, list[str]]:
     code = domain_code(target)
     if code is None or not is_coded_domain(target):
         return "", ["Uncoded" if not is_coded_domain(target) else domain_short(target)]
-    name = DOMAIN_NICKNAMES.get(code) or domain_short(target).split(" ", 1)[-1]
-    return code, _wrap_lines(name, DOMAIN_NAME_WRAP, 2)
+    name = DOMAIN_SHORT_NAMES.get(code) or goal_name(target)
+    return code, _wrap_lines(name, DOMAIN_NAME_WRAP, 3)
 
 
 def _header_text(code: str, lines: list[str], color: str, arrow: bool, muted: bool = False) -> str:
@@ -442,7 +445,8 @@ def build_program_dots(flows: pd.DataFrame, programs: list[str], zoomed: bool = 
     biggest = max(30, min(46, 640 / max(len(targets), 1)))
     sizes = [12 + (biggest - 12) * (n / peak) ** 0.5 for n in flows["outcomes"]]
     keys = [f"{src}||{tgt}" for src, tgt in zip(flows["source"], flows["target"])]
-    names = {t: (t if zoomed else domain_short(t)) for t in targets}
+    # Hover gives the full codebook name, without its code.
+    names = {t: goal_name(t) for t in targets}
     target_names = [names[t] for t in flows["target"]]
     fig = go.Figure(go.Scatter(
         x=list(flows["target"]),
