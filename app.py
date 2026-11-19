@@ -10,7 +10,7 @@ youth-serving program logic models. It is built for two audiences:
 * Program operators, who want to find peer organizations aiming at the same
   developmental goals.
 
-Pages (top navigation):
+Pages (top navigation; this release shows only 1-3, see release.py):
 
 1. Explore intended outcomes - findings, linked priority (or domain) / goal / audience charts, coverage gaps
 2. Find peers        - peers for an organization, organizations by goal, program comparison
@@ -51,6 +51,7 @@ import streamlit as st
 
 import charts
 import portrait
+import release
 import schools
 from portrait_component import portrait_wheel
 from priority_component import priority_grid
@@ -166,8 +167,10 @@ UPLOAD_KEY = "uploaded_csv"          # (file name, bytes) of a CSV uploaded this
 PORTRAIT_UPLOAD_KEY = "uploaded_portrait_csv"   # the same for the Portrait of a Graduate export
 GO_PORTRAIT_KEY = "go_to_portrait"              # set when a Portrait-only file was loaded from another page
 PORTRAIT_ENV_VAR = "PORTRAIT_CSV"
+PORTRAIT_REFUSED_KEY = "portrait_not_shown"     # a Portrait-only file turned away while the Portrait page is hidden
 READ_ERRORS = (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError)
-VIEWS = ["Wheel", "Ranked"]
+VIEWS = list(release.ALL_VIEWS)   # the release shows only the wheel (release.py)
+SHOW_ALL = release.flag_on(secrets=st.secrets)   # SHOW_ALL_PAGES brings back the hidden pages and views
 # What the first ranked chart groups by: plain priorities, or the codebook's own domains.
 
 
@@ -324,6 +327,7 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 /* The wheel page fits one screen: a tight toolbar row, the wheel, then one row of buttons under it. */
 .inline-label {{ font-size: 0.8125rem !important; font-weight: 500; color: {INK_2}; margin: 0 !important; text-align: right; }}
 .st-key-sec-explore [data-testid="stHorizontalBlock"]:first-child {{ margin-bottom: -0.25rem; }}
+.inline-label.lead {{ text-align: left; }}
 @media (max-width: 640px) {{ .inline-label {{ text-align: left; }} }}
 .st-key-wheel-actions {{ border-top: 1px solid {HAIRLINE}; padding-top: 0.6rem; }}
 .st-key-wheel-actions button {{ min-height: 2.25rem; }}
@@ -776,10 +780,17 @@ def page_system_map(df: pd.DataFrame) -> None:
     with section(key="explore"):
         # One toolbar row: View, then Count with its label beside it, so the wheel starts high enough to
         # fit on one laptop screen (review of 2026-11-18).
-        t0, t1, t2, _ = st.columns([1.45, 0.45, 3.4, 3.2], vertical_alignment="center", gap="small")
-        view = t0.segmented_control("View", VIEWS, default="Wheel", key="v1_view",
-                                    label_visibility="collapsed") or "Wheel"
-        t1.markdown("<p class='inline-label'>Count</p>", unsafe_allow_html=True)
+        views = list(release.shown_views(SHOW_ALL))
+        if len(views) > 1:
+            t0, t1, t2, _ = st.columns([1.45, 0.45, 3.4, 3.2], vertical_alignment="center", gap="small")
+            view = t0.segmented_control("View", views, default="Wheel", key="v1_view",
+                                        label_visibility="collapsed") or "Wheel"
+        else:
+            # Only the wheel in this release (release.py): Count starts the row.
+            t1, t2, _ = st.columns([0.32, 3.4, 4.78], vertical_alignment="center", gap="small")
+            view = views[0]
+        lead = "" if len(views) > 1 else " lead"
+        t1.markdown(f"<p class='inline-label{lead}'>Count</p>", unsafe_allow_html=True)
         # One Count control for both views, so switching view never changes what is counted.
         measure = t2.segmented_control(
             "Count", SUNBURST_MEASURES, default=MEASURE_PROGRAMS, key="v1_measure",
@@ -892,7 +903,9 @@ def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value",
                                          short_names=cached_short_names())
     data["search"] = cached_search_index(df, layout)
     data["definitions"] = cached_definitions()
-    data["spotlight"] = spotlight_panel_data(cached_spotlight(), cached_crosswalk())
+    if "indicators" in release.shown_pages(SHOW_ALL):
+        # The indicator links are internal until District sign-off, so they go with the District indicators page.
+        data["spotlight"] = spotlight_panel_data(cached_spotlight(), cached_crosswalk())
     if findings:
         # Shown in the side panel while nothing is pointed at or picked (**bold** marks the numbers).
         data["findings"] = list(findings)
@@ -1392,7 +1405,7 @@ def school_indicators(df: pd.DataFrame, everything: pd.DataFrame, relationships:
     every coded outcome at the school, whatever the filters, so a filter never makes a goal look unnamed.
     """
     links = cached_spotlight()
-    if not links or "3.x" not in codebook_scheme(everything[COL_DOMAIN].dropna().unique()):
+    if "indicators" not in PAGES or not links or "3.x" not in codebook_scheme(everything[COL_DOMAIN].dropna().unique()):
         return
     # Tested links only: research associations never count toward what a goal may reach.
     named = set(school_scope(everything, relationships, ulcs, school_name)[0]["goals"])
@@ -1808,10 +1821,22 @@ def remember_upload(uploaded, key: str = UPLOAD_KEY) -> None:
         except (*READ_ERRORS, MissingColumnsError):
             frame = None
         if frame is not None and len(frame) and portrait.is_portrait(frame).all():
+            if "portrait" not in release.shown_pages(SHOW_ALL):
+                # This release has no Portrait page: say so on the upload screen instead of keeping the file.
+                st.session_state[PORTRAIT_REFUSED_KEY] = value
+                return
             key = PORTRAIT_UPLOAD_KEY
             st.session_state["portrait_routed"] = uploaded.name
             st.session_state[GO_PORTRAIT_KEY] = True    # open the Portrait page on the next run
     st.session_state[key] = value
+
+
+def portrait_refused_note() -> None:
+    """Says why a Portrait-only file was not loaded while this release hides the Portrait page."""
+    refused = st.session_state.get(PORTRAIT_REFUSED_KEY)
+    if refused:
+        st.warning(f"{refused[0]} holds Portrait of a Graduate coding, which this version doesn't show yet. "
+                   "Upload the codebook 3.x export instead.")
 
 
 def load_data() -> tuple[Optional[pd.DataFrame], str]:
@@ -1857,6 +1882,7 @@ def welcome_screen() -> None:
             f"Use the CSV exported by the Qualitative Outcomes Coder, such as `{DATA_FILENAME}`. "
             "The file stays in this browser session and is not saved once you close the tab."
         )
+        portrait_refused_note()
         if PORTRAIT_UPLOAD_KEY in st.session_state:
             name = st.session_state[PORTRAIT_UPLOAD_KEY][0]
             st.info(f"{name} is loaded on the Portrait of a Graduate page. This page and the others read the "
@@ -1864,7 +1890,8 @@ def welcome_screen() -> None:
             if "portrait" in PAGES:
                 st.page_link(PAGES["portrait"], label="Open the Portrait of a Graduate page")
         uploaded = st.file_uploader("Coded outcomes CSV", type="csv", label_visibility="collapsed")
-        if uploaded is not None and (uploaded.name, uploaded.getvalue()) != st.session_state.get(PORTRAIT_UPLOAD_KEY):
+        if uploaded is not None and (uploaded.name, uploaded.getvalue()) not in (
+                st.session_state.get(PORTRAIT_UPLOAD_KEY), st.session_state.get(PORTRAIT_REFUSED_KEY)):
             remember_upload(uploaded)
             st.rerun()
     st.caption(
@@ -1969,10 +1996,12 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str, upload_key: str = U
         )
         replacement = st.file_uploader("Load a different CSV", type="csv", key="replace_upload")
         # Compare contents as well as names: a fresh export often keeps the old file's name.
-        if replacement is not None and st.session_state.get(upload_key) != (replacement.name,
-                                                                             replacement.getvalue()):
+        if replacement is not None and (replacement.name, replacement.getvalue()) not in (
+                st.session_state.get(upload_key), st.session_state.get(PORTRAIT_REFUSED_KEY)):
             remember_upload(replacement, upload_key)
             st.rerun()
+        if replacement is not None:
+            portrait_refused_note()
         st.markdown(
             "**About the measures**\n\n"
             "- **Outcome statement**: one outcome after the coder split compound statements.\n"
@@ -2052,7 +2081,8 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str, upload_key: str = U
     return filtered
 
 
-# The app's pages by key, for links from one page to another (filled by main()).
+# The app's pages by key, for links from one page to another (filled by main()). Only the pages this release
+# shows are here, so a link to a hidden page is left out.
 PAGES: dict = {}
 
 
@@ -2061,7 +2091,8 @@ def main() -> None:
     st.markdown(CSS, unsafe_allow_html=True)
 
     df, source = load_data()
-    portrait_df, portrait_source = load_portrait(df, source)
+    portrait_df, portrait_source = load_portrait(df, source) if "portrait" in release.shown_pages(SHOW_ALL) \
+        else (None, "")
     if df is not None:
         # Portrait of a Graduate rows never join a codebook 3.x count: they live on their own page.
         df = portrait.split_by_codebook(df)[0]
@@ -2089,6 +2120,12 @@ def main() -> None:
                             title="Portrait of a Graduate", url_path="portrait-of-a-graduate"),
         "review": st.Page(needs_main(lambda: page_review(holder["df"])), title="Review coding", url_path="review-coding"),
     }
+    # The first release shows three pages (release.py). The others stay registered but hidden, handing over to
+    # the landing page, so an old link opens the wheel instead of "Page not found".
+    shown = release.shown_pages(SHOW_ALL)
+    retired = [st.Page(partial(st.switch_page, pages["map"]), title=pages[k].title, url_path=pages[k].url_path,
+                       visibility="hidden") for k in pages if k not in shown]
+    pages = {k: p for k, p in pages.items() if k in shown}
     # The default page is served at "/" and its own url_path is ignored, so links to /system-map (and /aims) opened
     # "Page not found". Hidden pages at those addresses hand over to the landing page.
     alias = st.Page(lambda: st.switch_page(pages["map"]), title="Explore intended outcomes", url_path="system-map",
@@ -2097,7 +2134,7 @@ def main() -> None:
                     visibility="hidden")
     PAGES.clear()
     PAGES.update(pages)
-    current = st.navigation([*pages.values(), alias, alias_aims], position="top")
+    current = st.navigation([*pages.values(), alias, alias_aims, *retired], position="top")
     page_key = next((k for k, p in pages.items() if p.url_path == current.url_path), "map")
     if st.session_state.pop(GO_PORTRAIT_KEY, False) and page_key != "portrait":
         st.switch_page(pages["portrait"])

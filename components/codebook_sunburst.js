@@ -39,7 +39,7 @@ const SIZE = Math.round(600 * SCALE);
 const C = SIZE / 2;
 const scaled = r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, Math.round(v * SCALE)]));
 const R_VALUE = scaled({ hole: 138, domain: 202, goal: 284 });
-const R_EQUAL = scaled({ hole: 98, domain: 150, cat: 178, goal: 290 });   // a smaller centre leaves the bars room to grow
+const R_EQUAL = scaled({ hole: 92, domain: 156, cat: 184, goal: 290 });   // a smaller centre leaves the bars room to grow
 const STUB = 14;             // depth of a zero goal's dashed stub, and the shortest bar
 const POP = 1.04;            // how far the active goal lifts out of the ring
 const ANIM_MS = 520;         // zoom in / out
