@@ -603,12 +603,25 @@ def test_app_runs_every_view(tmp_path, monkeypatch):
     path = tmp_path / "export.csv"
     raw_rows().to_csv(path, index=False)
     monkeypatch.setenv(app.DATA_ENV_VAR, str(path))
+    monkeypatch.setenv("SHOW_ALL_PAGES", "1")   # the ranked view is hidden in the release
     at = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"), default_timeout=60).run()
     assert not at.exception
     for view in ("Ranked",):
         at.session_state["v1_view"] = view
         at.run()
         assert not at.exception, view
+
+
+def test_release_runs_the_wheel_without_a_view_switch(tmp_path, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    path = tmp_path / "export.csv"
+    raw_rows().to_csv(path, index=False)
+    monkeypatch.setenv(app.DATA_ENV_VAR, str(path))
+    monkeypatch.delenv("SHOW_ALL_PAGES", raising=False)
+    at = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"), default_timeout=60).run()
+    assert not at.exception
+    assert "v1_view" not in at.session_state
 
 
 def test_axis_labels_wrap_instead_of_cutting():
