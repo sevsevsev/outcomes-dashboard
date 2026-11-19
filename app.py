@@ -326,6 +326,14 @@ h1 {{ font-size: 1.75rem !important; font-weight: 600 !important; letter-spacing
 /* The landing page's chart has no heading, so its section needs no rule above it either. */
 .st-key-sec-findings {{ margin-bottom: 1rem; }}
 .st-key-sec-explore {{ border-top: none; padding-top: 0.25rem; margin-top: 0.5rem; }}
+/* The wheel page fits one screen: a tight toolbar row, the wheel, then one row of buttons under it. */
+.inline-label {{ font-size: 0.8125rem !important; font-weight: 500; color: {INK_2}; margin: 0 !important; text-align: right; }}
+.st-key-sec-explore [data-testid="stHorizontalBlock"]:first-child {{ margin-bottom: -0.25rem; }}
+@media (max-width: 640px) {{ .inline-label {{ text-align: left; }} }}
+.st-key-wheel-actions {{ border-top: 1px solid {HAIRLINE}; padding-top: 0.6rem; }}
+.st-key-wheel-actions button {{ min-height: 2.25rem; }}
+.block-container:has(.st-key-wheel-actions) {{ padding-bottom: 0.75rem; max-width: 1440px; }}
+.st-key-sec-explore [data-testid="stMarkdownContainer"]:has(.inline-label) {{ margin-bottom: 0; }}
 .sec-title {{ font-size: 1.125rem !important; font-weight: 600; letter-spacing: -0.01em; margin: 0; color: {INK}; }}
 .sec-note {{ color: {MUTED}; font-size: 0.875rem !important; margin: 0.15rem 0 0.6rem 0; }}
 /* Chart labels are the explorer's small uppercase eyebrows. */
@@ -771,28 +779,34 @@ def page_system_map(df: pd.DataFrame) -> None:
     # side panel says what a click does.
     lead_in = partial(findings_section, df, coverage)
     with section(key="explore"):
-        # Wide enough that View and Count each stay on one line at 1280 px.
-        t0, t1, t2 = st.columns([3.6, 4.6, 3])
-        view = t0.segmented_control("View", VIEWS, default="Wheel", key="v1_view") or "Wheel"
-        grouping = GROUP_PRIORITIES
-        if view == "Ranked":
-            # Only the ranked bars can group by priority; the other views always show the codebook's domains.
-            grouping = t2.segmented_control(
-                "Group by", GROUPINGS, default=GROUP_PRIORITIES, key="v1_grouping",
-                help="Priorities use plain names such as Attendance or Math. Codebook domains are the coder's "
-                     "own domains, which the wheel, sunburst and treemap always use.",
-            ) or GROUP_PRIORITIES
+        # One toolbar row: View, then Count with its label beside it, so the wheel starts high enough to
+        # fit on one laptop screen (review of 2026-11-18). Ranked adds its Group by at the end of the row.
+        t0, t1, t2, t3 = st.columns([1.45, 0.45, 3.4, 3.2], vertical_alignment="center", gap="small")
+        view = t0.segmented_control("View", VIEWS, default="Wheel", key="v1_view",
+                                    label_visibility="collapsed") or "Wheel"
+        t1.markdown("<p class='inline-label'>Count</p>", unsafe_allow_html=True)
         # One Count control for both views, so switching view never changes what is counted.
-        measure = t1.segmented_control(
+        measure = t2.segmented_control(
             "Count", SUNBURST_MEASURES, default=MEASURE_PROGRAMS, key="v1_measure",
-            format_func=lambda m: "Statements" if m == MEASURE_OUTCOMES else m,
+            format_func=lambda m: "Statements" if m == MEASURE_OUTCOMES else m, label_visibility="collapsed",
             help="Programs and organizations count each one once per goal. Statements counts every outcome "
                  "statement, so programs that list many outcomes weigh more.",
         ) or MEASURE_PROGRAMS
+        grouping = GROUP_PRIORITIES
         if view == "Ranked":
-            chosen_domain = linked_explorer(df, measure, grouping, lead_in=lead_in)
+            # Only the ranked bars can group by priority; the other views always show the codebook's domains.
+            grouping = t3.segmented_control(
+                "Group by", GROUPINGS, default=GROUP_PRIORITIES, key="v1_grouping", label_visibility="collapsed",
+                help="Priorities use plain names such as Attendance or Math. Codebook domains are the coder's "
+                     "own domains, which the wheel always uses.",
+            ) or GROUP_PRIORITIES
+            linked_explorer(df, measure, grouping, lead_in=lead_in)
+            chosen_domain = None
         else:
-            chosen_domain = sunburst_view(df, measure, layout="equal", lead_in=lead_in)
+            # The wheel page fits one screen: the findings sit in the wheel's side panel at rest, and the
+            # outcomes table and the thin-coverage table open from one row of buttons under the wheel.
+            sunburst_view(df, measure, layout="equal", findings=cached_findings(df, coverage), coverage=coverage)
+            return
 
     thin_goals(coverage, chosen_domain)
 
@@ -879,7 +893,8 @@ def linked_explorer(df: pd.DataFrame, measure: str, grouping: str = GROUP_PRIORI
 
 
 def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value",
-                  lead_in: Optional[Callable[[], None]] = None) -> Optional[str]:
+                  lead_in: Optional[Callable[[], None]] = None, findings: Optional[Sequence[str]] = None,
+                  coverage: Optional[pd.DataFrame] = None) -> Optional[str]:
     """Domains and their goals as one sunburst, styled after the codebook explorer's. A click narrows the table.
 
     `layout="equal"` draws the wheel: every codebook goal gets the same slice,
@@ -901,6 +916,10 @@ def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value",
     data["search"] = cached_search_index(df, layout)
     data["definitions"] = cached_definitions()
     data["spotlight"] = spotlight_panel_data(cached_spotlight(), cached_crosswalk())
+    if findings:
+        # Shown in the side panel while nothing is pointed at or picked (**bold** marks the numbers).
+        data["findings"] = list(findings)
+    data["status"] = status_caption(df)
     pick = codebook_sunburst(data, key=key)
     ids = set(nodes["id"])
     if pick and pick["domain"] not in ids:
@@ -921,21 +940,50 @@ def sunburst_view(df: pd.DataFrame, measure: str, layout: str = "value",
         rows = filter_outcomes(df, domains=[domain], subcategories=goals)
     else:
         rows = df if domain is None else filter_outcomes(df, domains=[domain], subcategories=[goal] if goal else None)
+    where = describe(domain_short(domain) if domain else None, goal or category)
+    if coverage is not None:
+        wheel_actions(rows, where, coverage, domain)
+        return domain
     if lead_in:
         lead_in()
-    outcomes_panel(rows, describe(domain_short(domain) if domain else None, goal or category), key="v1_sb",
-                   nonce_key="v1_nonce" if pick else None)
+    outcomes_panel(rows, where, key="v1_sb", nonce_key="v1_nonce" if pick else None)
     return domain
 
 
-def thin_goals(coverage: pd.DataFrame, domain: Optional[str]) -> None:
+def status_caption(df: pd.DataFrame) -> str:
+    """The filter bar's count, for the wheel's saved image: "2,441 intended outcomes from 112 organizations"."""
+    sources = df[COL_SOURCE_TYPE].unique() if COL_SOURCE_TYPE in df else ()
+    text = status_line(len(df), len(df), count_organizations(df[COL_ORG_VIEW]), sources)
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", text))).strip()
+
+
+def wheel_actions(rows: pd.DataFrame, where: str, coverage: pd.DataFrame, domain: Optional[str]) -> None:
+    """One row under the wheel: the outcomes table and the thin-coverage table each open over the page,
+    following what the wheel has picked, so the page itself never scrolls."""
+    shown = coverage if domain is None else coverage[coverage[COL_DOMAIN] == domain]
+    zero = int((shown["organizations"] == 0).sum())
+    with st.container(key="wheel-actions", horizontal=True, gap="small", vertical_alignment="center"):
+        plain_where = re.sub(r"<[^>]+>", "", where)
+        if st.button(f"Show {len(rows):,} outcomes{plain_where}", key="v1_show_rows", icon=":material/table_rows:",
+                     type="secondary"):
+            st.dialog(f"{len(rows):,} outcomes{plain_where}", width="large")(
+                lambda: outcomes_panel(rows, where, key="v1_dlg"))()
+        cov_label = "Where coverage is thin" + (f" in {plain_domain(domain)}" if domain else "")
+        if st.button(cov_label + (f" · {zero} goals with no program" if zero else ""), key="v1_show_thin",
+                     icon=":material/data_usage:", type="tertiary"):
+            st.dialog(cov_label, width="large")(lambda: thin_goals(coverage, domain, in_dialog=True))()
+
+
+def thin_goals(coverage: pd.DataFrame, domain: Optional[str], in_dialog: bool = False) -> None:
     """Every goal in the codebook, fewest organizations first. Follows the domain picked above."""
     shown = coverage if domain is None else coverage[coverage[COL_DOMAIN] == domain]
     zero = int((shown["organizations"] == 0).sum())
     note = "Every goal in the codebook, fewest organizations first." + (
         f" No program names {zero} of them yet." if zero else "")
     title = "Where coverage is thin" + (f" in {plain_domain(domain)}" if domain else "")
-    with section(title, note, key="coverage"):
+    with (st.container() if in_dialog else section(title, note, key="coverage")):
+        if in_dialog:
+            st.markdown(f"<p class='sec-note'>{note}</p>", unsafe_allow_html=True)
         st.dataframe(
             shown[[COL_SUBCAT, COL_DOMAIN]].map(plain_label).join(shown[["organizations", "programs", "outcomes"]]),
             hide_index=True,
