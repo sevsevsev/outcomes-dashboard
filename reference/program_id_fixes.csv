@@ -1,0 +1,7 @@
+# Reviewed corrections to the district partner and program IDs in coded-outcome exports.
+# Read by schools.load_id_fixes. Add a row only after checking the district's partner and
+# program names (scripts/check_program_ids.py lists the programs that need a decision).
+# Either fill file_partner_id + file_program_id (a wrong pair in the export), or
+# file_organization (the organization name exactly as the export gives it, for rows with no IDs).
+file_partner_id,file_program_id,file_organization,partner_id,program_id,note
+114,82,,88,82,"Philadelphia Young Playwrights' file name says 114_82; program 82 (Core Playwriting Program) belongs to partner 88, Philadelphia Young Playwrights, and partner 114 is the Philadelphia Museum of Art."

@@ -158,7 +158,10 @@ ORG_ALIASES = {
 
 # Logic model files are named "<id>_<id> - <Organization> - <Program> - Logic Model.<ext>",
 # sometimes followed by " — Part 2 of 6".
-FILENAME_PATTERN = re.compile(r"^\s*\d+_\d+\s+-\s+(?P<org>.+?)\s+-\s+(?P<program>.+?)\s+-\s+Logic Model", re.I)
+# "83_14 - Org - Program - Logic Model.pdf" (older exports) or
+# "113-13-historic-fair-hill-2026 - Org - Program - Logic Model.pdf" (3.3.0 exports on).
+FILENAME_PATTERN = re.compile(
+    r"^\s*\d+(?:_\d+|-\S*[A-Za-z#]\S*)\s+-\s+(?P<org>.+?)\s+-\s+(?P<program>.+?)\s+-\s+Logic Model", re.I)
 
 # Plotly hover boxes do not wrap text, so outcome samples are wrapped manually. 60 characters keeps
 # a ranked-bar hover box narrower than its half-width chart, so the box never runs off the chart's edge.
@@ -514,6 +517,28 @@ def _merge_case_variants(names: pd.Series) -> pd.Series:
     return names.map(lambda n: canonical.get(n.casefold(), n) if isinstance(n, str) else n).astype("string")
 
 
+COL_PROGRAM_ID = "program_id"
+# Exports spell the district ID columns differently ("Partner ID" in the 3.3.0
+# logic-model export, partner_id in district program files).
+ID_COLUMN_NAMES = {"partnerid": COL_PARTNER_ID, "programid": COL_PROGRAM_ID}
+
+
+def _with_id_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename "Partner ID" / "PROGRAM_ID" style columns to partner_id / program_id, and keep only
+    whole-number IDs: a spreadsheet lookup that failed ("#N/A") leaves the ID empty, not wrong."""
+    renames = {}
+    for column in df.columns:
+        target = ID_COLUMN_NAMES.get(re.sub(r"[\s_]+", "", str(column)).lower())
+        if target and target not in df.columns and target not in renames.values():
+            renames[column] = target
+    df = df.rename(columns=renames)
+    for column in ID_COLUMN_NAMES.values():
+        if column in df.columns:
+            text = df[column].astype("string").str.strip().str.replace(r"\.0+$", "", regex=True)
+            df[column] = text.where(text.str.fullmatch(r"\d+", na=False), pd.NA).astype("string")
+    return df
+
+
 def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
     """Validate and tidy a raw coded-outcomes export.
 
@@ -531,7 +556,7 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
             "The CSV is missing required column(s): " + ", ".join(missing)
         )
 
-    df = raw.copy()
+    df = _with_id_columns(raw.copy())
 
     # --- Trim stray whitespace in every text column ---------------------------
     for col in df.select_dtypes(include=["object", "string"]).columns:
@@ -540,10 +565,9 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
     # District program files name a partner by ID only. Label it so rows from
     # one partner still group together, rather than all collapsing into
     # "Unknown organization".
+    # (The file name, when there is one, is tried first, further down.)
     if COL_ORG not in df.columns:
         df[COL_ORG] = pd.Series(pd.NA, index=df.index, dtype="string")
-    if COL_PARTNER_ID in df.columns:
-        df[COL_ORG] = df[COL_ORG].fillna("Partner " + df[COL_PARTNER_ID])
     if COL_PROGRAM not in df.columns:
         df[COL_PROGRAM] = pd.Series(pd.NA, index=df.index, dtype="string")
 
@@ -564,7 +588,10 @@ def clean_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
         file_org = pd.Series(pd.NA, index=df.index)
         file_program = pd.Series(pd.NA, index=df.index)
 
-    org = df[COL_ORG].fillna(file_org).replace(ORG_ALIASES)
+    org = df[COL_ORG].fillna(file_org)
+    if COL_PARTNER_ID in df.columns:
+        org = org.fillna("Partner " + df[COL_PARTNER_ID])
+    org = org.replace(ORG_ALIASES)
     df[COL_ORG] = _merge_case_variants(org).fillna(UNKNOWN_ORG)
 
     df[COL_GRANTEE] = file_org.replace(ORG_ALIASES).fillna(df[COL_ORG])

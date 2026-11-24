@@ -178,3 +178,93 @@ def test_school_dots_show_every_codebook_domain_with_gaps_marked():
             assert custom[0] == charts.DOMAIN_KEY + domain and "none" not in text
         else:
             assert custom[0] == "" and "<i>none</i>" in text   # a gap: shown, not clickable
+
+
+# --- 3.3.0 export and the database's Schools_Partners_Relate.xlsx (2026-11-24) -----------------
+
+def _export_330():
+    """Rows shaped like coded_outcomes_youth_outcomes_v3-3.3.0: "Partner ID"/"Program ID" columns and
+    "PP-GG-slug - Org - Program - Logic Model" file names, one failed spreadsheet lookup ("#N")."""
+    def row(pid, gid, filename, org):
+        return {"Partner ID": pid, "Program ID": gid, "organization": org, "program": None,
+                "source_filename": filename, "outcome_text_original": "Kids read",
+                "primary_domain": ACAD, "primary_subcategory": "Y1.1 Literacy",
+                "primary_target_population": "students_youth", "primary_confidence": "high"}
+    return pd.DataFrame([
+        row("10", "1", "10-1-dance-2026 - BalletX - Dance - Logic Model.pdf", "BalletX"),
+        row("113", "13", "113-13-historic-fair-hill-2026 - Historic Fair Hill, Inc. - Historic Fair Hill"
+                         " - Logic Model.pdf — Part 1 of 6", None),
+        row("43", "#N", "43-#N-A-asap-2026 - ASAP - ASAP Chess - Logic Model.pdf", "ASAP"),
+    ])
+
+
+def test_330_export_id_columns_and_file_names_are_read():
+    df = sc.with_program_ids(od.clean_outcomes(_export_330()))
+    assert df[od.COL_PARTNER_ID].tolist()[:2] == ["10", "113"]
+    assert df[sc.COL_PROGRAM_ID].tolist()[:2] == ["1", "13"]
+    assert pd.isna(df[sc.COL_PROGRAM_ID].iloc[2])          # "#N" is a failed lookup, not an ID
+    # The organization comes from the dash-style file name, not "Unknown organization" or "Partner 113".
+    assert df[od.COL_ORG].iloc[1] == "Historic Fair Hill, Inc."
+    assert df[od.COL_PROGRAM].iloc[1] == "Historic Fair Hill"
+
+
+def test_dash_file_names_give_ids_when_the_columns_are_missing():
+    raw = _export_330().drop(columns=["Partner ID", "Program ID"])
+    ids = sc.outcome_program_ids(raw)
+    assert ids[sc.COL_PROGRAM_ID].tolist()[:2] == ["1", "13"]
+    assert ids[od.COL_PARTNER_ID].isna().iloc[2]
+    # A dated file name is not read as an ID pair.
+    dated = pd.DataFrame({"source_filename": ["2025-07-08 - Org - Program - Logic Model.pdf"]})
+    assert sc.outcome_program_ids(dated)[sc.COL_PROGRAM_ID].isna().all()
+
+
+def _relate_workbook(path, family="16"):
+    """An .xlsx like the partnerships database writes: font family 16, which openpyxl refuses."""
+    import re
+    import zipfile
+    pd.DataFrame({"EOS Code": [1010], "School Name": ["A School"], "Partner ID": [10],
+                  "Partner Name": ["BalletX Inc"], "Fiscal Year": ["2025-2026"], "Program ID": [1],
+                  "Program Name": ["Dance"]}).to_excel(path, index=False)
+    with zipfile.ZipFile(path) as src:
+        items = {i.filename: src.read(i.filename) for i in src.infolist()}
+    # openpyxl versions write the tag as <family val="2"/> or <family val="2" />; drop it, then add ours.
+    styles = re.sub(rb'<family\s+val="\d+"\s*/>', b"", items["xl/styles.xml"])
+    items["xl/styles.xml"] = re.sub(rb"<font>", f'<font><family val="{family}"/>'.encode(), styles)
+    assert f'<family val="{family}"/>'.encode() in items["xl/styles.xml"]
+    with zipfile.ZipFile(path, "w") as dst:
+        for name, data in items.items():
+            dst.writestr(name, data)
+
+
+def test_relate_export_with_bad_font_family_is_read(tmp_path):
+    path = tmp_path / "Schools_Partners_Relate.xlsx"
+    _relate_workbook(path)
+    kind, rel = sc.read_table(path)
+    assert kind == sc.RELATIONSHIPS
+    row = rel.iloc[0]
+    assert (row[od.COL_PARTNER_ID], row[sc.COL_PROGRAM_ID], row[sc.COL_ULCS]) == ("10", "1", "1010")
+    assert row[sc.COL_YEAR] == "20252026"
+    assert sc.fiscal_year_label(row[sc.COL_YEAR]) == "2025-26"
+    assert row[sc.COL_PARTNER_NAME] == "BalletX Inc"
+    assert sc.find_local_tables(tmp_path) == {sc.RELATIONSHIPS: path}
+
+
+def test_reviewed_id_fixes_correct_a_pair_or_fill_missing_ids(tmp_path):
+    fixes_file = tmp_path / "fixes.csv"
+    fixes_file.write_text("# comment\nfile_partner_id,file_program_id,file_organization,partner_id,program_id,note\n"
+                          "113,13,,88,82,wrong partner\n,,asap,43,73,confirmed\n")
+    fixes = sc.load_id_fixes(fixes_file)
+    df = od.clean_outcomes(_export_330())
+    ids = sc.apply_id_fixes(sc.outcome_program_ids(df), df, fixes)
+    assert list(zip(ids[od.COL_PARTNER_ID], ids[sc.COL_PROGRAM_ID])) == [("10", "1"), ("88", "82"), ("43", "73")]
+    # Without a fix nothing is guessed from names.
+    empty = sc.load_id_fixes(tmp_path / "none.csv")
+    assert sc.apply_id_fixes(sc.outcome_program_ids(df), df, empty)[sc.COL_PROGRAM_ID].isna().iloc[2]
+
+
+def test_shipped_id_fixes_file_is_valid():
+    fixes = sc.load_id_fixes()
+    assert not fixes.empty
+    assert fixes[[od.COL_PARTNER_ID, sc.COL_PROGRAM_ID]].notna().all().all()
+    keyed = fixes["file_program_id"].notna() | fixes["file_organization"].notna()
+    assert keyed.all()
