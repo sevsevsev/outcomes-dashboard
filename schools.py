@@ -7,8 +7,9 @@ no Streamlit calls.
 Two district tables feed it, both kept out of git like every partner file:
 
 * The program-to-school relationship table (the partnerships database's
-  "Program Schools" export): one row per program per school per fiscal year,
-  keyed by PARTNER ID, PROGRAM ID and EOS CODE (the school's ULCS code).
+  "Program Schools" export, or Schools_Partners_Relate.xlsx, which adds partner
+  and program names): one row per program per school per fiscal year, keyed by
+  PARTNER ID, PROGRAM ID and EOS CODE (the school's ULCS code).
 * The schools table (Schools.xlsx): ULCS code, school name, level, learning
   network, zip code and City Council district.
 
@@ -16,7 +17,8 @@ Coded outcomes join to the relationship table on the district partner and
 program IDs, never on names. A coded file carries them in `partner_id` and
 `program_id` columns (district program files, and logic-model files once the
 IDs are added to the coder input), in `program_key` ("54_32"), or in the logic
-model's file name ("... - 54_32 - Org - Program - Logic Model.pdf").
+model's file name ("54_32 - Org - ..." or "54-32-slug-2026 - Org - ..."). Reviewed
+corrections in reference/program_id_fixes.csv are applied on top.
 
 Not every program at a school has coded outcomes, so every function here keeps
 the uncoded ones: a school's portfolio lists all its partners, and says which
@@ -27,6 +29,7 @@ from __future__ import annotations
 
 import io
 import re
+import zipfile
 from pathlib import Path
 from typing import IO, Iterable, Optional, Union
 
@@ -43,6 +46,7 @@ from outcomes_data import (
     UNCODED_DOMAIN,
     UNKNOWN_ORG,
     _plural,
+    _with_id_columns,
     domain_order,
     goal_name,
     sample_outcome_texts,
@@ -54,6 +58,7 @@ REL_PARTNER = "PARTNER ID"
 REL_PROGRAM = "PROGRAM ID"
 REL_SCHOOL = "EOS CODE"          # the school's ULCS code
 REL_YEAR = "FISCAL YEAR ID"      # 20252026
+REL_YEARS = (REL_YEAR, "FISCAL YEAR")   # Schools_Partners_Relate.xlsx: "FISCAL YEAR", 2025-2026
 REL_DELETE = "DELETE"            # flagged for deletion in the database
 REL_PARTNER_NAME = "PARTNER NAME"   # optional: used when a future export carries names
 REL_PROGRAM_NAME = "PROGRAM NAME"
@@ -91,10 +96,13 @@ STATUS_ORDER = [CODED, PARTLY_CODED, NOT_CODED]
 
 PROGRAM_KEY = "program_key"
 KEY_PATTERN = re.compile(r"^\s*(\d+)_(\d+)\s*$")
-FILE_KEY_PATTERN = re.compile(r"(?:^|\s-\s)\s*(\d+)_(\d+)\s+-\s")
-FILE_ORG_PATTERN = re.compile(r"(?:^|\s-\s)\s*\d+_\d+\s+-\s+(.+?)\s+-\s")
+# "54_32 - Org - ..." in older exports; "113-13-historic-fair-hill-2026 - Org - ..." from 3.3.0 on.
+FILE_KEY_PATTERN = re.compile(r"(?:^|\s-\s)\s*(\d+)(?:_(\d+)|-(\d+)-[A-Za-z]\S*)\s+-\s")
+FILE_ORG_PATTERN = re.compile(r"(?:^|\s-\s)\s*\d+(?:_\d+|-\S*[A-Za-z#]\S*)\s+-\s+(.+?)\s+-\s")
 
 LOCAL_DIR = APP_DIR / "data"
+# Reviewed corrections to the district IDs a coded file carries (see load_id_fixes).
+ID_FIXES_PATH = APP_DIR / "reference" / "program_id_fixes.csv"
 
 
 class NotASchoolTableError(ValueError):
@@ -120,6 +128,39 @@ def table_kind(df: pd.DataFrame) -> Optional[str]:
     return None
 
 
+def _without_bad_font_families(data: bytes) -> io.BytesIO:
+    """The workbook with every <family val=".."/> font tag removed from its styles.
+
+    The partnerships database writes font family 16 into its Excel exports
+    (Schools_Partners_Relate.xlsx); openpyxl accepts only 0-14 and refuses the
+    whole file. The tag only picks a fallback font, so dropping it changes no data.
+    """
+    out = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(data)) as src, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as dst:
+        for item in src.infolist():
+            content = src.read(item.filename)
+            if item.filename == "xl/styles.xml":
+                content = re.sub(rb"<family\s+val=\"\d+\"\s*/>", b"", content)
+            dst.writestr(item, content)
+    out.seek(0)
+    return out
+
+
+def read_excel_sheets(source: Union[str, Path, IO[bytes]], **kwargs) -> dict[str, pd.DataFrame]:
+    """Every sheet of a workbook, also for database exports whose styles openpyxl rejects."""
+    if isinstance(source, (str, Path)):
+        data = Path(source).read_bytes()
+    else:
+        source.seek(0)
+        data = source.read()
+    try:
+        return pd.read_excel(io.BytesIO(data), sheet_name=None, **kwargs)
+    except ValueError as exc:
+        if "stylesheet" not in str(exc):
+            raise
+        return pd.read_excel(_without_bad_font_families(data), sheet_name=None, **kwargs)
+
+
 def read_table(source: Union[str, Path, IO[bytes]], name: str = "") -> tuple[str, pd.DataFrame]:
     """Read an .xlsx or .csv file and return (kind, tidy table).
 
@@ -128,7 +169,7 @@ def read_table(source: Union[str, Path, IO[bytes]], name: str = "") -> tuple[str
     """
     name = name or str(source)
     if name.lower().endswith((".xlsx", ".xlsm", ".xls")):
-        sheets = pd.read_excel(source, sheet_name=None)
+        sheets = read_excel_sheets(source)
         ordered = sorted(sheets.items(), key=lambda item: item[0].strip().lower() != SCHOOL_SHEET)
         candidates = [frame for _, frame in ordered]
     else:
@@ -155,6 +196,16 @@ def _id_text(series: pd.Series) -> pd.Series:
     return numbers.map(lambda v: str(int(v)) if pd.notna(v) else pd.NA).astype("string")
 
 
+def _year_text(df: pd.DataFrame) -> pd.Series:
+    """The fiscal year as "20252026", from FISCAL YEAR ID (20252026) or FISCAL YEAR ("2025-2026")."""
+    for column in REL_YEARS:
+        if column in df.columns:
+            digits = df[column].astype("string").str.replace(r"\.0+$", "", regex=True).str.replace(r"\D", "",
+                                                                                                    regex=True)
+            return digits.where(digits.str.len() == 8, pd.NA).astype("string")
+    return pd.Series(pd.NA, index=df.index, dtype="string")
+
+
 def tidy_relationships(raw: pd.DataFrame) -> pd.DataFrame:
     """One row per program and school: partner_id, program_id, ulcs, fiscal_year (+ names if given).
 
@@ -169,8 +220,7 @@ def tidy_relationships(raw: pd.DataFrame) -> pd.DataFrame:
         COL_PARTNER_ID: _id_text(df[REL_PARTNER]),
         COL_PROGRAM_ID: _id_text(df[REL_PROGRAM]),
         COL_ULCS: _id_text(df[REL_SCHOOL]),
-        COL_YEAR: _id_text(df[REL_YEAR]) if REL_YEAR in df.columns else pd.Series(pd.NA, index=df.index,
-                                                                                  dtype="string"),
+        COL_YEAR: _year_text(df),
     })
     for source, target in ((REL_PARTNER_NAME, COL_PARTNER_NAME), (REL_PROGRAM_NAME, COL_PROGRAM_NAME)):
         if source in df.columns:
@@ -213,7 +263,7 @@ def find_local_tables(folder: Path = LOCAL_DIR) -> dict[str, Path]:
             if path.suffix.lower() == ".csv":
                 kind = table_kind(pd.read_csv(path, nrows=0))
             else:
-                sheets = pd.read_excel(path, sheet_name=None, nrows=0)
+                sheets = read_excel_sheets(path, nrows=0)
                 kinds = {table_kind(frame) for frame in sheets.values()} - {None}
                 kind = next(iter(sorted(kinds)), None)
         except (ValueError, OSError, pd.errors.ParserError, UnicodeDecodeError):
@@ -243,6 +293,7 @@ def outcome_program_ids(df: pd.DataFrame) -> pd.DataFrame:
     """
     ids = pd.DataFrame({COL_PARTNER_ID: pd.Series(pd.NA, index=df.index, dtype="string"),
                         COL_PROGRAM_ID: pd.Series(pd.NA, index=df.index, dtype="string")})
+    df = _with_id_columns(df)
     if COL_PARTNER_ID in df.columns and COL_PROGRAM_ID in df.columns:
         ids[COL_PARTNER_ID] = _id_text(df[COL_PARTNER_ID])
         ids[COL_PROGRAM_ID] = _id_text(df[COL_PROGRAM_ID])
@@ -251,14 +302,57 @@ def outcome_program_ids(df: pd.DataFrame) -> pd.DataFrame:
         if not missing.any() or column not in df.columns:
             continue
         parts = df.loc[missing, column].astype("string").str.extract(pattern)
-        ids.loc[missing, COL_PARTNER_ID] = parts[0].astype("string")
-        ids.loc[missing, COL_PROGRAM_ID] = parts[1].astype("string")
+        program = parts[1] if parts.shape[1] == 2 else parts[1].fillna(parts[2])   # "54_32" or "54-32-slug"
+        ids.loc[missing, COL_PARTNER_ID] = parts[0].where(program.notna()).astype("string")
+        ids.loc[missing, COL_PROGRAM_ID] = program.astype("string")
+    return ids
+
+
+def load_id_fixes(path: Union[str, Path] = ID_FIXES_PATH) -> pd.DataFrame:
+    """Reviewed ID corrections: file_partner_id, file_program_id, file_organization -> partner_id, program_id.
+
+    A row fixes either a wrong ID pair the export carries (file_partner_id and
+    file_program_id filled), or a program the export left without IDs
+    (file_organization filled: the organization exactly as the export names
+    it, matched without regard to case). Each row is a decision a person made
+    after checking the district's partner and program names; the app never
+    guesses IDs from names on its own. scripts/check_program_ids.py lists the
+    programs that need a decision.
+    """
+    path = Path(path)
+    columns = ["file_partner_id", "file_program_id", "file_organization", COL_PARTNER_ID, COL_PROGRAM_ID]
+    if not path.is_file():
+        return pd.DataFrame(columns=columns, dtype="string")
+    fixes = pd.read_csv(path, dtype="string", comment="#").reindex(columns=columns + ["note"])
+    for column in ("file_partner_id", "file_program_id", COL_PARTNER_ID, COL_PROGRAM_ID):
+        fixes[column] = _id_text(fixes[column])
+    fixes["file_organization"] = fixes["file_organization"].str.strip().str.casefold()
+    return fixes.dropna(subset=[COL_PARTNER_ID, COL_PROGRAM_ID]).reset_index(drop=True)
+
+
+def apply_id_fixes(ids: pd.DataFrame, df: pd.DataFrame, fixes: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """ids (from outcome_program_ids) with the reviewed corrections in fixes applied."""
+    fixes = load_id_fixes() if fixes is None else fixes
+    if fixes.empty:
+        return ids
+    ids = ids.copy()
+    for fix in fixes.itertuples(index=False):
+        if pd.notna(fix.file_program_id):
+            hit = (ids[COL_PARTNER_ID] == fix.file_partner_id) & (ids[COL_PROGRAM_ID] == fix.file_program_id)
+        elif pd.notna(fix.file_organization) and COL_ORG in df.columns:
+            hit = ids[COL_PROGRAM_ID].isna() & (df[COL_ORG].astype("string").str.strip().str.casefold()
+                                                 == fix.file_organization)
+        else:
+            continue
+        hit = hit.fillna(False)
+        ids.loc[hit, COL_PARTNER_ID] = getattr(fix, COL_PARTNER_ID)
+        ids.loc[hit, COL_PROGRAM_ID] = getattr(fix, COL_PROGRAM_ID)
     return ids
 
 
 def with_program_ids(df: pd.DataFrame) -> pd.DataFrame:
     """df with its district partner_id and program_id filled in where they can be found."""
-    ids = outcome_program_ids(df)
+    ids = apply_id_fixes(outcome_program_ids(df), df)
     return df.assign(**{COL_PARTNER_ID: ids[COL_PARTNER_ID], COL_PROGRAM_ID: ids[COL_PROGRAM_ID]})
 
 
