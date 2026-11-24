@@ -624,6 +624,37 @@ def test_release_runs_the_wheel_without_a_view_switch(tmp_path, monkeypatch):
     assert "v1_view" not in at.session_state
 
 
+def _portrait_page_shows(path, monkeypatch) -> bool:
+    """Runs the release (no SHOW_ALL_PAGES) on a file, opens the Portrait page's address, and says whether the
+    page itself drew (a hidden page hands over to the wheel instead)."""
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.setenv(app.DATA_ENV_VAR, str(path))
+    monkeypatch.delenv("SHOW_ALL_PAGES", raising=False)
+    monkeypatch.delenv("PORTRAIT_CSV", raising=False)
+    at = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"), default_timeout=60).run()
+    assert not at.exception
+    at._page_hash = next(h for h, p in at._registered_pages.items() if p["url_pathname"] == "portrait-of-a-graduate")
+    at.run()
+    assert not at.exception
+    return any(m.value.startswith("<p class='portrait-banner'>") for m in at.markdown)
+
+
+def test_release_shows_the_portrait_page_only_when_portrait_rows_are_loaded(tmp_path, monkeypatch):
+    """Severin (2026-11-24): a coding with Portrait of a Graduate rows brings the Portrait page back."""
+    v3 = raw_rows().assign(codebook_version="youth_outcomes_v3@3.3.0")
+    pog = raw_rows().iloc[:3].assign(
+        primary_domain="POG.2 Persist with purpose and adapt with confidence",
+        primary_subcategory="POG.2.1 Know my values and aspirations",
+        codebook_version="portrait_of_a_graduate@0.1.0")
+    files = {"v3.csv": v3, "mixed.csv": pd.concat([v3, pog]), "portrait.csv": pog}
+    for name, frame in files.items():
+        frame.to_csv(tmp_path / name, index=False)
+    assert not _portrait_page_shows(tmp_path / "v3.csv", monkeypatch)
+    assert _portrait_page_shows(tmp_path / "mixed.csv", monkeypatch)
+    assert _portrait_page_shows(tmp_path / "portrait.csv", monkeypatch)
+
+
 def test_axis_labels_wrap_instead_of_cutting():
     name = "Netter Center for Community Partnerships, University of Pennsylvania"
     label = charts.axis_label(name)

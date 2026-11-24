@@ -232,3 +232,20 @@ def test_a_mixed_file_never_lets_portrait_rows_into_the_3x_pages(sample):
         coded = others[od.COL_DOMAIN] != "Uncoded"   # a blank-version uncoded row cannot be told apart; it counts nowhere
         assert others.loc[coded, od.COL_DOMAIN].str.startswith("Domain").all() and coded.sum() == 1
         assert len(pog) == len(sample) - (portrait_rows is blank)
+
+
+def test_portrait_rows_are_found_whatever_the_export_calls_the_version(sample):
+    """The 3.3.0 export era: versions may read "portrait_of_a_graduate-0.1.0", and domains may carry "Domain "."""
+    for version in ("portrait_of_a_graduate@0.1.0", "portrait_of_a_graduate-0.1.0", "Portrait_of_a_Graduate 0.2.0"):
+        rows = sample.assign(codebook_version=version)
+        assert portrait.is_portrait(rows).all(), version
+        assert portrait.codebook_version(rows) == version[-5:]
+    prefixed = sample.assign(codebook_version="")
+    prefixed[od.COL_DOMAIN] = "Domain " + prefixed[od.COL_DOMAIN].astype(str)
+    coded = sample[od.COL_DOMAIN] != "Uncoded"
+    assert portrait.is_portrait(prefixed)[coded].all()
+    assert not portrait.is_portrait(pd.DataFrame({od.COL_DOMAIN: ["Domain Y1. Academic Learning & Achievement"],
+                                                   "codebook_version": [""]})).any()
+    mixed = pd.DataFrame({"codebook_version": ["portrait_of_a_graduate@0.1.0", "portrait_of_a_graduate@0.10.0",
+                                               "youth_outcomes_v3@3.3.0"]})
+    assert portrait.codebook_version(mixed) == "0.10.0"

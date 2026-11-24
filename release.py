@@ -4,6 +4,9 @@ The first stable release keeps three pages (the wheel, Find peers and Partners a
 a small, settled tool first. The other pages and the ranked view stay in the code and come back when
 `SHOW_ALL_PAGES` is set to a true value, as an environment variable or a Streamlit secret (for testing
 them locally or on a private deploy).
+
+The Portrait of a Graduate page also comes back on its own whenever the loaded data holds Portrait rows
+(an uploaded Portrait export, or Portrait rows inside the main file), so loading that coding shows it.
 """
 from __future__ import annotations
 
@@ -30,8 +33,11 @@ def flag_on(environ: Mapping[str, str] = os.environ, secrets: Optional[Mapping] 
     return False
 
 
-def shown_pages(all_on: bool) -> tuple[str, ...]:
-    return ALL_PAGES if all_on else RELEASED_PAGES
+def shown_pages(all_on: bool, portrait: bool = False) -> tuple[str, ...]:
+    """The pages to show, in ALL_PAGES order. `portrait` is True when Portrait of a Graduate rows are loaded."""
+    if all_on:
+        return ALL_PAGES
+    return tuple(k for k in ALL_PAGES if k in RELEASED_PAGES or (portrait and k == "portrait"))
 
 
 def shown_views(all_on: bool) -> tuple[str, ...]:

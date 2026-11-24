@@ -91,7 +91,8 @@ TESTING_BANNER = ("Testing version (Portrait of a Graduate codebook {version}). 
 CREDIT = ("Portrait of a Graduate Competency Framework, written by Building 21 for the School District of "
           "Philadelphia, licensed CC BY-NC-SA 4.0.")
 
-_COMPETENCY = re.compile(r"^\s*(POG\.\d+|OUT)\b")
+_COMPETENCY = re.compile(r"^\s*(?:Domain\s+)?(POG\.\d+|OUT)\b")
+_VERSION_NUMBER = re.compile(r"[@\-_ ]v?(\d+(?:\.\d+)+)\s*$")
 _SKILL = re.compile(r"^\s*(POG\.\d+\.\d+|OUT\.\d+)\b")
 
 
@@ -134,10 +135,12 @@ def split_by_codebook(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def codebook_version(df: pd.DataFrame) -> str:
-    """ "0.1.0" from "portrait_of_a_graduate@0.1.0" (the newest if a file holds several)."""
+    """ "0.1.0" from "portrait_of_a_graduate@0.1.0" or "portrait_of_a_graduate-0.1.0" (the newest if a file
+    holds several)."""
     if COL_VERSION not in df.columns:
         return DEFAULT_VERSION
-    versions = sorted({str(v).split("@", 1)[1] for v in df[COL_VERSION].dropna().unique() if "@" in str(v)})
+    found = (_VERSION_NUMBER.search(str(v)) for v in df[COL_VERSION].dropna().unique() if "portrait" in str(v).lower())
+    versions = sorted({m.group(1) for m in found if m}, key=lambda v: tuple(int(n) for n in v.split(".")))
     return versions[-1] if versions else DEFAULT_VERSION
 
 
