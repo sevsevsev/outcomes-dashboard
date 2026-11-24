@@ -227,8 +227,9 @@ def _relate_workbook(path, family="16"):
                   "Program Name": ["Dance"]}).to_excel(path, index=False)
     with zipfile.ZipFile(path) as src:
         items = {i.filename: src.read(i.filename) for i in src.infolist()}
-    items["xl/styles.xml"] = re.sub(rb'<family val="\d+"/>', f'<family val="{family}"/>'.encode(),
-                                    items["xl/styles.xml"])
+    # openpyxl versions write the tag as <family val="2"/> or <family val="2" />; drop it, then add ours.
+    styles = re.sub(rb'<family\s+val="\d+"\s*/>', b"", items["xl/styles.xml"])
+    items["xl/styles.xml"] = re.sub(rb"<font>", f'<font><family val="{family}"/>'.encode(), styles)
     assert f'<family val="{family}"/>'.encode() in items["xl/styles.xml"]
     with zipfile.ZipFile(path, "w") as dst:
         for name, data in items.items():
