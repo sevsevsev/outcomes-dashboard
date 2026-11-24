@@ -10,7 +10,7 @@ youth-serving program logic models. It is built for two audiences:
 * Program operators, who want to find peer organizations aiming at the same
   developmental goals.
 
-Pages (top navigation; this release shows only 1-3, see release.py):
+Pages (top navigation; this release shows 1-3, plus 5 whenever Portrait rows are loaded; see release.py):
 
 1. Explore intended outcomes - findings, linked priority (or domain) / goal / audience charts, coverage gaps
 2. Find peers        - peers for an organization, organizations by goal, program comparison
@@ -167,7 +167,6 @@ UPLOAD_KEY = "uploaded_csv"          # (file name, bytes) of a CSV uploaded this
 PORTRAIT_UPLOAD_KEY = "uploaded_portrait_csv"   # the same for the Portrait of a Graduate export
 GO_PORTRAIT_KEY = "go_to_portrait"              # set when a Portrait-only file was loaded from another page
 PORTRAIT_ENV_VAR = "PORTRAIT_CSV"
-PORTRAIT_REFUSED_KEY = "portrait_not_shown"     # a Portrait-only file turned away while the Portrait page is hidden
 READ_ERRORS = (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError)
 VIEWS = list(release.ALL_VIEWS)   # the release shows only the wheel (release.py)
 SHOW_ALL = release.flag_on(secrets=st.secrets)   # SHOW_ALL_PAGES brings back the hidden pages and views
@@ -1856,22 +1855,10 @@ def remember_upload(uploaded, key: str = UPLOAD_KEY) -> None:
         except (*READ_ERRORS, MissingColumnsError):
             frame = None
         if frame is not None and len(frame) and portrait.is_portrait(frame).all():
-            if "portrait" not in release.shown_pages(SHOW_ALL):
-                # This release has no Portrait page: say so on the upload screen instead of keeping the file.
-                st.session_state[PORTRAIT_REFUSED_KEY] = value
-                return
             key = PORTRAIT_UPLOAD_KEY
             st.session_state["portrait_routed"] = uploaded.name
             st.session_state[GO_PORTRAIT_KEY] = True    # open the Portrait page on the next run
     st.session_state[key] = value
-
-
-def portrait_refused_note() -> None:
-    """Says why a Portrait-only file was not loaded while this release hides the Portrait page."""
-    refused = st.session_state.get(PORTRAIT_REFUSED_KEY)
-    if refused:
-        st.warning(f"{refused[0]} holds Portrait of a Graduate coding, which this version doesn't show yet. "
-                   "Upload the codebook 3.x export instead.")
 
 
 def load_data() -> tuple[Optional[pd.DataFrame], str]:
@@ -1917,16 +1904,17 @@ def welcome_screen() -> None:
             f"Use the CSV exported by the Qualitative Outcomes Coder, such as `{DATA_FILENAME}`. "
             "The file stays in this browser session and is not saved once you close the tab."
         )
-        portrait_refused_note()
-        if PORTRAIT_UPLOAD_KEY in st.session_state:
-            name = st.session_state[PORTRAIT_UPLOAD_KEY][0]
-            st.info(f"{name} is loaded on the Portrait of a Graduate page. This page and the others read the "
-                    "codebook 3.x export: upload it here and both stay loaded.")
-            if "portrait" in PAGES:
-                st.page_link(PAGES["portrait"], label="Open the Portrait of a Graduate page")
+        if "portrait" in PAGES:   # Portrait of a Graduate rows are loaded, but no codebook 3.x rows
+            if PORTRAIT_UPLOAD_KEY in st.session_state:
+                name = st.session_state[PORTRAIT_UPLOAD_KEY][0]
+                st.info(f"{name} is loaded on the Portrait of a Graduate page. This page and the others read the "
+                        "codebook 3.x export: upload it here and both stay loaded.")
+            else:
+                st.info("The loaded file holds only Portrait of a Graduate coding, which has its own page. "
+                        "This page and the others read the codebook 3.x export.")
+            st.page_link(PAGES["portrait"], label="Open the Portrait of a Graduate page")
         uploaded = st.file_uploader("Coded outcomes CSV", type="csv", label_visibility="collapsed")
-        if uploaded is not None and (uploaded.name, uploaded.getvalue()) not in (
-                st.session_state.get(PORTRAIT_UPLOAD_KEY), st.session_state.get(PORTRAIT_REFUSED_KEY)):
+        if uploaded is not None and (uploaded.name, uploaded.getvalue()) != st.session_state.get(PORTRAIT_UPLOAD_KEY):
             remember_upload(uploaded)
             st.rerun()
     st.caption(
@@ -2031,12 +2019,9 @@ def filter_bar(df: pd.DataFrame, source: str, page_key: str, upload_key: str = U
         )
         replacement = st.file_uploader("Load a different CSV", type="csv", key="replace_upload")
         # Compare contents as well as names: a fresh export often keeps the old file's name.
-        if replacement is not None and (replacement.name, replacement.getvalue()) not in (
-                st.session_state.get(upload_key), st.session_state.get(PORTRAIT_REFUSED_KEY)):
+        if replacement is not None and (replacement.name, replacement.getvalue()) != st.session_state.get(upload_key):
             remember_upload(replacement, upload_key)
             st.rerun()
-        if replacement is not None:
-            portrait_refused_note()
         st.markdown(
             "**About the measures**\n\n"
             "- **Outcome statement**: one outcome after the coder split compound statements.\n"
@@ -2126,8 +2111,9 @@ def main() -> None:
     st.markdown(CSS + POLISH_CSS, unsafe_allow_html=True)
 
     df, source = load_data()
-    portrait_df, portrait_source = load_portrait(df, source) if "portrait" in release.shown_pages(SHOW_ALL) \
-        else (None, "")
+    portrait_df, portrait_source = load_portrait(df, source)
+    if portrait_df is not None and portrait_df.empty:
+        portrait_df, portrait_source = None, ""
     if df is not None:
         # Portrait of a Graduate rows never join a codebook 3.x count: they live on their own page.
         df = portrait.split_by_codebook(df)[0]
@@ -2155,9 +2141,10 @@ def main() -> None:
                             title="Portrait of a Graduate", url_path="portrait-of-a-graduate"),
         "review": st.Page(needs_main(lambda: page_review(holder["df"])), title="Review coding", url_path="review-coding"),
     }
-    # The first release shows three pages (release.py). The others stay registered but hidden, handing over to
-    # the landing page, so an old link opens the wheel instead of "Page not found".
-    shown = release.shown_pages(SHOW_ALL)
+    # The first release shows three pages (release.py), plus the Portrait page whenever Portrait of a Graduate
+    # rows are loaded. The others stay registered but hidden, handing over to the landing page, so an old link
+    # opens the wheel instead of "Page not found".
+    shown = release.shown_pages(SHOW_ALL, portrait=portrait_df is not None)
     retired = [st.Page(partial(st.switch_page, pages["map"]), title=pages[k].title, url_path=pages[k].url_path,
                        visibility="hidden") for k in pages if k not in shown]
     pages = {k: p for k, p in pages.items() if k in shown}
@@ -2171,7 +2158,7 @@ def main() -> None:
     PAGES.update(pages)
     current = st.navigation([*pages.values(), alias, alias_aims, *retired], position="top")
     page_key = next((k for k, p in pages.items() if p.url_path == current.url_path), "map")
-    if st.session_state.pop(GO_PORTRAIT_KEY, False) and page_key != "portrait":
+    if st.session_state.pop(GO_PORTRAIT_KEY, False) and page_key != "portrait" and "portrait" in pages:
         st.switch_page(pages["portrait"])
     if page_key == "portrait":
         holder["portrait_version"] = portrait.codebook_version(portrait_df) if portrait_df is not None \
